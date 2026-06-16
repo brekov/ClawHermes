@@ -106,7 +106,7 @@ class ClawHermesConfig(BaseSettings):
     agent: AgentsConf = AgentsConf()
 
     # === Gateway ===
-    gateway_host: str = "0.0.0.0"
+    gateway_host: str = "127.0.0.1"
     gateway_port: int = 18789
     gateway_secret: str | None = None
 

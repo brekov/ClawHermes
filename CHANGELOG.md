@@ -1,5 +1,22 @@
 # Changelog
 
+## v0.2.0 (2026-06-16)
+
+可部署版本 - 常驻 Gateway + Docker 化
+
+### 新增
+
+- **Gateway 常驻服务**（FastAPI）：`POST /init`、`POST /chat`、`GET /health`、`GET /tools`、`POST /memory/save`、`GET /memory/search`、`GET /sessions`
+- **Docker 部署**：Dockerfile（python:3.12-slim）+ docker-compose.yml + HEALTHCHECK
+- **一键安装脚本**：`scripts/install.sh`，curl 管道安装
+- **Gateway 自动初始化**：容器启动时自动从环境变量加载 API Key 并初始化 Agent
+- **完整测试套件**：56 个测试覆盖全部功能
+
+### 变更
+
+- CLI `gateway` 命令现在完整可用，支持 `--api-key` 和 `--model` 参数
+- 默认绑定地址改为 `127.0.0.1`（更安全）
+
 ## v0.1.0 (2026-06-16)
 
 首个生产版本发布。

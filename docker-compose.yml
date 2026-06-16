@@ -1,0 +1,22 @@
+version: "3.8"
+
+services:
+  clawhermes:
+    build: .
+    container_name: clawhermes
+    ports:
+      - "18789:18789"
+    environment:
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}
+      - CH_DATA_DIR=/data/.clawhermes
+    volumes:
+      - clawhermes_data:/data/.clawhermes
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:18789/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+volumes:
+  clawhermes_data:
