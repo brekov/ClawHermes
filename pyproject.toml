@@ -1,0 +1,71 @@
+[project]
+name = "clawhermes"
+version = "0.1.0"
+description = "融合 Hermes 自进化能力与 OpenClaw Gateway 体系的 Python AI Agent 框架"
+requires-python = ">=3.12"
+authors = [
+    {name = "brekov"},
+]
+
+dependencies = [
+    # === LLM 编排 ===
+    "litellm>=2.0",
+
+    # === Web/API ===
+    "fastapi>=0.115",
+    "uvicorn[standard]",
+    "httpx>=0.28",
+
+    # === 消息网关 ===
+    "python-multipart",
+
+    # === 存储 ===
+    "sqlalchemy[asyncio]>=2.0",
+    "sqlite-utils>=0.38",
+    "chromadb>=0.6",
+
+    # === 工具执行 ===
+    "beautifulsoup4>=4.12",
+    "markdownify>=0.14",
+
+    # === 配置 ===
+    "pydantic-settings>=2.7",
+    "python-dotenv>=1.1",
+    "pyyaml>=6.0",
+
+    # === CLI ===
+    "rich>=13.0",
+    "click>=8.1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.25",
+    "pytest-cov>=6.0",
+    "mypy>=1.15",
+    "ruff>=0.11",
+    "pre-commit>=4.0",
+]
+telegram = ["python-telegram-bot>=21"]
+feishu = ["lark-oapi>=3.0"]
+redis = ["redis>=5.0"]
+
+[project.scripts]
+clawhermes = "clawhermes.cli:main"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "D"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = false
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
