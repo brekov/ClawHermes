@@ -363,15 +363,14 @@ def doctor():
         except ImportError:
             console.print(f"  ❌ {pkg} ({role}) — 未安装")
 
-    llm_keys = ["DEEPSEEK_API_KEY", "OPENAI_API_KEY", "GOOGLE_API_KEY", "ANTHROPIC_API_KEY"]
-    found = False
-    for key_name in llm_keys:
-        if os.getenv(key_name):
-            val = os.getenv(key_name, "")
-            console.print(f"  ✅ {key_name}={val[:8]}...")
-            found = True
+    found = []
+    for key in os.environ:
+        if key.endswith("_API_KEY") and os.environ[key]:
+            found.append(key)
+    for key in found[:3]:
+        console.print(f"  ✅ {key} 已配置")
     if not found:
-        console.print(f"  ⚠️  未设置 LLM API Key（支持: {", ".join(llm_keys)}）")
+        console.print(f"  ⚠️  未设置 API Key（任意 *_API_KEY 环境变量）")
 
     # 显示渠道配置状态
     from clawhermes.gateway.setup import load_channels

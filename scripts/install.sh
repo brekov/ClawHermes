@@ -110,40 +110,33 @@ echo -e "${GREEN}✅ 数据目录: ${DATA_DIR}${NC}"
 python3 -m clawhermes.cli setup 2>&1 | head -5
 echo -e "${GREEN}✅ 默认配置已生成${NC}"
 
-# ── 配置 LLM API Key ───────────────────────────────────────
+# ── 检测 API Key ──────────────────────────────────────────
 
 echo ""
-echo -e "${CYAN}🔑 检测 LLM API Key...${NC}"
+echo -e "${CYAN}🔑 检测 API Key...${NC}"
 
-# 支持的所有 LLM Provider 环境变量
-LLM_KEYS="DEEPSEEK_API_KEY OPENAI_API_KEY GOOGLE_API_KEY ANTHROPIC_API_KEY GROQ_API_KEY"
-FOUND_KEY=""
-
-for key in $LLM_KEYS; do
-    if [ -n "${!key:-}" ]; then
-        FOUND_KEY="$key"
+# 扫描所有 *_API_KEY 环境变量
+found_key=""
+while IFS='=' read -r name value; do
+    if [[ "$name" == *_API_KEY ]] && [ -n "$value" ]; then
+        found_key="$name"
         break
     fi
-done
+done < <(env)
 
 if [ -f "${INSTALL_DIR}/.env" ]; then
     echo -e "${GREEN}✅ 检测到 .env 文件${NC}"
-elif [ -n "$FOUND_KEY" ]; then
-    echo "${FOUND_KEY}=${!FOUND_KEY}" > "${INSTALL_DIR}/.env"
-    echo -e "${GREEN}✅ 已从环境变量 ${FOUND_KEY} 写入 .env${NC}"
+elif [ -n "$found_key" ]; then
+    echo "${found_key}=${!found_key}" > "${INSTALL_DIR}/.env"
+    echo -e "${GREEN}✅ 已从环境变量 ${found_key} 写入 .env${NC}"
 elif ls "${DATA_DIR}/providers/"*.yaml &>/dev/null 2>&1; then
     echo -e "${GREEN}✅ 已检测到 LLM Provider 配置${NC}"
 else
     echo ""
-    echo -e "${YELLOW}⚠️  未设置任何 LLM API Key${NC}"
-    echo "   支持的环境变量（选一个即可）:"
-    echo "     DEEPSEEK_API_KEY=sk-xxx"
-    echo "     OPENAI_API_KEY=sk-xxx"
-    echo "     GOOGLE_API_KEY=AIza..."
-    echo "     ANTHROPIC_API_KEY=sk-ant-..."
-    echo "     GROQ_API_KEY=gsk_..."
-    echo ""
-    echo "   设置后运行: echo 'DEEPSEEK_API_KEY=sk-xxx' > ${INSTALL_DIR}/.env"
+    echo -e "${YELLOW}⚠️  未设置 API Key${NC}"
+    echo "   设置任意 *_API_KEY 环境变量即可:"
+    echo "     export DEEPSEEK_API_KEY=sk-xxx"
+    echo "     export OPENAI_API_KEY=sk-xxx"
     echo ""
 fi
 
