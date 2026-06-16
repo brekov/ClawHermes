@@ -95,8 +95,8 @@ class SessionContext:
 @dataclass
 class MemoryItem:
     """一条记忆"""
-    id: str = field(default_factory=lambda: uuid.uuid4().hex)
     content: str
+    id: str = field(default_factory=lambda: uuid.uuid4().hex)
     scope: MemoryScope = MemoryScope.USER
     metadata: dict[str, Any] = field(default_factory=dict)
     created_at: datetime = field(default_factory=datetime.now)
@@ -107,8 +107,8 @@ class MemoryItem:
 class Skill:
     """一条技能"""
     name: str
-    description: str
     content: str                # SKILL.md 内容
+    description: str = ""
     category: str = "general"
     version: int = 1
     usage_count: int = 0
@@ -126,4 +126,4 @@ class ProviderConfig:
     base_url: str | None = None
     max_tokens: int = 64000
     temperature: float = 0.7
-    timeout_ms: int = 60000
+    timeout: int = 60000

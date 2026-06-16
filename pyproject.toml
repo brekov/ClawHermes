@@ -9,7 +9,7 @@ authors = [
 
 dependencies = [
     # === LLM 编排 ===
-    "litellm>=2.0",
+    "litellm>=1.40",
 
     # === Web/API ===
     "fastapi>=0.115",
