@@ -200,6 +200,7 @@ class Agent:
         config: AgentConfig | None = None,
         memory_manager=None,
         skill_manager=None,
+        context_engine=None,
     ):
         self.llm = llm_provider
         self.prompt = SystemPrompt()
@@ -209,6 +210,7 @@ class Agent:
         self.config = config or AgentConfig()
         self.memory = memory_manager
         self.skills = skill_manager
+        self.context_engine = context_engine
         self._interrupt = threading.Event()
         self._last_conversation: list[dict] = []
 
@@ -232,6 +234,12 @@ class Agent:
 
             if self._interrupt.is_set():
                 return "（已中断）"
+
+            # 上下文压缩（F10）
+            if self.context_engine and iteration > 1:
+                prompt_tokens = sum(len(m.get("content", "")) for m in messages)
+                if self.context_engine.should_compress(prompt_tokens):
+                    messages = self.context_engine.compress(messages, prompt_tokens)
 
             self.hooks.trigger(HookPoint.MODEL_CALL_STARTED)
             try:

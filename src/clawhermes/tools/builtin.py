@@ -126,6 +126,30 @@ def register_builtin_tools(registry: ToolRegistry):
         handler=_memory_save_stub,
     ))
 
+    registry.register(ToolDef(
+        name="delegate_task",
+        description="委派子任务给子 Agent 并行执行（如代码审查、多文件分析等）",
+        parameters={
+            "type": "object",
+            "properties": {
+                "tasks": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "id": {"type": "string", "description": "任务ID"},
+                            "description": {"type": "string", "description": "任务描述"},
+                            "instructions": {"type": "string", "description": "详细指令"},
+                        },
+                        "required": ["description"],
+                    },
+                },
+            },
+            "required": ["tasks"],
+        },
+        handler=_delegate_task_stub,
+    ))
+
 
 # ===== 工具实现 =====
 
@@ -206,5 +230,13 @@ def _memory_search_stub(query: str, **kwargs) -> dict:
 
 
 def _memory_save_stub(content: str, **kwargs) -> dict:
-    """记忆保存存根 - 完整实现在 M5"""
+    """记忆保存存根"""
     return {"success": True, "note": "记忆系统开发中（已暂存）"}
+
+
+def _delegate_task_stub(tasks: list[dict], **kwargs) -> dict:
+    """子 Agent 委派存根 - 需要 DelegateManager 实例"""
+    result_text = []
+    for t in tasks:
+        result_text.append(f"任务 [{t.get('id', '?')}]: {t.get('description', '')}")
+    return {"results": result_text, "note": "子 Agent 委派需要注入 DelegateManager"}

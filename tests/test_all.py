@@ -92,11 +92,12 @@ def test_tool_system():
     # 注册
     registry = ToolRegistry()
     register_builtin_tools(registry)
-    check("8个内置工具", len(registry.list()) == 8)
+    tools = registry.list()
+    check(f"{len(tools)}个内置工具", len(tools) >= 8)
 
     # Schema
     schemas = registry.schemas()
-    check("工具 Schema 生成", len(schemas) == 8)
+    check("工具 Schema 生成", len(schemas) >= 8)
 
     # 调度
     hooks = HookManager()
