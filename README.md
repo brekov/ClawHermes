@@ -62,7 +62,7 @@ clawhermes gateway start       # 启动 Gateway，渠道自动连接
 clawhermes gateway status      # 查看已配置的渠道
 ```
 
-配置保存在 `~/.clawhermes/channels.json`，无需手动编辑。
+配置保存在 `~/.clawhermes//channels.json`，无需手动编辑。
 
 ---
 
