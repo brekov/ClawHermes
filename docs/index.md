@@ -31,8 +31,7 @@ clawhermes chat
 | **工具系统** | 9 个内置工具、钩子系统(before/after)、并行/串行调度 |
 | **记忆系统** | JSON + ChromaDB 双存储、语义搜索、跨会话持久化 |
 | **技能系统** | SkillManager、Background Review(自进化)、Curator(自动维护) |
-| **消息渠道** | 个人微信(扫码)、企业微信、飞书、QQ(OneBot)、Telegram、Webhook |
-| **配置管理** | config.yaml 主配置、channels/*.yaml、providers/*.yaml、.env 密钥分离 |
+| **配置管理** | config.yaml 主配置、providers/*.yaml、.env 密钥分离 |
 
 ## 三、部署
 
@@ -43,10 +42,6 @@ docker run -e DEEPSEEK_API_KEY=sk-xxx -p 18789:18789 clawhermes
 
 # 一键安装
 bash <(curl -fsSL https://raw.githubusercontent.com/brekov/ClawHermes/main/scripts/install.sh)
-
-# 配置渠道
-clawhermes gateway setup
-clawhermes gateway start
 ```
 
 ## 四、设计理念
@@ -55,8 +50,9 @@ clawhermes gateway start
 |:---|:---|
 | 三层 System Prompt (缓存友好) | 插件钩子体系 (工具级拦截) |
 | Background Review (自进化) | 工具策略引擎 (精细权限) |
-| ContextEngine 可插拔 | Gateway 统一控制面 |
-| Curator (技能库维护) | 配置校验 fail-fast |
+| ContextEngine 可插拔 | 配置校验 fail-fast |
+| Curator (技能库维护) | 双层持久化 (树形 transcript) |
+| 多凭证池 (高可用) |  |
 
 ## 五、文档
 

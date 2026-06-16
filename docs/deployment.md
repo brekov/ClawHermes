@@ -1,8 +1,9 @@
-> 版本：v1.0
-> 日期：2026-06-16
----
-
 # ClawHermes · 部署指南
+
+> 版本：v2.0
+> 日期：2026-06-16
+
+---
 
 ## 方式一：Docker（推荐）
 
@@ -46,8 +47,8 @@ pip install -e .
 # 配置
 echo "DEEPSEEK_API_KEY=sk-xxx" > .env
 
-# 启动
-clawhermes gateway --host 0.0.0.0
+# 启动 Gateway（REST API 服务）
+clawhermes gateway start --host 0.0.0.0
 ```
 
 ## 方式三：一键安装
@@ -56,67 +57,28 @@ clawhermes gateway --host 0.0.0.0
 bash <(curl -fsSL https://raw.githubusercontent.com/brekov/ClawHermes/main/scripts/install.sh)
 ```
 
-## 渠道接入
+---
 
-### 交互式配置（推荐）
+## Gateway 说明
 
-参照 OpenClaw 的 `openclaw gateway setup`，ClawHermes 也通过向导配置：
-
-```bash
-# 交互式向导，按提示填入渠道凭证
-clawhermes gateway setup
-```
-
-配置保存在 `~/.clawhermes/channels/` 目录下。
-
-### 启动 Gateway（自动连接已配置的渠道）
+> ClawHermes 的 Gateway 是一个 **REST API** 服务，用于 Agent 交互，**并非**聊天平台网关。
+> 
+> Gateway 提供 10 个 REST 端点，通过 HTTP API 暴露 Agent 核心能力（对话、工具、记忆、技能等）。
+> 上层应用可以通过这些 API 接入 ClawHermes 的 Agent 能力，无需依赖任何特定聊天平台。
 
 ```bash
+# 启动 Gateway 服务
 clawhermes gateway start --host 0.0.0.0
-```
 
-### 查看已配置的渠道
-
-```bash
-clawhermes gateway status
-```
-
-### 备用：API 方式（临时启动）
-
-也支持通过 API 动态启停渠道：
-
-```bash
-curl -X POST http://127.0.0.1:18789/channels/feishu/start?app_id=cli_xxx&app_secret=xxx
-curl -X POST "http://127.0.0.1:18789/channels/telegram/start?token=xxx"
-```
-
-### 查看已连接的渠道
-
-```bash
-curl http://127.0.0.1:18789/channels
-```
-
-### 备用：API 方式（临时启动）
-
-也支持通过 API 动态启停渠道：
-
-```bash
-# 飞书
-curl -X POST http://127.0.0.1:18789/channels/feishu/start?app_id=cli_xxx&app_secret=xxx
-
-# Telegram
-curl -X POST "http://127.0.0.1:18789/channels/telegram/start?token=xxx"
-
-# 微信 / QQ 同理
-```
-
+# 配置 LLM Provider
+clawhermes gateway setup
 ```
 
 ## 健康检查
 
 ```bash
 curl http://localhost:18789/health
-# {"status":"ok","version":"0.6.0","tools":9,"skills":0,"sessions":0}
+# {"status":"ok","version":"0.10.0","tools":9,"skills":0,"sessions":0}
 ```
 
 ## 环境变量

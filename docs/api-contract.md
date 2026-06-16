@@ -226,72 +226,56 @@ class Curator:
 
 ---
 
-## 6. Gateway 接口
+## 6. Gateway HTTP API
 
-### HTTP API
+### 端点列表
 
 ```
-POST /init     { api_key, model?, base_url?, max_iterations? }
-              → { status, model, tools, skills, chroma }
+POST /init       初始化 Agent 配置 (api_key, model?, base_url?, max_iterations?)
+                → { status, model, tools, skills, chroma }
 
-POST /chat     { message, session_id? }
-              → { response, session_id, model }
+POST /chat       发送消息 { message, session_id? }
+                → { response, session_id, model }
 
-GET  /health  → { status, version, uptime_seconds, tools, skills, sessions }
+GET  /health     健康检查 → { status, version, uptime_seconds, tools, skills, sessions }
 
-GET  /tools   → { tools: [{name, description, parallel_safe}] }
+GET  /tools      列出所有工具 → { tools: [{name, description, parallel_safe}] }
 
 POST /memory/save   ?content=xxx&importance=0.5 → { status }
 GET  /memory/search ?query=xxx → { results: [{content, importance}] }
 
-GET  /skills  ?status=active → { skills: [...] }
+GET  /skills     ?status=active → { skills: [...] }
 POST /skills/create ?name=xxx&content=xxx → { status, name }
 
 POST /curator/run ?dry_run=false → { status, stats }
 
-GET  /sessions → { sessions: [...], count }
-
-POST /channels/feishu/start           ?app_id&app_secret → { status }
-POST /channels/feishu/start-from-env   (从环境变量读取) → { status }
-POST /channels/wechat/start            ?corp_id&corp_secret&agent_id → { status }
-POST /channels/wechat/public/start     ?app_id&app_secret&token&encoding_aes_key → { status }
-POST /channels/wechat/callback         { body } → response
-POST /channels/qq/start                ?ws_url&token → { status }
-POST /channels/telegram/start          ?token → { status }
-POST /channels/webhook/receive         ?platform&chat_id&text → { status }
-GET  /channels                         → { channels: [...], count }
-GET  /channels → { channels: [...], count }
+GET  /sessions   → { sessions: [...], count }
 ```
 
-### Channel Bridge (Node.js)
-
-```
-POST /send  { channel, to, text } → { success, messageId? }
-GET  /health → { status, weixin, feishu }
-```
-
----
-
-## 7. 渠道适配器接口
+### 数据模型
 
 ```python
-class PlatformAdapter(ABC):
-    @abstractmethod
-    def send_text(self, chat_id: str, text: str) -> SendResult
-    @abstractmethod
-    def start(self, message_handler: Callable[[MessageEvent], None])
-    @abstractmethod
-    def stop(self)
+# 请求 /chat
+{
+    "message": str,
+    "session_id": str | None,
+}
+
+# 响应 /chat
+{
+    "response": str,
+    "session_id": str,
+    "model": str,
+    "tool_calls": int,
+    "duration_ms": float,
+}
 ```
 
 ---
 
-## 8. 外部依赖接口
+## 外部依赖
 
 | 依赖 | 用途 | 接口稳定性 |
 |------|------|-----------|
 | litellm.completion() | 调用LLM | 稳定，OpenAI-compatible |
 | chromadb.PersistentClient() | 向量存储 | 稳定 |
-| lark-oapi ws.Client() | 飞书 WebSocket | 稳定 |
-| wechatpy.WeChatClient | 微信 API | 稳定 |
-| OneBot (go-cqhttp) | QQ 协议 | 稳定 |

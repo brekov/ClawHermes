@@ -1,5 +1,37 @@
 # Changelog
 
+## v0.10.0 (2026-06-16)
+
+回归 Agent 框架本分 — 移除全部消息渠道代码
+
+### 变更说明
+
+> ClawHermes 不再是一个消息网关/Gateway，而是一个纯 Python AI Agent 框架，通过 REST API 暴露能力。
+> 消息渠道集成（飞书、微信、QQ、Telegram 等）属于 OpenClaw 的范畴，两者分工明确。
+
+### 移除
+
+- **全部渠道代码**：`bridge.py`、`bridge.mjs`、`channels.py`、`platforms/` 目录已删除
+- **渠道依赖**：`python-telegram-bot`、`lark-oapi`、`wechatpy` 等依赖已移除
+- **渠道配置**：渠道相关的配置命令（`gateway setup` 不再配置渠道）
+- **Channel Bridge**：Node.js bridge 代码已删除
+- **渠道 API 端点**：Gateway 从 16+ 端点缩减为 10 个 Agent 核心端点
+
+### 新增
+
+- **纯 Agent 框架定位**：聚焦 Agent 核心（LLM、工具、记忆、技能、自进化）
+- **REST API 对接能力**：通过 10 个 REST 端点暴露 Agent 能力，可对接任意前端
+
+### 功能全景
+
+| 模块 | 能力 |
+|:---|:---|
+| Agent 核心 | 多LLM接入(132)、三层Prompt、上下文压缩(F10)、子Agent委派(F12)、多Agent |
+| 工具系统 | 9内置工具、钩子系统(before/after)、并行/串行调度、策略引擎 |
+| 记忆系统 | JSON+ChromaDB双存储、语义搜索、跨会话持久化 |
+| 技能系统 | SkillManager、Background Review(自进化)、Curator(自动维护) |
+| 配置管理 | config.yaml主配置、providers/*.yaml、.env密钥分离 |
+
 ## v0.9.0 (2026-06-16)
 
 配置体系重构 — 对齐 OpenClaw/Hermes
@@ -9,7 +41,6 @@
 ```
 ~/.clawhermes/
 ├── config.yaml              # 主配置（agent/gateway/memory…）
-├── channels/*.yaml          # 每个渠道独立文件
 ├── providers/*.yaml         # 每个 LLM Provider 独立文件
 ├── agents/<name>/           # 每个 Agent 独立目录
 │   ├── SOUL.md / AGENTS.md / USER.md
@@ -19,15 +50,12 @@
 ### 新增
 
 - `config.yaml` 主配置文件（`clawhermes config show/init/path`）
-- 渠道配置从 channels.json 迁移到 `channels/*.yaml`，每个渠道独立文件
 - LLM Provider 配置独立为 `providers/*.yaml`，增删 provider 不影响其他配置
 - 对比分析文档 `docs/comparison.md`（ClawHermes vs OpenClaw vs Hermes）
 
 ### 变更
 
 - Agent 设定文件对齐 OpenClaw/Hermes：`persona.md → SOUL.md`、`instructions.md → AGENTS.md`
-- `gateway setup` 写入 `channels/<name>.yaml` 而非 channels.json
-- 自动迁移旧版 channels.json
 - `clawhermes setup` 自动生成 config.yaml
 
 ### 功能全景
@@ -38,8 +66,7 @@
 | 工具系统 | 9内置工具、钩子系统(before/after)、并行/串行调度、策略引擎 |
 | 记忆系统 | JSON+ChromaDB双存储、语义搜索、跨会话持久化 |
 | 技能系统 | SkillManager、Background Review(自进化)、Curator(自动维护) |
-| 消息渠道 | 个人微信(扫码)、企业微信、飞书、QQ(OneBot)、Telegram、Webhook |
-| 配置管理 | config.yaml主配置、channels/*.yaml、providers/*.yaml、.env密钥分离 |
+| 配置管理 | config.yaml主配置、providers/*.yaml、.env密钥分离 |
 
 ## v0.8.0 (2026-06-16)
 
@@ -60,7 +87,7 @@ Agent 设定 + 多 Agent + 微信扫码
 
 - `clawhermes gateway setup/start/status` 命令组
 - 企业微信扫码登录（ilink 协议）
-- 渠道配置声明式（channels.json → 后改为 channels/*.yaml）
+- 渠道配置声明式
 
 ## v0.6.0 (2026-06-16)
 

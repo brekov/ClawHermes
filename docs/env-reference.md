@@ -1,8 +1,9 @@
-> 版本：v1.0
-> 日期：2026-06-16
----
-
 # ClawHermes · 环境变量参考
+
+> 版本：v2.0
+> 日期：2026-06-16
+
+---
 
 ## LLM Provider（选一个即可）
 
@@ -28,35 +29,6 @@
 | 变量 | 说明 | 默认值 |
 |------|------|--------|
 | `CH_DATA_DIR` | 数据目录 | `~/.clawhermes` |
-
-## 渠道
-
-## 渠道配置
-
-渠道通过 `clawhermes gateway setup` 交互式配置，保存在 `~/.clawhermes/channels/` 目录下。
-
-```bash
-clawhermes gateway setup    # 交互式向导
-clawhermes gateway status   # 查看已配置的渠道
-```
-
-### API 方式（备用）
-
-也支持通过 HTTP API 动态启动：
-
-```bash
-POST /channels/feishu/start?app_id=cli_xxx&app_secret=xxx
-POST /channels/wechat/start?corp_id=wwxxx&corp_secret=xxx&agent_id=1000001
-POST /channels/qq/start?ws_url=ws://127.0.0.1:6700
-POST /channels/telegram/start?token=xxx:xxx
-```
-
-## Channel Bridge
-
-| 变量 | 说明 | 默认值 |
-|------|------|--------|
-| `CH_BRIDGE_PORT` | Bridge 端口 | `18788` |
-| `CH_GATEWAY_URL` | ClawHermes Gateway 地址 | `http://127.0.0.1:18789` |
 
 ## 模型命名规则
 

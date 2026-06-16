@@ -1,6 +1,6 @@
 [project]
 name = "clawhermes"
-version = "0.6.0"
+version = "0.10.0"
 description = "融合 Hermes 自进化能力与 OpenClaw Gateway 体系的 Python AI Agent 框架"
 requires-python = ">=3.12"
 authors = [
@@ -15,9 +15,6 @@ dependencies = [
     "fastapi>=0.115",
     "uvicorn[standard]",
     "httpx>=0.28",
-
-    # === 消息网关 ===
-    "python-multipart",
 
     # === 存储 ===
     "sqlalchemy[asyncio]>=2.0",
@@ -47,8 +44,6 @@ dev = [
     "ruff>=0.11",
     "pre-commit>=4.0",
 ]
-telegram = ["python-telegram-bot>=21"]
-feishu = ["lark-oapi>=3.0"]
 redis = ["redis>=5.0"]
 
 [project.scripts]

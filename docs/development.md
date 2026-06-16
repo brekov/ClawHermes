@@ -1,7 +1,7 @@
-> 版本：v1.0
-> 日期：2026-06-16
-
 # ClawHermes · 开发指南
+
+> 版本：v2.0
+> 日期：2026-06-16
 
 ## 环境准备
 
@@ -29,7 +29,7 @@ src/clawhermes/
 ├── tools/          # 工具系统
 ├── skills/         # 技能系统
 ├── storage/        # 存储
-├── gateway/        # 消息网关（API + 平台适配器）
+├── gateway/        # REST API 网关（app + setup）
 ├── cli.py          # CLI 入口
 ├── config.py       # 配置管理
 └── types.py        # 核心类型
@@ -66,12 +66,6 @@ python tests/test_integration.py
 1. 在 `tools/builtin.py` 中实现 handler 函数
 2. 在 `register_builtin_tools()` 中注册 ToolDef
 3. 在 `tests/test_all.py` 中验证
-
-## 添加新渠道
-
-1. 在 `gateway/platforms/` 下创建适配器（继承 PlatformAdapter）
-2. 实现 `send_text` / `start` / `stop`
-3. 在 `gateway/app.py` 中注册 API 端点
 
 ## 发布流程
 

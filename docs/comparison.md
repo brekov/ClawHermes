@@ -25,7 +25,7 @@
 ```
 OpenClaw:         Gateway → Agent(单进程) → 22+渠道 / CLI / API
 Hermes:           CLI → Agent → Skills → Memory → Gateway(多渠道)
-ClawHermes:       Gateway → Agent → 工具/记忆/技能 → 6渠道 / CLI / API
+ClawHermes:       Gateway → Agent → 工具/记忆/技能 → REST API
 ```
 
 ### 2.2 System Prompt
@@ -105,18 +105,11 @@ ClawHermes:       Gateway → Agent → 工具/记忆/技能 → 6渠道 / CLI /
 
 | 特性 | OpenClaw | Hermes | ClawHermes |
 |:---|:---|:---|:---|
-| 总渠道数 | **22+** | 6 | **6** |
-| 微信(个人) | ✅ 插件 | ❌ | ✅ **扫码登录**(复用 OpenClaw SDK) |
-| 企业微信 | ✅ 插件 | ❌ | ✅ 扫码 + corp secret |
-| 飞书 | ✅ 插件 | ❌ | ✅ lark-oapi WebSocket |
-| QQ | ✅ 插件 | ❌ | ✅ OneBot/go-cqhttp |
-| Telegram | ✅ 插件 | ✅ | ✅ 长轮询 |
-| Discord | ✅ 插件 | ✅ | ❌ |
-| Slack | ✅ 插件 | ✅ | ❌ |
-| Signal | ✅ 插件 | ✅ | ❌ |
-| Email | ❌ | ✅ | ❌ |
-| 渠道统一抽象 | ✅ BasePlatformAdapter | ❌ | ✅ **PlatformAdapter** |
-| 配置方式 | **config 声明式** | config 文件 | **gateway setup 交互式** |
+| 渠道支持 | **22+ 渠道** | 6 渠道 | **0（v0.10.0 已移除）** |
+| 定位 | 消息网关 + Agent | Agent + 渠道 | **纯 Agent 框架（REST API）** |
+
+> ClawHermes v0.10.0 移除了全部消息渠道代码，回归纯 AI Agent 框架定位。
+> 消息渠道集成属于 OpenClaw 的范畴。ClawHermes 通过 REST API 暴露能力，可对接任意前端。
 
 ### 3.7 多 Agent
 
@@ -151,8 +144,6 @@ ClawHermes:       Gateway → Agent → 工具/记忆/技能 → 6渠道 / CLI /
 | **多凭证池** | Hermes 有，OpenClaw 没有 |
 | **自进化** | 借鉴 Hermes 的 Background Review + Curator |
 | **钩子系统** | 借鉴 OpenClaw，Hermes 没有 |
-| **渠道声明式配置** | 对齐 OpenClaw 的设计理念 |
-| **微信扫码登录** | 复用 OpenClaw 的 ilink 协议，Hermes 不支持微信 |
 | **Agent 身份设定** | 三者都对齐（SOUL.md/AGENTS.md/USER.md） |
 
 ### 4.2 ClawHermes 不足的
@@ -160,12 +151,10 @@ ClawHermes:       Gateway → Agent → 工具/记忆/技能 → 6渠道 / CLI /
 | 项目 | 说明 | 优先级 |
 |:---|:---|:---:|
 | **内置工具太少** | 9 个 vs OpenClaw 40+ | 🔴 高 |
-| **渠道数太少** | 6 个 vs OpenClaw 22+ | 🔴 高 |
 | **工具 profiles** | OpenClaw 的 minimal/coding/full 未实现 | 🟡 中 |
 | **技能 Hub** | OpenClaw 有 ClawHub，Hermes 有 agentskills.io | 🟡 中 |
 | **技能审核流** | OpenClaw 有提案→审批流程 | 🟡 中 |
 | **WEB UI** | OpenClaw 有管理面板 | 🟢 低 |
-| **Discord/Slack** | Hermes 和 OpenClaw 都支持 | 🟢 低 |
 | **并行执行深度** | 子 Agent 默认最多 3 并发 | 🟢 低 |
 
 ### 4.3 三者都没有的
@@ -174,16 +163,15 @@ ClawHermes:       Gateway → Agent → 工具/记忆/技能 → 6渠道 / CLI /
 |:---|:---|
 | **完善的 CLI Agent 配置向导** | ClawHermes 的 `agent set-persona` 是独创 |
 | **ChromaDB 向量记忆** | 三个项目中唯一实现语义搜索的 |
-| **微信扫码一键配置** | 只有 ClawHermes 支持（复用 OpenClaw 协议） |
 
 ---
 
 ## 五、定位总结
 
 ```
-OpenClaw:    最成熟的 Gateway + 最多渠道 → 生产首选
+OpenClaw:    最成熟的 Gateway + 最多渠道 → 消息平台集成首选
 Hermes:      最强的自进化学习闭环 → 研究/学习
-ClawHermes:  融合两者设计 + Python 纯原生 → 轻量级替代
+ClawHermes:  融合两者设计 + Python 纯原生 → 轻量级 Agent 框架
 ```
 
-**一句话：** ClawHermes 在核心能力上对齐了 OpenClaw 和 Hermes 的设计精华，在工具数量和渠道数量上还有明显差距，但在 Python 生态、向量记忆、扫码配置等方面有自己的优势。
+**一句话：** ClawHermes 在核心能力上对齐了 OpenClaw 和 Hermes 的设计精华，专注 Agent 核心（REST API），在 Python 生态、向量记忆等方面有自己的优势。消息渠道集成不是 ClawHermes 的职责，而是 OpenClaw 的优势所在。

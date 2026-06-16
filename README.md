@@ -15,9 +15,9 @@
 |:---|:---|
 | 三层 System Prompt → 缓存友好，省 token | 插件钩子体系 → 工具级拦截/改写/审批 |
 | Background Review → 对话后自动沉淀记忆/技能 | 工具策略引擎 → profile + allow/deny 精细权限 |
-| ContextEngine 可插拔 → 压缩策略可替换 | Gateway 统一控制面 → 多渠道一致性体验 |
-| Curator → 技能库自动维护（stale→archived） | 双层持久化 → 树形 transcript |
-| 多凭证池 → 高可用（故障自动冷却） | 配置校验 fail-fast → 不带病运行 |
+| ContextEngine 可插拔 → 压缩策略可替换 | 双层持久化 → 树形 transcript |
+| Curator → 技能库自动维护（stale→archived） | 配置校验 fail-fast → 不带病运行 |
+| 多凭证池 → 高可用（故障自动冷却） |  |
 
 ---
 
@@ -38,11 +38,7 @@ clawhermes chat
 
 ```bash
 docker build -t clawhermes .
-docker run -e DEEPSEEK_API_KEY=sk-xxx \
-  -e CH_CHANNEL_FEISHU_ENABLED=true \
-  -e CH_CHANNEL_FEISHU_APP_ID=cli_xxx \
-  -e CH_CHANNEL_FEISHU_APP_SECRET=xxx \
-  -p 18789:18789 clawhermes
+docker run -e DEEPSEEK_API_KEY=sk-xxx -p 18789:18789 clawhermes
 ```
 
 ### HTTP API
@@ -54,24 +50,14 @@ curl -X POST http://127.0.0.1:18789/chat \
   -d '{"message":"你好"}'
 ```
 
-### 配置渠道（交互式向导，类似 OpenClaw）
-
-```bash
-clawhermes gateway setup      # 交互式配置飞书/微信/QQ/Telegram
-clawhermes gateway start       # 启动 Gateway，渠道自动连接
-clawhermes gateway status      # 查看已配置的渠道
-```
-
-配置保存在 `~/.clawhermes/channels/` 目录下，每个渠道一个文件。
-
 ---
 
 ## 架构
 
 ```
 ┌────────────────────────────────────────────────────────────┐
-│                    Gateway 层                              │
-│  CLI / HTTP / 飞书 / 微信 / QQ / Telegram / Webhook       │
+│                    Gateway 层（REST API）                   │
+│  CLI / HTTP（FastAPI · 10 个 REST 端点）                   │
 └────────────────────────┬───────────────────────────────────┘
                          │
 ┌────────────────────────▼───────────────────────────────────┐
@@ -106,7 +92,6 @@ clawhermes gateway status      # 查看已配置的渠道
 | F2 | **对话主循环** | 思考-行动循环，50 次迭代上限，自动中断保护 |
 | F3 | **工具系统** | 9 个内置工具，自动注册，JSON Schema 生成 |
 | F4 | **持久化记忆** | JSON 文件 + ChromaDB 双存储，语义搜索 |
-| F5 | **多渠道网关** | 飞书(WebSocket) / 微信(SDK桥接) / QQ(OneBot) / Telegram |
 | F6 | **技能系统** | SkillManager，元数据持久化，上下文注入 |
 | F7 | **自进化** | Background Review，对话后自动审查沉淀记忆/技能 |
 | F8 | **钩子系统** | before/after tool call，before/after agent run |
@@ -179,16 +164,26 @@ src/clawhermes/
 │   └── chroma_memory.py    # ChromaDB 向量记忆
 │
 └── gateway/
-    ├── app.py              # FastAPI Gateway（16+ REST 端点）
-    ├── channels.py         # 渠道抽象层（PlatformAdapter/GatewayManager）
-    └── platforms/
-        ├── feishu.py       # 飞书适配器
-        ├── wechat.py       # 微信适配器（企微+公众号）
-        └── qq.py           # QQ 适配器（OneBot）
+    ├── app.py              # FastAPI Gateway（10 个 REST 端点）
+    └── setup.py            # Provider 配置管理
 
 scripts/
 └── install.sh              # 一键安装脚本
 ```
+
+---
+
+## 关于本项目范围
+
+> **ClawHermes 是一个纯 Python AI Agent 框架，通过 REST API 暴露能力。**
+>
+> 本框架**不包含**聊天渠道集成（飞书、微信、QQ、Telegram 等消息平台）。
+> 消息渠道集成属于 OpenClaw 的范畴。ClawHermes 专注于 Agent 核心能力：
+> - Agent 思考-行动循环
+> - 工具系统与钩子/策略
+> - 记忆与技能管理
+> - 自进化（Background Review）
+> - 通过 REST API 对接任意前端或平台
 
 ---
 
@@ -211,12 +206,12 @@ python tests/test_integration.py
 | [PRD.md](docs/PRD.md) | 产品需求文档（含实现状态）| ✅ v1.0 |
 | [architecture.md](docs/architecture.md) | 架构设计文档 | ✅ v1.0 |
 | [data-model.md](docs/data-model.md) | 数据模型（6实体+枚举）| ✅ |
-| [api-contract.md](docs/api-contract.md) | 接口契约（8模块）| ✅ |
-| [sequence-diagrams.md](docs/sequence-diagrams.md) | 6个关键流程时序图 | ✅ |
+| [api-contract.md](docs/api-contract.md) | 接口契约（6模块）| ✅ |
+| [sequence-diagrams.md](docs/sequence-diagrams.md) | 5个关键流程时序图 | ✅ |
 | [deployment.md](docs/deployment.md) | 部署指南（Docker/裸机/一键）| ✅ |
 | [env-reference.md](docs/env-reference.md) | 环境变量手册 | ✅ |
 | [development.md](docs/development.md) | 开发指南 | ✅ |
-| [CHANGELOG.md](CHANGELOG.md) | 变更日志（v0.1~v0.6）| ✅ |
+| [CHANGELOG.md](CHANGELOG.md) | 变更日志（v0.1~v0.10）| ✅ |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | 贡献指南 | ✅ |
 
 ---

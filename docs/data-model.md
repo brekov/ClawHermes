@@ -38,8 +38,7 @@
 | 字段 | 类型 | 约束 | 说明 |
 |------|------|------|------|
 | `session_id` | string | PK, UUID | 全局唯一会话ID |
-| `chat_id` | string | NOT NULL | 渠道侧聊天ID |
-| `platform` | string | NOT NULL | 渠道标识：cli/weixin/feishu/qq/telegram |
+| `chat_id` | string | NOT NULL | 对话标识ID |
 | `messages` | Message[] | | 会话消息列表 |
 | `metadata` | dict | | 扩展属性（用户画像、标签等） |
 | `token_count` | int | DEFAULT 0 | 累计token用量 |

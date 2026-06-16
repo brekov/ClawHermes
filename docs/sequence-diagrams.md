@@ -127,27 +127,7 @@ Agent 循环               ContextEngine              LLM (压缩)
    │                              │                         │
 ```
 
-## 5. 多渠道消息流程
-
-```
-用户(微信)       Channel Bridge     ClawHermes Gateway        Agent
-   │                  │                     │                  │
-   │ 发消息           │                     │                  │
-   │ ────────────────▶│                     │                  │
-   │                  │  POST /chat         │                  │
-   │                  │ ───────────────────▶│                  │
-   │                  │                     │  chat(msg)       │
-   │                  │                     │ ────────────────▶│
-   │                  │                     │                  │
-   │                  │                     │  ◀── 回复 ───────│
-   │                  │  ◀── 响应 ──────────┤                  │
-   │                  │                     │                  │
-   │  sendMessage     │                     │                  │
-   │  ◀───────────────┤                     │                  │
-   │                  │                     │                  │
-```
-
-## 6. 记忆系统数据流
+## 5. 记忆系统数据流
 
 ```
 Agent 对话               MemoryManager      JSONProvider    ChromaProvider
