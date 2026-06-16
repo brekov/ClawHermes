@@ -110,7 +110,6 @@ curl -X POST "http://127.0.0.1:18789/channels/telegram/start?token=xxx"
 # 微信 / QQ 同理
 ```
 
-  node scripts/channel-bridge.cjs
 ```
 
 ## 健康检查

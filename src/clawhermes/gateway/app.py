@@ -39,7 +39,7 @@ def _get_data_dir() -> str:
 
 
 def _auto_start_channels():
-    """从 channels.json 配置自动启动渠道（通过 gateway setup 配置）"""
+    """从 channels/*.yaml 配置自动启动渠道"""
     from clawhermes.gateway.channels import (
         GatewayManager, TelegramAdapter,
     )

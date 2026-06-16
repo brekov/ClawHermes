@@ -1,0 +1,60 @@
+edit_uri: edit/main/docs/
+markdown_extensions:
+- admonition
+- pymdownx.details
+- pymdownx.superfences
+- pymdownx.tabbed:
+    alternate_style: true
+- pymdownx.highlight:
+    anchor_linenums: true
+- pymdownx.inlinehilite
+- pymdownx.snippets
+- tables
+- toc:
+    permalink: true
+nav:
+- 首页: index.md
+- 功能列表: FEATURES.md
+- 设计文档:
+  - 产品需求: PRD.md
+  - 架构设计: architecture.md
+  - 数据模型: data-model.md
+  - 接口契约: api-contract.md
+  - 时序图: sequence-diagrams.md
+- 部署与配置:
+  - 部署指南: deployment.md
+  - 环境变量: env-reference.md
+- 开发指南: development.md
+- 对比分析: comparison.md
+- 变更日志: changelog.md
+plugins:
+- search
+- mkdocs-nav-weight:
+    section_renamed: true
+repo_name: brekov/ClawHermes
+repo_url: https://github.com/brekov/ClawHermes
+site_description: 融合 Hermes 自进化能力与 OpenClaw Gateway 体系的 Python AI Agent 框架
+site_name: ClawHermes
+site_url: https://brekov.github.io/ClawHermes
+theme:
+  features:
+  - navigation.instant
+  - navigation.tracking
+  - navigation.top
+  - search.highlight
+  - content.code.copy
+  language: zh
+  name: material
+  palette:
+  - accent: indigo
+    primary: indigo
+    scheme: default
+    toggle:
+      icon: material/toggle-switch-off-outline
+      name: 切换到暗色模式
+  - accent: indigo
+    primary: indigo
+    scheme: slate
+    toggle:
+      icon: material/toggle-switch
+      name: 切换到亮色模式
