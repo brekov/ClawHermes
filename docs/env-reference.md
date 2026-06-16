@@ -33,7 +33,7 @@
 
 ## 渠道配置
 
-渠道通过 `clawhermes gateway setup` 交互式配置，保存在 `~/.clawhermes/channels.json`。
+渠道通过 `clawhermes gateway setup` 交互式配置，保存在 `~/.clawhermes/channels/` 目录下。
 
 ```bash
 clawhermes gateway setup    # 交互式向导

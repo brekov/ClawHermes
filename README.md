@@ -62,7 +62,7 @@ clawhermes gateway start       # 启动 Gateway，渠道自动连接
 clawhermes gateway status      # 查看已配置的渠道
 ```
 
-配置保存在 `~/.clawhermes//channels.json`，无需手动编辑。
+配置保存在 `~/.clawhermes/channels/` 目录下，每个渠道一个文件。
 
 ---
 
@@ -187,7 +187,6 @@ src/clawhermes/
         └── qq.py           # QQ 适配器（OneBot）
 
 scripts/
-├── channel-bridge.cjs      # Node.js 兼容层（复用 OpenClaw SDK）
 └── install.sh              # 一键安装脚本
 ```
 

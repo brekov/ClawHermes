@@ -67,7 +67,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/brekov/ClawHermes/main/scrip
 clawhermes gateway setup
 ```
 
-配置保存在 `~/.clawhermes/channels.json`。
+配置保存在 `~/.clawhermes/channels/` 目录下。
 
 ### 启动 Gateway（自动连接已配置的渠道）
 
@@ -110,10 +110,6 @@ curl -X POST "http://127.0.0.1:18789/channels/telegram/start?token=xxx"
 # 微信 / QQ 同理
 ```
 
-### Channel Bridge（复用 OpenClaw 微信 SDK）
-
-```bash
-FEISHU_APP_ID=cli_xxx FEISHU_APP_SECRET=xxx \
   node scripts/channel-bridge.cjs
 ```
 

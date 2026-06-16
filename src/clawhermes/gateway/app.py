@@ -526,4 +526,4 @@ def webhook_receive(platform: str = Query(...), chat_id: str = Query(...),
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=18789)
+    uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("CH_GATEWAY_PORT", "18789")))
