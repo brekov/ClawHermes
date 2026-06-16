@@ -340,39 +340,121 @@ def list_sessions():
 
 # ====== Channels ======
 
+_gateway_manager: "GatewayManager" | None = None
+
+
+def _agent_callback(text: str, chat_id: str) -> str:
+    try:
+        return get_agent().chat(text, session_id=f"ch:{chat_id}")
+    except Exception as e:
+        return f"处理失败: {e}"
+
+
+def _get_gateway_manager():
+    global _gateway_manager
+    if _gateway_manager is None:
+        from clawhermes.gateway.channels import GatewayManager
+        _gateway_manager = GatewayManager(_agent_callback)
+    return _gateway_manager
+
+
+# ====== 飞书 ======
+
+@app.post("/channels/feishu/start")
+def start_feishu(app_id: str = Query(...), app_secret: str = Query(...)):
+    """启动飞书 Bot（WebSocket 长连接）"""
+    from clawhermes.gateway.platforms.feishu import FeishuAdapter
+    gm = _get_gateway_manager()
+    gm.register("feishu", FeishuAdapter(app_id, app_secret))
+    gm.start_all()
+    return {"status": "ok", "channel": "feishu"}
+
+
+@app.post("/channels/feishu/start-from-env")
+def start_feishu_from_env():
+    """从环境变量启动飞书"""
+    app_id = os.getenv("FEISHU_APP_ID") or os.getenv("LARK_APP_ID")
+    app_secret = os.getenv("FEISHU_APP_SECRET") or os.getenv("LARK_APP_SECRET")
+    if not app_id or not app_secret:
+        raise HTTPException(400, "请在环境变量中设置 FEISHU_APP_ID 和 FEISHU_APP_SECRET")
+    return start_feishu(app_id=app_id, app_secret=app_secret)
+
+
+# ====== 微信 ======
+
+@app.post("/channels/wechat/start")
+def start_wechat(corp_id: str = Query(...), corp_secret: str = Query(...),
+                 agent_id: int = Query(...)):
+    """启动企业微信 Bot"""
+    from clawhermes.gateway.platforms.wechat import WeChatAdapter
+    gm = _get_gateway_manager()
+    gm.register("wechat", WeChatAdapter(corp_id, corp_secret, agent_id))
+    gm.start_all()
+    return {"status": "ok", "channel": "wechat"}
+
+
+@app.post("/channels/wechat/public/start")
+def start_wechat_public(app_id: str = Query(...), app_secret: str = Query(...),
+                        token: str = Query(...), encoding_aes_key: str = ""):
+    """启动微信公众号"""
+    from clawhermes.gateway.platforms.wechat import WeChatPublicAdapter
+    gm = _get_gateway_manager()
+    gm.register("wechat_mp", WeChatPublicAdapter(app_id, app_secret, token, encoding_aes_key))
+    gm.start_all()
+    return {"status": "ok", "channel": "wechat_mp"}
+
+
+@app.post("/channels/wechat/callback")
+def wechat_callback(body: dict):
+    """微信回调入口"""
+    from clawhermes.gateway.platforms.wechat import WeChatAdapter
+    gm = _get_gateway_manager()
+    adapter = gm._adapters.get("wechat")
+    if isinstance(adapter, WeChatAdapter):
+        return adapter.handle_webhook(body)
+    return {"error": "微信适配器未启动"}
+
+
+# ====== QQ ======
+
+@app.post("/channels/qq/start")
+def start_qq(ws_url: str = Query("ws://127.0.0.1:6700"), token: str = ""):
+    """启动 QQ Bot（OneBot/go-cqhttp 协议）"""
+    from clawhermes.gateway.platforms.qq import QQAdapter
+    gm = _get_gateway_manager()
+    gm.register("qq", QQAdapter(ws_url, token))
+    gm.start_all()
+    return {"status": "ok", "channel": "qq", "ws_url": ws_url}
+
+
+# ====== Telegram ======
+
 @app.post("/channels/telegram/start")
 def start_telegram(token: str = Query(...)):
     """启动 Telegram Bot"""
-    from clawhermes.gateway.channels import TelegramAdapter, GatewayManager
-    global _gateway_manager
-
-    def agent_callback(text: str, chat_id: str) -> str:
-        try:
-            return get_agent().chat(text, session_id=f"tg:{chat_id}")
-        except Exception as e:
-            return f"处理失败: {e}"
-
-    gm = _gateway_manager or GatewayManager(agent_callback)
+    from clawhermes.gateway.channels import TelegramAdapter
+    gm = _get_gateway_manager()
     gm.register("telegram", TelegramAdapter(token))
     gm.start_all()
-    _gateway_manager = gm
     return {"status": "ok", "channel": "telegram"}
+
+
+# ====== 统一管理 ======
+
+@app.get("/channels")
+def list_channels():
+    """查看已启动的渠道"""
+    gm = _get_gateway_manager()
+    return {"channels": list(gm._adapters.keys()), "count": len(gm._adapters)}
 
 
 @app.post("/channels/webhook/receive")
 def webhook_receive(platform: str = Query(...), chat_id: str = Query(...),
                     text: str = Query(...)):
-    """Webhook 接收消息（供微信/飞书等调用）"""
-    from clawhermes.gateway.channels import WebhookAdapter, GatewayManager
-
-    def agent_callback(msg: str, cid: str) -> str:
-        try:
-            return get_agent().chat(msg, session_id=f"wh:{cid}")
-        except Exception as e:
-            return f"处理失败: {e}"
-
+    """Webhook 接收消息"""
+    from clawhermes.gateway.channels import WebhookAdapter
+    gm = _get_gateway_manager()
     adapter = WebhookAdapter()
-    gm = GatewayManager(agent_callback)
     gm.register(platform, adapter)
     adapter.receive(platform, chat_id, text)
     return {"status": "ok", "message": f"已收到来自 {platform} 的消息"}
