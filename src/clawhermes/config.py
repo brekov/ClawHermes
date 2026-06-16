@@ -3,6 +3,7 @@ ClawHermes - 类型安全配置管理（Pydantic Settings）
 """
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Literal
 
@@ -165,12 +166,65 @@ class ClawHermesConfig(BaseSettings):
         return v
 
 
-# 全局单例配置
+# ===== YAML 配置文件（类似 Hermes config.yaml / OpenClaw openclaw.json）=====
+
+
+def get_yaml_path() -> Path:
+    return Path(os.environ.get("CH_DATA_DIR", str(Path.home() / ".clawhermes"))) / "config.yaml"
+
+
+def load_yaml() -> dict:
+    """加载 config.yaml"""
+    import yaml
+    p = get_yaml_path()
+    if p.exists():
+        try:
+            with open(p) as f:
+                return yaml.safe_load(f) or {}
+        except Exception as e:
+            print(f"⚠️  config.yaml 加载失败: {e}")
+    return {}
+
+
+def save_yaml(cfg: dict):
+    """保存 config.yaml"""
+    import yaml
+    p = get_yaml_path()
+    p.parent.mkdir(parents=True, exist_ok=True)
+    with open(p, "w") as f:
+        yaml.dump(cfg, f, default_flow_style=False, allow_unicode=True, indent=2)
+    print(f"  ✅ 配置已保存: {p}")
+
+
+def default_yaml() -> dict:
+    """生成默认 config.yaml"""
+    return {
+        "agent": {
+            "name": "default",
+            "model": "deepseek/deepseek-chat",
+            "max_iterations": 50,
+        },
+        "gateway": {"host": "127.0.0.1", "port": 18789},
+        "llm": {"provider": "deepseek"},
+        "memory": {"engine": "chromadb"},
+        "skills": {"enabled": True, "background_review": True, "curator_interval_hours": 168},
+        "context": {"compress_threshold": 0.75, "protect_first_n": 3, "protect_last_n": 6},
+        "tools": {"parallel_execution": True, "profile": "standard"},
+        "channels": {
+            "feishu": {"enabled": False},
+            "wechat": {"enabled": False},
+            "qq": {"enabled": False},
+            "telegram": {"enabled": False},
+        },
+    }
+
+
+# 全局单例
 config: ClawHermesConfig | None = None
 
 
 def load_config(env_file: str | None = None) -> ClawHermesConfig:
-    """加载配置，支持自定义 .env 路径"""
+    """加载配置（环境变量 + YAML）"""
     global config
     config = ClawHermesConfig(_env_file=env_file)
     return config

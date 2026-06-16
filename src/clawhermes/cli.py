@@ -171,6 +171,45 @@ def switch(name: str):
 
 # ====== setup 命令 ======
 
+# ====== config 命令 ======
+
+@main.group()
+def config():
+    """管理配置文件 (config.yaml)"""
+    pass
+
+
+@config.command("show")
+def config_show():
+    """查看当前配置"""
+    from clawhermes.config import load_yaml
+    from rich.syntax import Syntax
+    cfg = load_yaml()
+    if cfg:
+        import yaml
+        text = yaml.dump(cfg, default_flow_style=False, allow_unicode=True)
+        console.print(Syntax(text, "yaml", theme="monokai"))
+    else:
+        console.print("⚠️  config.yaml 不存在，运行 clawhermes setup 生成")
+
+
+@config.command("init")
+def config_init():
+    """生成默认配置文件"""
+    from clawhermes.config import default_yaml, save_yaml
+    cfg = default_yaml()
+    save_yaml(cfg)
+    console.print("💡 编辑 config.yaml 后运行 clawhermes gateway start 生效")
+
+
+@config.command("path")
+def config_path():
+    """显示配置文件路径"""
+    from clawhermes.config import get_yaml_path
+    console.print(f"📄 {get_yaml_path()}")
+
+
+
 @main.command()
 @click.option("--env-file", default=None)
 def setup(env_file: str | None):
@@ -184,6 +223,45 @@ def setup(env_file: str | None):
     console.print(f"✅ 数据目录已创建: [bold]{data_dir}[/bold]")
     console.print("💡 运行 [bold]clawhermes gateway setup[/bold] 配置消息渠道")
     console.print("💡 运行 [bold]clawhermes agent set-SOUL[/bold] 设定 Agent 身份")
+
+
+# ====== config 命令 ======
+
+@main.group()
+def config():
+    """管理配置文件 (config.yaml)"""
+    pass
+
+
+@config.command("show")
+def config_show():
+    """查看当前配置"""
+    from clawhermes.config import load_yaml
+    from rich.syntax import Syntax
+    cfg = load_yaml()
+    if cfg:
+        import yaml
+        text = yaml.dump(cfg, default_flow_style=False, allow_unicode=True)
+        console.print(Syntax(text, "yaml", theme="monokai"))
+    else:
+        console.print("⚠️  config.yaml 不存在，运行 clawhermes setup 生成")
+
+
+@config.command("init")
+def config_init():
+    """生成默认配置文件"""
+    from clawhermes.config import default_yaml, save_yaml
+    cfg = default_yaml()
+    save_yaml(cfg)
+    console.print("💡 编辑 config.yaml 后运行 clawhermes gateway start 生效")
+
+
+@config.command("path")
+def config_path():
+    """显示配置文件路径"""
+    from clawhermes.config import get_yaml_path
+    console.print(f"📄 {get_yaml_path()}")
+
 
 
 @main.command()
@@ -229,6 +307,45 @@ def chat(model, api_key, one_shot):
                 console.print(Markdown(response))
             except Exception as e:
                 console.print(f"❌ 错误: {e}", style="red")
+
+
+# ====== config 命令 ======
+
+@main.group()
+def config():
+    """管理配置文件 (config.yaml)"""
+    pass
+
+
+@config.command("show")
+def config_show():
+    """查看当前配置"""
+    from clawhermes.config import load_yaml
+    from rich.syntax import Syntax
+    cfg = load_yaml()
+    if cfg:
+        import yaml
+        text = yaml.dump(cfg, default_flow_style=False, allow_unicode=True)
+        console.print(Syntax(text, "yaml", theme="monokai"))
+    else:
+        console.print("⚠️  config.yaml 不存在，运行 clawhermes setup 生成")
+
+
+@config.command("init")
+def config_init():
+    """生成默认配置文件"""
+    from clawhermes.config import default_yaml, save_yaml
+    cfg = default_yaml()
+    save_yaml(cfg)
+    console.print("💡 编辑 config.yaml 后运行 clawhermes gateway start 生效")
+
+
+@config.command("path")
+def config_path():
+    """显示配置文件路径"""
+    from clawhermes.config import get_yaml_path
+    console.print(f"📄 {get_yaml_path()}")
+
 
 
 @main.command()
