@@ -70,9 +70,9 @@ def create_agent(name: str, clone_from: str | None = None) -> Path:
     else:
         path.mkdir(parents=True)
         # 创建默认文件
-        (path / "persona.md").write_text(f"# {name} 的身份\n\n你是一个智能 AI 助手。\n")
-        (path / "instructions.md").write_text("# 行为指令\n\n- 用中文回答\n- 简洁明了\n- 不确定时如实告知\n")
-        (path / "user.md").write_text("# 用户信息\n\n无\n")
+        (path / "SOUL.md").write_text(f"# {name} 的身份\n\n你是一个智能 AI 助手。\n")
+        (path / "AGENTS.md").write_text("# 行为指令\n\n- 用中文回答\n- 简洁明了\n- 不确定时如实告知\n")
+        (path / "USER.md").write_text("# 用户信息\n\n无\n")
         (path / "config.json").write_text(json.dumps({
             "model": os.getenv("CH_DEFAULT_MODEL", "deepseek/deepseek-chat"),
             "temperature": 0.7,
@@ -101,7 +101,7 @@ def delete_agent(name: str):
 
 def read_persona(name: str) -> str:
     """读取 Agent 身份设定"""
-    path = agent_path(name) / "persona.md"
+    path = agent_path(name) / "SOUL.md"
     if path.exists():
         return path.read_text()
     return "# 无身份设定\n"
@@ -109,7 +109,7 @@ def read_persona(name: str) -> str:
 
 def read_instructions(name: str) -> str:
     """读取 Agent 行为指令"""
-    path = agent_path(name) / "instructions.md"
+    path = agent_path(name) / "AGENTS.md"
     if path.exists():
         return path.read_text()
     return "# 无行为指令\n"
@@ -117,23 +117,23 @@ def read_instructions(name: str) -> str:
 
 def read_user_info(name: str) -> str:
     """读取用户信息"""
-    path = agent_path(name) / "user.md"
+    path = agent_path(name) / "USER.md"
     if path.exists():
         return path.read_text()
     return "# 无用户信息\n"
 
 
 def write_persona(name: str, content: str):
-    (agent_path(name) / "persona.md").write_text(content)
+    (agent_path(name) / "SOUL.md").write_text(content)
     console.print(f"[green]✅ '{name}' 的身份设定已更新[/green]")
 
 
 def write_instructions(name: str, content: str):
-    (agent_path(name) / "instructions.md").write_text(content)
+    (agent_path(name) / "AGENTS.md").write_text(content)
 
 
 def write_user_info(name: str, content: str):
-    (agent_path(name) / "user.md").write_text(content)
+    (agent_path(name) / "USER.md").write_text(content)
 
 
 def get_agent_config(name: str) -> dict:

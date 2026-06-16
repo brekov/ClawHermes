@@ -111,7 +111,7 @@ def agent():
 @agent.command("list")
 def agent_list():
     """列出所有 Agent"""
-    from clawhermes.agent.persona.manager import cmd_list
+    from clawhermes.agent.SOUL.manager import cmd_list
     cmd_list()
 
 
@@ -120,7 +120,7 @@ def agent_list():
 @click.option("--clone", default=None, help="从已有 Agent 克隆")
 def create(name: str, clone: str | None):
     """创建新 Agent"""
-    from clawhermes.agent.persona.manager import cmd_create
+    from clawhermes.agent.SOUL.manager import cmd_create
     cmd_create(name, clone)
 
 
@@ -128,7 +128,7 @@ def create(name: str, clone: str | None):
 @click.argument("name", required=False)
 def delete(name: str | None):
     """删除 Agent"""
-    from clawhermes.agent.persona.manager import delete_agent
+    from clawhermes.agent.SOUL.manager import delete_agent
     delete_agent(name)
 
 
@@ -136,16 +136,16 @@ def delete(name: str | None):
 @click.argument("name", required=False)
 @click.option("--persona", default=None, help="直接指定身份内容")
 @click.option("--instructions", default=None, help="直接指定行为指令")
-def set_persona(name: str | None, persona: str | None, instructions: str | None):
+def set_persona(name: str | None, SOUL: str | None, instructions: str | None):
     """设定 Agent 身份（交互式或 --persona/--instructions）"""
-    from clawhermes.agent.persona.manager import cmd_set_persona, cmd_set_instructions, write_persona, write_instructions, get_default_agent
+    from clawhermes.agent.SOUL.manager import cmd_set_persona, cmd_set_instructions, write_SOUL, write_instructions, get_default_agent
     if name is None:
         name = get_default_agent()
-    if persona:
-        write_persona(name, persona)
+    if SOUL:
+        write_SOUL(name, SOUL)
     if instructions:
         write_instructions(name, instructions)
-    if not persona and not instructions:
+    if not SOUL and not instructions:
         cmd_set_persona(name)
 
 
@@ -153,7 +153,7 @@ def set_persona(name: str | None, persona: str | None, instructions: str | None)
 @click.argument("name", required=False)
 def show(name: str | None):
     """查看 Agent 详情"""
-    from clawhermes.agent.persona.manager import cmd_show
+    from clawhermes.agent.SOUL.manager import cmd_show
     cmd_show(name)
 
 
@@ -161,7 +161,7 @@ def show(name: str | None):
 @click.argument("name")
 def switch(name: str):
     """切换默认 Agent"""
-    from clawhermes.agent.persona.manager import set_default_agent, agent_exists
+    from clawhermes.agent.SOUL.manager import set_default_agent, agent_exists
     if agent_exists(name):
         set_default_agent(name)
         console.print(f"[green]✅ 已切换到 Agent '{name}'[/green]")
@@ -179,11 +179,11 @@ def setup(env_file: str | None):
     data_dir.mkdir(parents=True, exist_ok=True)
     (data_dir / "skills").mkdir(parents=True, exist_ok=True)
     # 创建默认 Agent
-    from clawhermes.agent.persona.manager import create_agent
+    from clawhermes.agent.SOUL.manager import create_agent
     create_agent("default")
     console.print(f"✅ 数据目录已创建: [bold]{data_dir}[/bold]")
     console.print("💡 运行 [bold]clawhermes gateway setup[/bold] 配置消息渠道")
-    console.print("💡 运行 [bold]clawhermes agent set-persona[/bold] 设定 Agent 身份")
+    console.print("💡 运行 [bold]clawhermes agent set-SOUL[/bold] 设定 Agent 身份")
 
 
 @main.command()
