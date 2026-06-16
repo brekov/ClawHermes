@@ -178,7 +178,7 @@ scripts/
 > **ClawHermes 是一个纯 Python AI Agent 框架，通过 REST API 暴露能力。**
 >
 > 本框架**不包含**聊天渠道集成（飞书、微信、QQ、Telegram 等消息平台）。
-> 消息渠道集成属于 OpenClaw 的范畴。ClawHermes 专注于 Agent 核心能力：
+> ClawHermes 专注于 Agent 核心能力，消息渠道由部署者自行集成。
 > - Agent 思考-行动循环
 > - 工具系统与钩子/策略
 > - 记忆与技能管理

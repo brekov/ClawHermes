@@ -7,7 +7,7 @@
 ### 变更说明
 
 > ClawHermes 不再是一个消息网关/Gateway，而是一个纯 Python AI Agent 框架，通过 REST API 暴露能力。
-> 消息渠道集成（飞书、微信、QQ、Telegram 等）属于 OpenClaw 的范畴，两者分工明确。
+> 消息渠道集成由部署者自行对接（如通过 OpenClaw、自建 webhook 或任意前端）。
 
 ### 移除
 

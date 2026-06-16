@@ -5,7 +5,7 @@
 > 状态：✔️ 全部实现
 
 > **v0.10.0 重要决策**：ClawHermes 移除全部消息渠道代码（飞书、微信、QQ、Telegram），回归纯 AI Agent 框架定位。
-> 消息渠道集成属于 OpenClaw 的范畴，ClawHermes 专注 Agent 核心能力，通过 REST API 暴露能力。
+> ClawHermes 专注 Agent 核心能力，消息渠道由部署者自行集成。
 
 ---
 
@@ -43,7 +43,7 @@
 | F11 | 多凭证池与故障转移 | P2 | Hermes | ✅ |
 | F12 | 子 Agent 委派 | P2 | Hermes | ✅ |
 
-> **F5 已移除 (v0.10.0)**：多渠道消息网关。ClawHermes 回归 Agent 框架本分，不再集成消息渠道。消息渠道是 OpenClaw 的范畴。
+> **F5 已移除 (v0.10.0)**：多渠道消息网关。ClawHermes 回归 Agent 框架本分，不再集成消息渠道。
 
 ### 2.2 非功能需求
 
