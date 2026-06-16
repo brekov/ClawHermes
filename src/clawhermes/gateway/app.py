@@ -38,6 +38,21 @@ def _get_data_dir() -> str:
     return os.getenv("CH_DATA_DIR", os.path.expanduser("~/.clawhermes"))
 
 
+def _start_bridge():
+    """启动 Node SDK 长连接（收消息用）"""
+    try:
+        from clawhermes.gateway.bridge import get_bridge
+        bridge = get_bridge()
+        if bridge.start():
+            logger.info("📡 Bridge 长连接已启动")
+            # 注册消息接收回调
+            def on_message(msg):
+                logger.info("收到消息: %s", msg.get("text", "")[:50])
+            bridge.on_message(on_message)
+    except Exception as e:
+        logger.warning("Bridge 启动失败（不影响基础功能）: %s", e)
+
+
 def _auto_start_channels():
     """从 channels/*.yaml 配置自动启动渠道"""
     from clawhermes.gateway.channels import (
