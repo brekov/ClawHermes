@@ -22,4 +22,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 EXPOSE 18789
 
 # 默认启动 Gateway
-CMD ["clawhermes", "gateway", "--host", "0.0.0.0", "--port", "18789"]
+CMD ["clawhermes", "gateway", "start", "--host", "0.0.0.0"]
