@@ -56,61 +56,60 @@ def remove_channel(name: str):
 # ===== 交互式配置向导 =====
 
 def interactive_setup():
-    """交互式渠道配置向导（类似 OpenClaw 的 gateway setup）"""
+    """交互式渠道配置向导（微信扫码，飞书扫码，其他手动）"""
     from rich.console import Console
-    from rich.prompt import Prompt, Confirm
+    from rich.prompt import Confirm
     from rich.panel import Panel
 
     console = Console()
     console.print(Panel.fit(
         "[bold]ClawHermes Gateway 配置向导[/bold]\n"
-        "配置消息渠道，保存后启动 Gateway 自动连接",
+        "企业微信支持扫码登录，无需手动填写凭证",
         border_style="blue",
     ))
 
     config = load_config()
 
+    # 微信（扫码登录）
+    if Confirm.ask("📱 配置微信渠道？（扫码登录）", default=False):
+        from clawhermes.gateway.qr_setup import wechat_qr_login
+        result = wechat_qr_login()
+        if result and result.get("bot_token"):
+            config["wechat"] = result
+            console.print("  ✅ 微信扫码登录成功")
+        else:
+            console.print("  ⚠️  扫码失败，可稍后重试 [bold]clawhermes gateway setup[/bold]")
+
     # 飞书
     if Confirm.ask("📡 配置飞书渠道？", default=False):
-        app_id = Prompt.ask("  飞书 App ID")
-        app_secret = Prompt.ask("  飞书 App Secret")
-        config["feishu"] = {"app_id": app_id, "app_secret": app_secret}
-        console.print("  ✅ 飞书已配置")
-
-    # 企业微信
-    if Confirm.ask("📡 配置企业微信渠道？", default=False):
-        corp_id = Prompt.ask("  企业微信 Corp ID")
-        corp_secret = Prompt.ask("  企业微信 Corp Secret")
-        agent_id = Prompt.ask("  应用 Agent ID", default="1000001")
-        config["wechat"] = {
-            "corp_id": corp_id,
-            "corp_secret": corp_secret,
-            "agent_id": int(agent_id),
-        }
-        console.print("  ✅ 企业微信已配置")
+        from clawhermes.gateway.qr_setup import feishu_qr_login
+        result = feishu_qr_login()
+        if result:
+            config["feishu"] = result
+            console.print("  ✅ 飞书已配置")
 
     # QQ
     if Confirm.ask("📡 配置 QQ 渠道？（需 go-cqhttp）", default=False):
-        ws_url = Prompt.ask("  go-cqhttp WebSocket 地址", default="ws://127.0.0.1:6700")
-        token = Prompt.ask("  访问令牌（可选）", default="")
-        config["qq"] = {"ws_url": ws_url}
-        if token:
-            config["qq"]["token"] = token
-        console.print("  ✅ QQ 已配置")
+        from clawhermes.gateway.qr_setup import qq_setup
+        result = qq_setup()
+        if result:
+            config["qq"] = result
+            console.print("  ✅ QQ 已配置")
 
     # Telegram
     if Confirm.ask("📡 配置 Telegram 渠道？", default=False):
-        token = Prompt.ask("  Bot Token", default="")
-        if token:
-            config["telegram"] = {"token": token}
+        from clawhermes.gateway.qr_setup import telegram_setup
+        result = telegram_setup()
+        if result:
+            config["telegram"] = result
             console.print("  ✅ Telegram 已配置")
 
     save_config(config)
 
     if config:
-        console.print("\n💡 现在运行 [bold]clawhermes gateway[/bold] 启动，渠道将自动连接")
+        console.print("\n💡 现在运行 [bold]clawhermes gateway start[/bold] 启动")
     else:
-        console.print("\n💡 未配置任何渠道，随时可以重新运行 [bold]clawhermes gateway setup[/bold]")
+        console.print("\n💡 未配置任何渠道，随时重新运行 [bold]clawhermes gateway setup[/bold]")
 
 
 def show_status():

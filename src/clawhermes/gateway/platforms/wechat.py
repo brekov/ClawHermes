@@ -15,59 +15,93 @@ logger = logging.getLogger(__name__)
 class WeChatAdapter(PlatformAdapter):
     """微信适配器 - 支持企业微信（WeCom）"""
 
-    def __init__(self, corp_id: str, corp_secret: str, agent_id: int):
+    def __init__(self, corp_id: str = "", corp_secret: str = "", agent_id: int = 0,
+                 bot_token: str = ""):
         """
-        企业微信适配器
-        :param corp_id: 企业 ID
-        :param corp_secret: 企业 Secret
-        :param agent_id: 应用 Agent ID
+        微信适配器，支持两种认证方式:
+        1. 企业微信应用: corp_id + corp_secret + agent_id
+        2. 扫码登录: bot_token（通过 clawhermes gateway setup 扫码获取）
         """
         self.corp_id = corp_id
         self.corp_secret = corp_secret
         self.agent_id = agent_id
+        self.bot_token = bot_token
         self._handler: Callable | None = None
         self._running = False
         self._token = ""
-        self._client = None
-
-    def _get_token(self) -> str:
-        """获取 access_token"""
-        if self._token:
-            return self._token
-        import httpx
-        resp = httpx.get(
-            "https://qyapi.weixin.qq.com/cgi-bin/gettoken",
-            params={"corpid": self.corp_id, "corpsecret": self.corp_secret},
-            timeout=10,
-        )
-        if resp.is_success:
-            data = resp.json()
-            self._token = data.get("access_token", "")
-        return self._token
 
     def send_text(self, chat_id: str, text: str) -> SendResult:
         """发送文本消息"""
-        token = self._get_token()
+        # 优先使用 bot_token（扫码登录方式）
+        if self.bot_token:
+            return self._send_via_bot(chat_id, text)
+        # 回退到企业微信 API
+        return self._send_via_corp(chat_id, text)
+
+    def _send_via_bot(self, chat_id: str, text: str) -> SendResult:
+        """通过 bot_token 发送（Ilio 协议）"""
+        import httpx
+        try:
+            resp = httpx.post(
+                "https://ilinkai.weixin.qq.com/ilink/bot/send_message",
+                json={
+                    "bot_token": self.bot_token,
+                    "to_userid": chat_id,
+                    "msg_type": "text",
+                    "content": json.dumps({"text": text}, ensure_ascii=False),
+                },
+                timeout=10,
+            )
+            if resp.is_success:
+                return SendResult(success=True)
+            return SendResult(success=False, error=resp.text)
+        except Exception as e:
+            return SendResult(success=False, error=str(e))
+
+    def _send_via_corp(self, chat_id: str, text: str) -> SendResult:
+        """通过企业微信 API 发送"""
+        token = self._get_corp_token()
         if not token:
             return SendResult(success=False, error="获取 token 失败")
 
         import httpx
-        resp = httpx.post(
-            f"https://qyapi.weixin.qq.com/cgi-bin/message/send?access_token={token}",
-            json={
-                "touser": chat_id,
-                "msgtype": "text",
-                "agentid": self.agent_id,
-                "text": {"content": text},
-            },
-            timeout=10,
-        )
-        if resp.is_success:
-            data = resp.json()
-            if data.get("errcode") == 0:
-                return SendResult(success=True)
-            return SendResult(success=False, error=data.get("errmsg", ""))
-        return SendResult(success=False, error=resp.text)
+        try:
+            resp = httpx.post(
+                f"https://qyapi.weixin.qq.com/cgi-bin/message/send?access_token={token}",
+                json={
+                    "touser": chat_id,
+                    "msgtype": "text",
+                    "agentid": self.agent_id,
+                    "text": {"content": text},
+                },
+                timeout=10,
+            )
+            if resp.is_success:
+                data = resp.json()
+                if data.get("errcode") == 0:
+                    return SendResult(success=True)
+                return SendResult(success=False, error=data.get("errmsg", ""))
+            return SendResult(success=False, error=resp.text)
+        except Exception as e:
+            return SendResult(success=False, error=str(e))
+
+    def _get_corp_token(self) -> str:
+        """获取企业微信 access_token"""
+        if self._token:
+            return self._token
+        import httpx
+        try:
+            resp = httpx.get(
+                "https://qyapi.weixin.qq.com/cgi-bin/gettoken",
+                params={"corpid": self.corp_id, "corpsecret": self.corp_secret},
+                timeout=10,
+            )
+            if resp.is_success:
+                data = resp.json()
+                self._token = data.get("access_token", "")
+        except Exception:
+            pass
+        return self._token
 
     def start(self, message_handler: Callable[[MessageEvent], None]):
         """启动（Webhook 模式，接收回调）"""

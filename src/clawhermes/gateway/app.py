@@ -64,11 +64,17 @@ def _auto_start_channels():
                     gm.register("feishu", FeishuAdapter(app_id, secret))
 
             elif name == "wechat":
-                corp_id = cfg.get("corp_id")
-                corp_secret = cfg.get("corp_secret")
-                agent_id = cfg.get("agent_id", 0)
-                if corp_id and corp_secret and agent_id:
-                    gm.register("wechat", WeChatAdapter(corp_id, corp_secret, int(agent_id)))
+                bot_token = cfg.get("bot_token")
+                if bot_token:
+                    # 扫码登录方式
+                    gm.register("wechat", WeChatAdapter(bot_token=bot_token))
+                else:
+                    # 企业微信应用方式
+                    corp_id = cfg.get("corp_id")
+                    corp_secret = cfg.get("corp_secret")
+                    agent_id = cfg.get("agent_id", 0)
+                    if corp_id and corp_secret and agent_id:
+                        gm.register("wechat", WeChatAdapter(corp_id, corp_secret, int(agent_id)))
 
             elif name == "qq":
                 ws_url = cfg.get("ws_url", "ws://127.0.0.1:6700")
