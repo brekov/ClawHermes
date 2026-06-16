@@ -90,7 +90,7 @@ class ChatResponse(BaseModel):
 class StatusResponse(BaseModel):
     status: str
     agent: str = "ClawHermes"
-    version: str = "0.2.0"
+    version: str = "0.2.1"
     uptime: str = ""
     tools: int = 0
     sessions: int = 0
