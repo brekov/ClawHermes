@@ -1,92 +1,69 @@
 #!/usr/bin/env node
 /**
- * ClawHermes Channel Bridge — Node.js SDK 兼容层
+ * ClawHermes Node SDK 兼容层 — CLI 模式
  * 
- * 由 Python Gateway 自动启动，通过 HTTP 为本进程内的 Node SDK 提供调用入口。
+ * 由 Python 端通过 subprocess 调用，加载官方 Node SDK 执行操作。
+ * 不做常驻服务，用完即止。
  * 
- * Python (WeChatAdapter) → HTTP → Bridge → @tencent-weixin/openclaw-weixin
- * Python (FeishuAdapter) → HTTP → Bridge → @larksuite/openclaw-lark
+ * 用法:
+ *   node scripts/bridge.mjs send weixin <to> <text>
+ *   node scripts/bridge.mjs send feishu <to> <text>
+ *   node scripts/bridge.mjs check weixin
+ *   node scripts/bridge.mjs check feishu
  */
-const http = require('http');
+const cmd = process.argv[2];
+const channel = process.argv[3];
 
-const PORT = parseInt(process.env.CH_BRIDGE_PORT || '18788');
-const WX_PKG = process.env.CH_WX_PACKAGE || '@tencent-weixin/openclaw-weixin';
-const LARK_PKG = process.env.CH_LARK_PACKAGE || '@larksuite/openclaw-lark';
-
-// ── 加载微信 SDK ──────────────────────────────────────
-let wxSend = null;
-try {
-    const wxRoot = require.resolve(WX_PKG + '/package.json');
-    const path = require('path');
-    wxSend = require(path.join(path.dirname(wxRoot), 'dist/src/messaging/send.js'));
-    console.log(`✅ 微信 SDK 已加载: ${WX_PKG}`);
-} catch (e) {
-    console.log(`ℹ️  微信 SDK 未安装 (${e.message})`);
-}
-
-// ── HTTP 服务 ─────────────────────────────────────────
-const server = http.createServer((req, res) => {
-    res.setHeader('Content-Type', 'application/json');
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
-
-    const url = new URL(req.url, `http://${req.headers.host}`);
-    let body = '';
-    req.on('data', c => body += c);
-    req.on('end', async () => {
-        try {
-            const result = await handle(url, body);
-            res.writeHead(result.error ? 400 : 200);
-            res.end(JSON.stringify(result));
-        } catch (e) {
-            res.writeHead(500);
-            res.end(JSON.stringify({ error: e.message }));
-        }
-    });
-});
-
-async function handle(url, body) {
-    const path = url.pathname;
-    const params = Object.fromEntries(url.searchParams);
-
-    if (path === '/health') {
-        return { status: 'ok', weixin: !!wxSend };
-    }
-
-    if (path === '/send') {
-        const { channel, to, text } = JSON.parse(body || '{}');
-        if (!channel || !to || !text) return { error: 'missing channel/to/text' };
-
-        if (channel === 'weixin') {
-            if (!wxSend) return { error: '微信 SDK 未安装（npm install @tencent-weixin/openclaw-weixin）' };
-            const result = await wxSend.sendMessageWeixin({ to, text, opts: { contextToken: '' } });
-            return { success: true, messageId: result?.messageId };
-
-        } else if (channel === 'feishu') {
-            const FEISHU_APP_ID = process.env.FEISHU_APP_ID || process.env.LARK_APP_ID;
-            const FEISHU_APP_SECRET = process.env.FEISHU_APP_SECRET || process.env.LARK_APP_SECRET;
-            if (!FEISHU_APP_ID || !FEISHU_APP_SECRET) return { error: 'FEISHU_APP_ID/ SECRET 未设置' };
-            const lark = require(LARK_PKG);
-            const result = await lark.sendTextLark({ chat_id: to, text });
-            return { success: true, data: result };
+async function main() {
+    try {
+        if (cmd === 'check') {
+            const result = { installed: false, sdk: null };
+            if (channel === 'weixin') {
+                try {
+                    require.resolve('@tencent-weixin/openclaw-weixin');
+                    result.installed = true;
+                    result.sdk = '@tencent-weixin/openclaw-weixin';
+                } catch {}
+            } else if (channel === 'feishu') {
+                try {
+                    require.resolve('@larksuite/openclaw-lark');
+                    result.installed = true;
+                    result.sdk = '@larksuite/openclaw-lark';
+                } catch {}
+            }
+            console.log(JSON.stringify(result));
+            process.exit(0);
         }
 
-        return { error: `unknown channel: ${channel}` };
-    }
+        if (cmd === 'send') {
+            const to = process.argv[4];
+            const text = process.argv[5];
+            if (!channel || !to || !text) {
+                throw new Error('用法: bridge.mjs send <channel> <to> <text>');
+            }
 
-    if (path === '/install') {
-        const { pkg } = params;
-        if (!pkg) return { error: 'missing pkg parameter' };
-        const { execSync } = require('child_process');
-        execSync(`npm install ${pkg}`, { cwd: __dirname, stdio: 'inherit' });
-        return { success: true, installed: pkg };
-    }
+            if (channel === 'weixin') {
+                const wx = require('@tencent-weixin/openclaw-weixin/dist/src/messaging/send.js');
+                const result = await wx.sendMessageWeixin({ to, text, opts: { contextToken: '' } });
+                console.log(JSON.stringify({ success: true, messageId: result?.messageId }));
 
-    return { error: 'not found' };
+            } else if (channel === 'feishu') {
+                const lark = require('@larksuite/openclaw-lark');
+                const FEISHU_APP_ID = process.env.FEISHU_APP_ID || process.env.LARK_APP_ID;
+                const FEISHU_APP_SECRET = process.env.FEISHU_APP_SECRET || process.env.LARK_APP_SECRET;
+                const result = await lark.sendTextLark({ chat_id: to, text });
+                console.log(JSON.stringify({ success: true, data: result }));
+            }
+            process.exit(0);
+        }
+
+        console.error('用法: bridge.mjs send|check <channel> [args...]');
+        process.exit(1);
+
+    } catch (e) {
+        console.log(JSON.stringify({ error: e.message }));
+        process.exit(1);
+    }
 }
 
-server.listen(PORT, '127.0.0.1', () => {
-    console.log(`🔌 ClawHermes Bridge (Node SDK 兼容层)`);
-    console.log(`   端口: ${PORT}`);
-    console.log(`   微信: ${wxSend ? '✅' : '❌'} (npm install @tencent-weixin/openclaw-weixin)`);
-});
+main();

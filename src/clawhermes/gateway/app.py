@@ -504,8 +504,6 @@ def start_telegram(token: str = Query(...)):
     return {"status": "ok", "channel": "telegram"}
 
 
-# ====== Bridge ======
-
 
 @app.post("/channels/bridge/start")
 def start_bridge():
