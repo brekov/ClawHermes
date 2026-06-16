@@ -198,6 +198,8 @@ class Agent:
         llm_provider: LLMProvider,
         tool_registry: ToolRegistry | None = None,
         config: AgentConfig | None = None,
+        memory_manager=None,
+        skill_manager=None,
     ):
         self.llm = llm_provider
         self.prompt = SystemPrompt()
@@ -205,7 +207,10 @@ class Agent:
         self.hooks = HookManager()
         self.dispatcher = ToolDispatcher(self.tools, self.hooks)
         self.config = config or AgentConfig()
+        self.memory = memory_manager
+        self.skills = skill_manager
         self._interrupt = threading.Event()
+        self._last_conversation: list[dict] = []
 
     def chat(self, user_message: str, session_id: str = "") -> str:
         """简单接口：输入用户消息，返回最终响应"""
@@ -217,7 +222,6 @@ class Agent:
         messages.append({"role": "user", "content": user_message})
 
         for iteration in range(self.config.max_iterations):
-            # before_agent_run 钩子
             hook_result = self.hooks.trigger(
                 HookPoint.BEFORE_AGENT_RUN,
                 messages=messages,
@@ -229,7 +233,6 @@ class Agent:
             if self._interrupt.is_set():
                 return "（已中断）"
 
-            # 调用 LLM
             self.hooks.trigger(HookPoint.MODEL_CALL_STARTED)
             try:
                 response: LLMResponse = self.llm.chat(
@@ -247,17 +250,24 @@ class Agent:
                 "tool_calls": response.tool_calls,
             })
 
-            # 没有 tool_calls → 返回最终响应
             if not response.tool_calls:
-                # before_agent_reply 钩子
                 hook_result = self.hooks.trigger(
                     HookPoint.BEFORE_AGENT_REPLY,
                     response=response.content or "",
                 )
                 final = hook_result.get("override_response", response.content or "")
+
+                # 保存对话记录用于 Background Review
+                self._last_conversation = [
+                    {"role": m["role"], "content": str(m.get("content", ""))[:500]}
+                    for m in messages[-6:]  # 只保留最近几轮
+                ]
+
+                # 触发 after_agent_end 钩子
+                self.hooks.trigger(HookPoint.AFTER_AGENT_END, messages=messages)
+
                 return final
 
-            # 执行工具调用
             tool_results = self.dispatcher.execute(
                 response.tool_calls,
                 context={"session_id": session_id, "iteration": iteration},
@@ -267,5 +277,8 @@ class Agent:
         return "（已达最大迭代次数）"
 
     def interrupt(self):
-        """中断当前对话"""
         self._interrupt.set()
+
+    def get_conversation(self) -> list[dict]:
+        """获取最近对话记录（供 Background Review 使用）"""
+        return self._last_conversation
