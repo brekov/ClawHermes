@@ -31,8 +31,11 @@
 |------|------|------|
 | `FEISHU_APP_ID` / `LARK_APP_ID` | 飞书应用 ID | `cli_xxx` |
 | `FEISHU_APP_SECRET` / `LARK_APP_SECRET` | 飞书应用 Secret | `xxx` |
-| `CH_WX_TOKEN` | 微信 Token | `xxx` |
-| `CH_TG_TOKEN` | Telegram Bot Token | `xxx:xxx` |
+| `CH_WECHAT_CORP_ID` | 企业微信 Corp ID | `wwxxx` |
+| `CH_WECHAT_CORP_SECRET` | 企业微信 Corp Secret | `xxx` |
+| `CH_WECHAT_AGENT_ID` | 企业微信应用 Agent ID | `1000001` |
+| `CH_TG_BOT_TOKEN` | Telegram Bot Token | `xxx:xxx` |
+| `CH_QQ_WS_URL` | go-cqhttp WebSocket 地址 | `ws://127.0.0.1:6700` |
 
 ## Channel Bridge
 

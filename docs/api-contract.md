@@ -251,11 +251,15 @@ POST /curator/run ?dry_run=false → { status, stats }
 
 GET  /sessions → { sessions: [...], count }
 
-POST /channels/feishu/start  ?app_id&app_secret → { status }
-POST /channels/wechat/start  ?corp_id&corp_secret&agent_id → { status }
-POST /channels/qq/start      ?ws_url → { status }
-POST /channels/telegram/start ?token → { status }
-POST /channels/webhook/receive ?platform&chat_id&text → { status }
+POST /channels/feishu/start           ?app_id&app_secret → { status }
+POST /channels/feishu/start-from-env   (从环境变量读取) → { status }
+POST /channels/wechat/start            ?corp_id&corp_secret&agent_id → { status }
+POST /channels/wechat/public/start     ?app_id&app_secret&token&encoding_aes_key → { status }
+POST /channels/wechat/callback         { body } → response
+POST /channels/qq/start                ?ws_url&token → { status }
+POST /channels/telegram/start          ?token → { status }
+POST /channels/webhook/receive         ?platform&chat_id&text → { status }
+GET  /channels                         → { channels: [...], count }
 GET  /channels → { channels: [...], count }
 ```
 

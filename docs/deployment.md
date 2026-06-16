@@ -60,8 +60,25 @@ bash <(curl -fsSL https://raw.githubusercontent.com/brekov/ClawHermes/main/scrip
 export FEISHU_APP_ID=cli_xxx
 export FEISHU_APP_SECRET=xxx
 
-# 启动后调用
 curl -X POST http://127.0.0.1:18789/channels/feishu/start-from-env
+```
+
+### 企业微信
+
+```bash
+curl -X POST "http://127.0.0.1:18789/channels/wechat/start?corp_id=xxx&corp_secret=xxx&agent_id=1000001"
+```
+
+### 微信公众号
+
+```bash
+curl -X POST "http://127.0.0.1:18789/channels/wechat/public/start?app_id=xxx&app_secret=xxx&token=xxx"
+```
+
+### QQ（需先启动 go-cqhttp）
+
+```bash
+curl -X POST "http://127.0.0.1:18789/channels/qq/start?ws_url=ws://127.0.0.1:6700"
 ```
 
 ### Telegram
@@ -75,6 +92,12 @@ curl -X POST "http://127.0.0.1:18789/channels/telegram/start?token=YOUR_BOT_TOKE
 ```bash
 FEISHU_APP_ID=cli_xxx FEISHU_APP_SECRET=xxx \
   node scripts/channel-bridge.cjs
+```
+
+### 查看已启动的渠道
+
+```bash
+curl http://127.0.0.1:18789/channels
 ```
 
 ## 健康检查
