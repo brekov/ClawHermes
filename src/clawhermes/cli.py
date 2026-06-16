@@ -77,7 +77,6 @@ def start(port: int, host: str, api_key: str | None, model: str | None):
 
 def _channel_summary() -> str:
     """读取渠道配置并返回摘要"""
-    from clawhermes.gateway.setup import load_channels
     channels = load_channels()
     if not cfg:
         return "未配置（运行 clawhermes gateway setup）"
@@ -87,14 +86,12 @@ def _channel_summary() -> str:
 @gateway.command()
 def setup():
     """交互式配置消息渠道"""
-    from clawhermes.gateway.setup import interactive_setup
     interactive_setup()
 
 
 @gateway.command()
 def status():
     """查看渠道配置状态"""
-    from clawhermes.gateway.setup import show_status
     show_status()
 
 
@@ -373,7 +370,6 @@ def doctor():
         console.print(f"  ⚠️  未设置 API Key（任意 *_API_KEY 环境变量）")
 
     # 显示渠道配置状态
-    from clawhermes.gateway.setup import load_channels
     channels = load_channels()
     if channels:
         console.print(f"  ✅ 渠道配置: {', '.join(channels.keys())}")
