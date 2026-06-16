@@ -32,10 +32,22 @@ class WeChatAdapter(PlatformAdapter):
 
     def send_text(self, chat_id: str, text: str) -> SendResult:
         """发送文本消息"""
-        # 优先使用 bot_token（扫码登录方式）
+        # 优先通过 Bridge 调用官方 Node SDK
+        try:
+            from clawhermes.gateway.bridge import get_bridge
+            bridge = get_bridge()
+            health = bridge.health()
+            if health.get("status") == "ok" and health.get("weixin"):
+                result = bridge.send("weixin", chat_id, text)
+                if not result.get("error"):
+                    return SendResult(success=True)
+                logger.warning("Bridge 发送失败，回退直连: %s", result.get("error"))
+        except Exception:
+            pass
+
+        # 回退到直连 ilink API
         if self.bot_token:
             return self._send_via_bot(chat_id, text)
-        # 回退到企业微信 API
         return self._send_via_corp(chat_id, text)
 
     def _send_via_bot(self, chat_id: str, text: str) -> SendResult:

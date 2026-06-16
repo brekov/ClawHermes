@@ -501,6 +501,24 @@ def start_telegram(token: str = Query(...)):
     return {"status": "ok", "channel": "telegram"}
 
 
+# ====== Bridge ======
+
+
+@app.post("/channels/bridge/start")
+def start_bridge():
+    """启动 Node SDK 兼容层（微信/飞书官方 SDK）"""
+    from clawhermes.gateway.bridge import get_bridge
+    bridge = get_bridge()
+    health = bridge.health()
+    if health.get("status") == "ok":
+        return {"status": "ok", "message": "Bridge 已在运行"}
+    ok = bridge.start()
+    if ok:
+        return {"status": "ok", "message": "Bridge 已启动"}
+    return {"status": "error", "message": "Bridge 启动失败（需要 Node.js + npm install）"}
+
+
+
 # ====== 统一管理 ======
 
 @app.get("/channels")
