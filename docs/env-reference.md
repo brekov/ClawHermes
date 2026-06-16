@@ -27,26 +27,25 @@
 
 ## 渠道
 
-## 渠道配置（声明式）
+## 渠道配置
 
-渠道在 `.env` 中声明，Gateway 启动时自动连接，无需手动调用 API。
+渠道通过 `clawhermes gateway setup` 交互式配置，保存在 `~/.clawhermes/channels.json`。
 
-| 变量 | 说明 | 示例 |
-|------|------|------|
-| `CH_CHANNEL_FEISHU_ENABLED` | 启用飞书 | `true` |
-| `CH_CHANNEL_FEISHU_APP_ID` | 飞书应用 ID | `cli_xxx` |
-| `CH_CHANNEL_FEISHU_APP_SECRET` | 飞书应用 Secret | `xxx` |
-| `CH_CHANNEL_WECHAT_ENABLED` | 启用企业微信 | `true` |
-| `CH_CHANNEL_WECHAT_CORP_ID` | 企业微信 Corp ID | `wwxxx` |
-| `CH_CHANNEL_WECHAT_CORP_SECRET` | 企业微信 Corp Secret | `xxx` |
-| `CH_CHANNEL_WECHAT_AGENT_ID` | 企业微信应用 Agent ID | `1000001` |
-| `CH_CHANNEL_QQ_ENABLED` | 启用 QQ | `true` |
-| `CH_CHANNEL_QQ_WS_URL` | go-cqhttp WebSocket 地址 | `ws://127.0.0.1:6700` |
-| `CH_CHANNEL_QQ_TOKEN` | go-cqhttp 访问令牌 | `xxx` |
-| `CH_CHANNEL_TELEGRAM_ENABLED` | 启用 Telegram | `true` |
-| `CH_CHANNEL_TELEGRAM_TOKEN` | Telegram Bot Token | `xxx:xxx` |
+```bash
+clawhermes gateway setup    # 交互式向导
+clawhermes gateway status   # 查看已配置的渠道
+```
 
-也兼容旧的简写变量名（`FEISHU_APP_ID`、`FEISHU_APP_SECRET` 等）。
+### API 方式（备用）
+
+也支持通过 HTTP API 动态启动：
+
+```bash
+POST /channels/feishu/start?app_id=cli_xxx&app_secret=xxx
+POST /channels/wechat/start?corp_id=wwxxx&corp_secret=xxx&agent_id=1000001
+POST /channels/qq/start?ws_url=ws://127.0.0.1:6700
+POST /channels/telegram/start?token=xxx:xxx
+```
 
 ## Channel Bridge
 

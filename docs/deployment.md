@@ -54,37 +54,36 @@ bash <(curl -fsSL https://raw.githubusercontent.com/brekov/ClawHermes/main/scrip
 
 ## 渠道接入
 
-渠道采用**声明式配置**——在 `.env` 中写好，Gateway 启动时自动连接。
+### 交互式配置（推荐）
 
-### 配置方式（推荐）
-
-在 `.env` 文件中添加：
+参照 OpenClaw 的 `openclaw gateway setup`，ClawHermes 也通过向导配置：
 
 ```bash
-# 飞书
-CH_CHANNEL_FEISHU_ENABLED=true
-CH_CHANNEL_FEISHU_APP_ID=cli_xxx
-CH_CHANNEL_FEISHU_APP_SECRET=xxx
-
-# 企业微信
-CH_CHANNEL_WECHAT_ENABLED=true
-CH_CHANNEL_WECHAT_CORP_ID=wwxxx
-CH_CHANNEL_WECHAT_CORP_SECRET=xxx
-CH_CHANNEL_WECHAT_AGENT_ID=1000001
-
-# QQ（需先启动 go-cqhttp）
-CH_CHANNEL_QQ_ENABLED=true
-CH_CHANNEL_QQ_WS_URL=ws://127.0.0.1:6700
-
-# Telegram
-CH_CHANNEL_TELEGRAM_ENABLED=true
-CH_CHANNEL_TELEGRAM_TOKEN=xxx:xxx
+# 交互式向导，按提示填入渠道凭证
+clawhermes gateway setup
 ```
 
-然后直接启动 Gateway，渠道自动连接：
+配置保存在 `~/.clawhermes/channels.json`。
+
+### 启动 Gateway（自动连接已配置的渠道）
 
 ```bash
-clawhermes gateway --host 0.0.0.0
+clawhermes gateway start --host 0.0.0.0
+```
+
+### 查看已配置的渠道
+
+```bash
+clawhermes gateway status
+```
+
+### 备用：API 方式（临时启动）
+
+也支持通过 API 动态启停渠道：
+
+```bash
+curl -X POST http://127.0.0.1:18789/channels/feishu/start?app_id=cli_xxx&app_secret=xxx
+curl -X POST "http://127.0.0.1:18789/channels/telegram/start?token=xxx"
 ```
 
 ### 查看已连接的渠道
