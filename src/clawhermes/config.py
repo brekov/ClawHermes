@@ -20,11 +20,32 @@ class LLMProviderConf(BaseSettings):
     timeout_ms: int = 60000
 
 
-class GatewayPlatformConf(BaseSettings):
-    """消息渠道配置"""
+class ChannelFeishuConf(BaseSettings):
+    """飞书渠道配置"""
     enabled: bool = False
-    token: str | None = None
-    secret: str | None = None
+    app_id: str = ""
+    app_secret: str = ""
+
+
+class ChannelWechatConf(BaseSettings):
+    """企业微信渠道配置"""
+    enabled: bool = False
+    corp_id: str = ""
+    corp_secret: str = ""
+    agent_id: int = 0
+
+
+class ChannelQQConf(BaseSettings):
+    """QQ 渠道配置"""
+    enabled: bool = False
+    ws_url: str = "ws://127.0.0.1:6700"
+    token: str = ""
+
+
+class ChannelTelegramConf(BaseSettings):
+    """Telegram 渠道配置"""
+    enabled: bool = False
+    token: str = ""
 
 
 class MemoryConf(BaseSettings):
@@ -110,10 +131,11 @@ class ClawHermesConfig(BaseSettings):
     gateway_port: int = 18789
     gateway_secret: str | None = None
 
-    # 渠道
-    weixin: GatewayPlatformConf = GatewayPlatformConf()
-    telegram: GatewayPlatformConf = GatewayPlatformConf()
-    feishu: GatewayPlatformConf = GatewayPlatformConf()
+    # 渠道（声明式配置，启动自动连接）
+    channel_feishu: ChannelFeishuConf = ChannelFeishuConf()
+    channel_wechat: ChannelWechatConf = ChannelWechatConf()
+    channel_qq: ChannelQQConf = ChannelQQConf()
+    channel_telegram: ChannelTelegramConf = ChannelTelegramConf()
 
     # === 子系统 ===
     memory: MemoryConf = MemoryConf()

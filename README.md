@@ -38,21 +38,37 @@ clawhermes chat
 
 ```bash
 docker build -t clawhermes .
-docker run -e DEEPSEEK_API_KEY=sk-xxx -p 18789:18789 clawhermes
+docker run -e DEEPSEEK_API_KEY=sk-xxx \
+  -e CH_CHANNEL_FEISHU_ENABLED=true \
+  -e CH_CHANNEL_FEISHU_APP_ID=cli_xxx \
+  -e CH_CHANNEL_FEISHU_APP_SECRET=xxx \
+  -p 18789:18789 clawhermes
 ```
 
 ### HTTP API
 
 ```bash
-# 初始化
-curl -X POST http://127.0.0.1:18789/init \
-  -H "Content-Type: application/json" \
-  -d '{"api_key":"sk-xxx"}'
-
 # 对话
 curl -X POST http://127.0.0.1:18789/chat \
   -H "Content-Type: application/json" \
   -d '{"message":"你好"}'
+```
+
+### 配置渠道（声明式）
+
+编辑 `.env`，Gateway 启动时自动连接：
+
+```bash
+# 飞书
+CH_CHANNEL_FEISHU_ENABLED=true
+CH_CHANNEL_FEISHU_APP_ID=cli_xxx
+CH_CHANNEL_FEISHU_APP_SECRET=xxx
+
+# 企业微信
+CH_CHANNEL_WECHAT_ENABLED=true
+CH_CHANNEL_WECHAT_CORP_ID=wwxxx
+CH_CHANNEL_WECHAT_CORP_SECRET=xxx
+CH_CHANNEL_WECHAT_AGENT_ID=1000001
 ```
 
 ---

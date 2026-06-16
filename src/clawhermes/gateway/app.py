@@ -38,6 +38,52 @@ def _get_data_dir() -> str:
     return os.getenv("CH_DATA_DIR", os.path.expanduser("~/.clawhermes"))
 
 
+def _auto_start_channels():
+    """从配置自动启动已启用的渠道"""
+    from clawhermes.gateway.channels import (
+        GatewayManager, TelegramAdapter, WebhookAdapter,
+    )
+    from clawhermes.gateway.platforms.feishu import FeishuAdapter
+    from clawhermes.gateway.platforms.wechat import WeChatAdapter
+    from clawhermes.gateway.platforms.qq import QQAdapter
+
+    gm = _get_gateway_manager()
+
+    # 飞书
+    if os.getenv("CH_CHANNEL_FEISHU_ENABLED", "").lower() in ("true", "1"):
+        app_id = os.getenv("CH_CHANNEL_FEISHU_APP_ID") or os.getenv("FEISHU_APP_ID")
+        secret = os.getenv("CH_CHANNEL_FEISHU_APP_SECRET") or os.getenv("FEISHU_APP_SECRET")
+        if app_id and secret:
+            gm.register("feishu", FeishuAdapter(app_id, secret))
+            logger.info("📡 飞书渠道已自动配置")
+
+    # 企业微信
+    if os.getenv("CH_CHANNEL_WECHAT_ENABLED", "").lower() in ("true", "1"):
+        corp_id = os.getenv("CH_CHANNEL_WECHAT_CORP_ID")
+        corp_secret = os.getenv("CH_CHANNEL_WECHAT_CORP_SECRET")
+        agent_id = int(os.getenv("CH_CHANNEL_WECHAT_AGENT_ID", "0"))
+        if corp_id and corp_secret and agent_id:
+            gm.register("wechat", WeChatAdapter(corp_id, corp_secret, agent_id))
+            logger.info("📡 企业微信渠道已自动配置")
+
+    # QQ
+    if os.getenv("CH_CHANNEL_QQ_ENABLED", "").lower() in ("true", "1"):
+        ws_url = os.getenv("CH_CHANNEL_QQ_WS_URL", "ws://127.0.0.1:6700")
+        token = os.getenv("CH_CHANNEL_QQ_TOKEN", "")
+        gm.register("qq", QQAdapter(ws_url, token))
+        logger.info("📡 QQ 渠道已自动配置")
+
+    # Telegram
+    if os.getenv("CH_CHANNEL_TELEGRAM_ENABLED", "").lower() in ("true", "1"):
+        token = os.getenv("CH_CHANNEL_TELEGRAM_TOKEN")
+        if token:
+            gm.register("telegram", TelegramAdapter(token))
+            logger.info("📡 Telegram 渠道已自动配置")
+
+    # 启动所有已注册渠道
+    gm.start_all()
+
+
 def _auto_init():
     """从环境变量自动初始化（含 ChromaDB + Skills + Review + Curator）"""
     global _agent, _memory, _skill_manager, _reviewer, _curator
@@ -117,6 +163,9 @@ def _auto_init():
 
         logger.info("✅ Agent 初始化完成: %s (%d tools, skills: %d)",
                      model, len(registry.list()), len(skill_manager.list()))
+
+        # 自动启动已配置的渠道
+        _auto_start_channels()
 
     except Exception as e:
         logger.error("Auto-init failed: %s", e)
