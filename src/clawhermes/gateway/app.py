@@ -46,16 +46,16 @@ def _auto_start_channels():
     from clawhermes.gateway.platforms.feishu import FeishuAdapter
     from clawhermes.gateway.platforms.wechat import WeChatAdapter
     from clawhermes.gateway.platforms.qq import QQAdapter
-    from clawhermes.gateway.setup import load_config
+    from clawhermes.gateway.setup import load_channels
 
-    config = load_config()
-    if not config:
+    channels = load_channels()
+    if not channels:
         logger.info("无渠道配置，跳过（运行 clawhermes gateway setup 配置）")
         return
 
     gm = _get_gateway_manager()
 
-    for name, cfg in config.items():
+    for name, cfg in channels.items():
         try:
             if name == "feishu":
                 app_id = cfg.get("app_id")

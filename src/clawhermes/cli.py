@@ -77,11 +77,11 @@ def start(port: int, host: str, api_key: str | None, model: str | None):
 
 def _channel_summary() -> str:
     """读取渠道配置并返回摘要"""
-    from clawhermes.gateway.setup import load_config
-    cfg = load_config()
+    from clawhermes.gateway.setup import load_channels
+    channels = load_channels()
     if not cfg:
         return "未配置（运行 clawhermes gateway setup）"
-    return ", ".join(cfg.keys())
+    return ", ".join(channels.keys())
 
 
 @gateway.command()
@@ -185,7 +185,7 @@ def config_show():
     from clawhermes.config import load_yaml
     from rich.syntax import Syntax
     cfg = load_yaml()
-    if cfg:
+    if channels:
         import yaml
         text = yaml.dump(cfg, default_flow_style=False, allow_unicode=True)
         console.print(Syntax(text, "yaml", theme="monokai"))
@@ -239,7 +239,7 @@ def config_show():
     from clawhermes.config import load_yaml
     from rich.syntax import Syntax
     cfg = load_yaml()
-    if cfg:
+    if channels:
         import yaml
         text = yaml.dump(cfg, default_flow_style=False, allow_unicode=True)
         console.print(Syntax(text, "yaml", theme="monokai"))
@@ -323,7 +323,7 @@ def config_show():
     from clawhermes.config import load_yaml
     from rich.syntax import Syntax
     cfg = load_yaml()
-    if cfg:
+    if channels:
         import yaml
         text = yaml.dump(cfg, default_flow_style=False, allow_unicode=True)
         console.print(Syntax(text, "yaml", theme="monokai"))
@@ -371,10 +371,10 @@ def doctor():
             console.print(f"  ⚠️  {key_name} 未设置")
 
     # 显示渠道配置状态
-    from clawhermes.gateway.setup import load_config
-    cfg = load_config()
-    if cfg:
-        console.print(f"  ✅ 渠道配置: {', '.join(cfg.keys())}")
+    from clawhermes.gateway.setup import load_channels
+    channels = load_channels()
+    if channels:
+        console.print(f"  ✅ 渠道配置: {', '.join(channels.keys())}")
     else:
         console.print("  ⚠️  未配置渠道（运行 clawhermes gateway setup）")
 
