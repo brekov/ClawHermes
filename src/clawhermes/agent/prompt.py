@@ -13,6 +13,9 @@ class StableLayer:
     """稳定层 - Agent 身份、工具指导，几乎不变"""
     agent_name: str = "ClawHermes"
     identity: str = ""
+    persona: str = ""     # 从 agent persona 加载的身份设定
+    instructions: str = "" # 从 agent persona 加载的行为指令
+    user_info: str = ""    # 从 agent persona 加载的用户信息
     tool_guide: str = (
         "你有可用的工具来完成各种任务。"
         "当需要调用工具时，在响应中返回 tool_calls。"
@@ -23,10 +26,21 @@ class StableLayer:
         "当前对话结束后，系统会自动评估是否需要更新技能和记忆。"
     )
 
+    def load_from_agent(self, agent_name: str):
+        """从 Agent 配置加载身份设定"""
+        try:
+            from clawhermes.agent.persona.manager import (
+                build_persona_prompt, get_agent_config,
+            )
+            self.agent_name = agent_name
+            self.identity = build_persona_prompt(agent_name)
+            cfg = get_agent_config(agent_name)
+        except Exception:
+            pass
+
     def render(self) -> str:
         parts = [
-            f"你是 {self.agent_name}，一个智能 AI 助手。",
-            self.identity,
+            self.identity or f"你是 {self.agent_name}，一个智能 AI 助手。",
             self.tool_guide,
             self.skill_prompt,
         ]

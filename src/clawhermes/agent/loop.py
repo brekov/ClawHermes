@@ -201,6 +201,7 @@ class Agent:
         memory_manager=None,
         skill_manager=None,
         context_engine=None,
+        agent_name: str | None = None,
     ):
         self.llm = llm_provider
         self.prompt = SystemPrompt()
@@ -211,8 +212,16 @@ class Agent:
         self.memory = memory_manager
         self.skills = skill_manager
         self.context_engine = context_engine
+        self._agent_name = agent_name or "ClawHermes"
         self._interrupt = threading.Event()
         self._last_conversation: list[dict] = []
+
+        # 加载 Agent 身份设定
+        if agent_name:
+            try:
+                self.prompt.stable.load_from_agent(agent_name)
+            except Exception:
+                pass
 
     def chat(self, user_message: str, session_id: str = "") -> str:
         """简单接口：输入用户消息，返回最终响应"""
