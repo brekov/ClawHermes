@@ -131,21 +131,49 @@ def interactive_setup():
         border_style="blue",
     ))
 
-    # 微信（需要 npm 安装 @tencent-weixin/openclaw-weixin）
-    if Confirm.ask("📱 配置个人微信渠道？", default=True):
-        if not _check_npm(console, "@tencent-weixin/openclaw-weixin"):
-            pass
-        from clawhermes.gateway.weixin_setup import wechat_setup
-        result = wechat_setup()
-        if result:
-            console.print("  ✅ 微信已配置")
+    # 微信（通过 Bridge 调用官方 Node SDK）
+    if Confirm.ask("📱 配置个人微信渠道？（扫码登录）", default=True):
+        _check_npm(console, "@tencent-weixin/openclaw-weixin")
+        # 扫码登录（纯 Python，无需 SDK）
+        import httpx, qrcode, time
+        try:
+            resp = httpx.post(
+                "https://ilinkai.weixin.qq.com/ilink/bot/get_bot_qrcode?bot_type=3",
+                json={"local_token_list": []}, timeout=15,
+            )
+            data = resp.json()
+            qr = data.get("qrcode")
+            if qr:
+                qrcode.QRCode(border=1, box_size=2).add_data(qr).make(fit=True).print_ascii()
+                console.print("\n[dim]等待扫码... (60秒超时)[/dim]")
+                start = time.time()
+                with httpx.Client(timeout=65) as client:
+                    while time.time() - start < 60:
+                        r = client.get(f"https://ilinkai.weixin.qq.com/ilink/bot/get_qrcode_status?qrcode={qr}")
+                        s = r.json().get("status", "")
+                        if s == "wait": console.print(".", end="")
+                        elif s == "scaned": console.print("\n[green]已扫码，请确认[/green]")
+                        elif s == "confirmed":
+                            token = r.json().get("bot_token", "")
+                            if token:
+                                save_channel("wechat", {"bot_token": token})
+                                console.print(f"\n[green]✅ 微信已配置[/green]")
+                            break
+                        elif s == "expired": console.print("\n[red]二维码已过期[/red]"); break
+                        time.sleep(1)
+            else:
+                console.print("[red]获取二维码失败[/red]")
+        except Exception as e:
+            console.print(f"[red]扫码失败: {e}[/red]")
 
     # 企业微信
     if Confirm.ask("📡 配置企业微信渠道？", default=False):
-        from clawhermes.gateway.ilink import wechat_qr_login
-        result = wechat_qr_login()
-        if result:
-            save_channel("wechat_corp", result)
+        from rich.prompt import Prompt
+        corp_id = Prompt.ask("  企业微信 Corp ID")
+        corp_secret = Prompt.ask("  企业微信 Corp Secret")
+        agent_id = Prompt.ask("  应用 Agent ID", default="1000001")
+        if corp_id and corp_secret:
+            save_channel("wechat_corp", {"corp_id": corp_id, "corp_secret": corp_secret, "agent_id": int(agent_id)})
             console.print("  ✅ 企业微信已配置")
 
     # 飞书（需要 pip install lark-oapi）

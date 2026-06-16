@@ -45,6 +45,7 @@ def _auto_start_channels():
     )
     from clawhermes.gateway.platforms.feishu import FeishuAdapter
     from clawhermes.gateway.platforms.wechat import WeChatAdapter
+    from clawhermes.gateway.platforms.wechat_corp import WeChatCorpAdapter
     from clawhermes.gateway.platforms.qq import QQAdapter
     from clawhermes.gateway.setup import load_channels
 
@@ -77,7 +78,7 @@ def _auto_start_channels():
             elif name == "wechat_corp":
                 bot_token = cfg.get("bot_token")
                 if bot_token:
-                    gm.register("wechat_corp", WeChatAdapter(bot_token=bot_token))
+                    gm.register("wechat_corp", WeChatCorpAdapter(bot_token=bot_token))
 
             elif name == "qq":
                 ws_url = cfg.get("ws_url", "ws://127.0.0.1:6700")
@@ -449,6 +450,7 @@ def start_wechat(corp_id: str = Query(...), corp_secret: str = Query(...),
                  agent_id: int = Query(...)):
     """启动企业微信 Bot"""
     from clawhermes.gateway.platforms.wechat import WeChatAdapter
+    from clawhermes.gateway.platforms.wechat_corp import WeChatCorpAdapter
     gm = _get_gateway_manager()
     gm.register("wechat", WeChatAdapter(corp_id, corp_secret, agent_id))
     gm.start_all()
@@ -470,6 +472,7 @@ def start_wechat_public(app_id: str = Query(...), app_secret: str = Query(...),
 def wechat_callback(body: dict):
     """微信回调入口"""
     from clawhermes.gateway.platforms.wechat import WeChatAdapter
+    from clawhermes.gateway.platforms.wechat_corp import WeChatCorpAdapter
     gm = _get_gateway_manager()
     adapter = gm._adapters.get("wechat")
     if isinstance(adapter, WeChatAdapter):
