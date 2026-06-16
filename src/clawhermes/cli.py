@@ -140,7 +140,7 @@ def agent():
 
 @agent.command("list")
 def agent_list():
-    from clawhermes.agent.persona.manager import cmd_list
+    from clawhermes.agent.agent_mgr import cmd_list
     cmd_list()
 
 
@@ -148,21 +148,21 @@ def agent_list():
 @click.argument("name")
 @click.option("--clone", default=None)
 def create(name, clone):
-    from clawhermes.agent.persona.manager import cmd_create
+    from clawhermes.agent.agent_mgr import cmd_create
     cmd_create(name, clone)
 
 
 @agent.command()
 @click.argument("name", required=False)
 def show(name):
-    from clawhermes.agent.persona.manager import cmd_show
+    from clawhermes.agent.agent_mgr import cmd_show
     cmd_show(name)
 
 
 @agent.command()
 @click.argument("name")
 def switch(name):
-    from clawhermes.agent.persona.manager import set_default_agent, agent_exists
+    from clawhermes.agent.agent_mgr import set_default_agent, agent_exists
     if agent_exists(name):
         set_default_agent(name)
         console.print(f"✅ 已切换到 '{name}'")
@@ -173,7 +173,7 @@ def switch(name):
 @agent.command()
 @click.argument("name", required=False)
 def set_persona(name):
-    from clawhermes.agent.persona.manager import cmd_set_persona
+    from clawhermes.agent.agent_mgr import cmd_set_persona
     cmd_set_persona(name)
 
 
@@ -185,7 +185,7 @@ def setup():
     data_dir = Path(os.getenv("CH_DATA_DIR", "~/.clawhermes")).expanduser()
     data_dir.mkdir(parents=True, exist_ok=True)
     (data_dir / "skills").mkdir(parents=True, exist_ok=True)
-    from clawhermes.agent.persona.manager import create_agent
+    from clawhermes.agent.agent_mgr import create_agent
     create_agent("default")
     console.print(f"✅ 已初始化: {data_dir}")
 

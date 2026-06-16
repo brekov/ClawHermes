@@ -29,7 +29,7 @@ class StableLayer:
     def load_from_agent(self, agent_name: str):
         """从 Agent 配置加载身份设定"""
         try:
-            from clawhermes.agent.persona.manager import (
+            from clawhermes.agent.agent_mgr import (
                 build_persona_prompt, get_agent_config,
             )
             self.agent_name = agent_name
