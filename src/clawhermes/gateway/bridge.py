@@ -12,7 +12,7 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-BRIDGE_SCRIPT = Path(__file__).parent.parent.parent.parent / "scripts" / "bridge.mjs"
+BRIDGE_SCRIPT = Path(__file__).parent / "bridge.mjs"
 
 
 def _run_node(args: list[str]) -> dict[str, Any]:
