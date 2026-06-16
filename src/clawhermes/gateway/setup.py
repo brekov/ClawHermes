@@ -131,17 +131,16 @@ def interactive_setup():
         border_style="blue",
     ))
 
-    # 微信（个人号扫码）
+    # 微信（个人号扫码，纯 Python，不依赖 OpenClaw）
     if Confirm.ask("📱 配置个人微信渠道？（扫码登录）", default=True):
-        from clawhermes.gateway.weixin_setup import wechat_qr_setup
-        result = wechat_qr_setup()
+        from clawhermes.gateway.weixin_setup import wechat_setup
+        result = wechat_setup()
         if result:
-            save_channel("wechat", result)
             console.print("  ✅ 微信已配置")
 
     # 企业微信
     if Confirm.ask("📡 配置企业微信渠道？", default=False):
-        from clawhermes.gateway.qr_setup import wechat_qr_login
+        from clawhermes.gateway.ilink import wechat_qr_login
         result = wechat_qr_login()
         if result:
             save_channel("wechat_corp", result)
@@ -149,26 +148,31 @@ def interactive_setup():
 
     # 飞书
     if Confirm.ask("📡 配置飞书渠道？", default=False):
-        from clawhermes.gateway.qr_setup import feishu_qr_login
-        result = feishu_qr_login()
-        if result:
-            save_channel("feishu", result)
+        from rich.prompt import Prompt
+        console.print("请提供飞书应用凭证（在飞书开发者后台获取）")
+        app_id = Prompt.ask("  飞书 App ID")
+        app_secret = Prompt.ask("  飞书 App Secret")
+        if app_id and app_secret:
+            save_channel("feishu", {"app_id": app_id, "app_secret": app_secret})
             console.print("  ✅ 飞书已配置")
 
     # QQ
     if Confirm.ask("📡 配置 QQ 渠道？（需 go-cqhttp）", default=False):
-        from clawhermes.gateway.qr_setup import qq_setup
-        result = qq_setup()
-        if result:
-            save_channel("qq", result)
-            console.print("  ✅ QQ 已配置")
+        from rich.prompt import Prompt
+        ws_url = Prompt.ask("  go-cqhttp 地址", default="ws://127.0.0.1:6700")
+        token = Prompt.ask("  访问令牌（可选）", default="")
+        cfg = {"ws_url": ws_url}
+        if token:
+            cfg["token"] = token
+        save_channel("qq", cfg)
+        console.print("  ✅ QQ 已配置")
 
     # Telegram
     if Confirm.ask("📡 配置 Telegram 渠道？", default=False):
-        from clawhermes.gateway.qr_setup import telegram_setup
-        result = telegram_setup()
-        if result:
-            save_channel("telegram", result)
+        from rich.prompt import Prompt
+        token = Prompt.ask("  Bot Token")
+        if token:
+            save_channel("telegram", {"token": token})
             console.print("  ✅ Telegram 已配置")
 
     channels = load_channels()
