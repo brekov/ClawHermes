@@ -27,7 +27,6 @@ class ChannelFeishuConf(BaseSettings):
     app_id: str = ""
     app_secret: str = ""
 
-
 class ChannelWechatConf(BaseSettings):
     """企业微信渠道配置"""
     enabled: bool = False
@@ -35,19 +34,16 @@ class ChannelWechatConf(BaseSettings):
     corp_secret: str = ""
     agent_id: int = 0
 
-
 class ChannelQQConf(BaseSettings):
     """QQ 渠道配置"""
     enabled: bool = False
     ws_url: str = "ws://127.0.0.1:6700"
     token: str = ""
 
-
 class ChannelTelegramConf(BaseSettings):
     """Telegram 渠道配置"""
     enabled: bool = False
     token: str = ""
-
 
 class MemoryConf(BaseSettings):
     """记忆系统配置"""
@@ -133,10 +129,6 @@ class ClawHermesConfig(BaseSettings):
     gateway_secret: str | None = None
 
     # 渠道（声明式配置，启动自动连接）
-    channel_feishu: ChannelFeishuConf = ChannelFeishuConf()
-    channel_wechat: ChannelWechatConf = ChannelWechatConf()
-    channel_qq: ChannelQQConf = ChannelQQConf()
-    channel_telegram: ChannelTelegramConf = ChannelTelegramConf()
 
     # === 子系统 ===
     memory: MemoryConf = MemoryConf()
@@ -210,12 +202,6 @@ def default_yaml() -> dict:
         "skills": {"enabled": True, "background_review": True, "curator_interval_hours": 168},
         "context": {"compress_threshold": 0.75, "protect_first_n": 3, "protect_last_n": 6},
         "tools": {"parallel_execution": True, "profile": "standard"},
-        "channels": {
-            "feishu": {"enabled": False},
-            "wechat": {"enabled": False},
-            "qq": {"enabled": False},
-            "telegram": {"enabled": False},
-        },
     }
 
 
