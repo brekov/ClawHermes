@@ -70,15 +70,27 @@ def interactive_setup():
 
     config = load_config()
 
-    # 微信（扫码登录）
-    if Confirm.ask("📱 配置微信渠道？（扫码登录）", default=False):
+    # 微信（通过 openclaw-weixin-cli 扫码登录个人微信）
+    if Confirm.ask("📱 配置个人微信渠道？（扫码登录）", default=True):
+        from clawhermes.gateway.weixin_setup import wechat_qr_setup
+        result = wechat_qr_setup()
+        if result and result.get("bot_token"):
+            config["wechat"] = {"bot_token": result["bot_token"]}
+            if result.get("base_url"):
+                config["wechat"]["base_url"] = result["base_url"]
+            console.print("  ✅ 微信已配置")
+        else:
+            console.print("  ⚠️  配置未完成")
+
+    # 企业微信（扫码登录，不同于个人微信）
+    if Confirm.ask("📡 配置企业微信渠道？", default=False):
         from clawhermes.gateway.qr_setup import wechat_qr_login
         result = wechat_qr_login()
         if result and result.get("bot_token"):
-            config["wechat"] = result
-            console.print("  ✅ 微信扫码登录成功")
+            config["wechat_corp"] = result
+            console.print("  ✅ 企业微信已配置")
         else:
-            console.print("  ⚠️  扫码失败，可稍后重试 [bold]clawhermes gateway setup[/bold]")
+            console.print("  ⚠️  配置未完成")
 
     # 飞书
     if Confirm.ask("📡 配置飞书渠道？", default=False):
