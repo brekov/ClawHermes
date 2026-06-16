@@ -1,8 +1,8 @@
 # ClawHermes · 架构设计文档
 
-> 版本：v0.1-draft
+> 版本：v1.0
 > 日期：2026-06-16
-> 状态：设计阶段
+> 状态：已实现
 
 ---
 
@@ -76,13 +76,13 @@
 
 | 模块 | 职责 | 关键类 |
 |------|------|--------|
-| `agent/loop.py` | 思考-行动主循环 | `AgentLoop` |
+| `agent/loop.py` | 思考-行动主循环 | `Agent` / `AgentConfig` |
 | `agent/prompt.py` | 三层 System Prompt 组装 | `SystemPrompt` / `StableLayer` / `ContextLayer` / `VolatileLayer` |
-| `agent/context.py` | 上下文管理与压缩 | `ContextEngine` (ABC) / `LLMCompressor` |
+| `agent/context.py` | F10: 上下文管理与压缩 | `ContextEngine` (ABC) / `LLMCompressor` / `NoopCompressor` |
 | `agent/memory.py` | 记忆管理器 | `MemoryManager` / `MemoryProvider` (ABC) |
-| `agent/skills.py` | 技能加载/管理/自进化 | `SkillManager` / `BackgroundReview` / `Curator` |
-| `agent/tools.py` | 工具注册/调度/钩子 | `ToolRegistry` / `ToolDispatcher` / `HookManager` |
-| `agent/delegate.py` | 子 Agent 委派 | `DelegateManager` |
+| `agent/delegate.py` | F12: 子 Agent 委派 | `DelegateManager` / 深度限制 / 并发执行 |
+| `skills/manager.py` | 技能加载/管理/自进化 | `SkillManager` / `BackgroundReview` / `Curator` |
+| `agent/loop.py` | 工具注册/调度/钩子 | `ToolRegistry` / `ToolDispatcher` / `HookManager` |
 
 ### 2.3 工具系统
 

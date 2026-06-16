@@ -198,14 +198,18 @@ python tests/test_integration.py
 
 ## 文档
 
-| 文档 | 说明 |
-|:---|:---|
-| [PRD.md](docs/PRD.md) | 产品需求文档 |
-| [architecture.md](docs/architecture.md) | 架构设计文档 |
-| [data-model.md](docs/data-model.md) | 数据模型文档 |
-| [api-contract.md](docs/api-contract.md) | 接口契约文档 |
-| [sequence-diagrams.md](docs/sequence-diagrams.md) | 时序图 |
-| [CHANGELOG.md](CHANGELOG.md) | 变更日志 |
+| 文档 | 说明 | 状态 |
+|:---|:---|---:|
+| [PRD.md](docs/PRD.md) | 产品需求文档（含实现状态）| ✅ v1.0 |
+| [architecture.md](docs/architecture.md) | 架构设计文档 | ✅ v1.0 |
+| [data-model.md](docs/data-model.md) | 数据模型（6实体+枚举）| ✅ |
+| [api-contract.md](docs/api-contract.md) | 接口契约（8模块）| ✅ |
+| [sequence-diagrams.md](docs/sequence-diagrams.md) | 6个关键流程时序图 | ✅ |
+| [deployment.md](docs/deployment.md) | 部署指南（Docker/裸机/一键）| ✅ |
+| [env-reference.md](docs/env-reference.md) | 环境变量手册 | ✅ |
+| [development.md](docs/development.md) | 开发指南 | ✅ |
+| [CHANGELOG.md](CHANGELOG.md) | 变更日志（v0.1~v0.6）| ✅ |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | 贡献指南 | ✅ |
 
 ---
 
