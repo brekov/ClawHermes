@@ -131,8 +131,10 @@ def interactive_setup():
         border_style="blue",
     ))
 
-    # 微信（个人号扫码，纯 Python，不依赖 OpenClaw）
-    if Confirm.ask("📱 配置个人微信渠道？（扫码登录）", default=True):
+    # 微信（需要 npm 安装 @tencent-weixin/openclaw-weixin）
+    if Confirm.ask("📱 配置个人微信渠道？", default=True):
+        if not _check_npm(console, "@tencent-weixin/openclaw-weixin"):
+            pass
         from clawhermes.gateway.weixin_setup import wechat_setup
         result = wechat_setup()
         if result:
@@ -146,8 +148,17 @@ def interactive_setup():
             save_channel("wechat_corp", result)
             console.print("  ✅ 企业微信已配置")
 
-    # 飞书
+    # 飞书（需要 pip install lark-oapi）
     if Confirm.ask("📡 配置飞书渠道？", default=False):
+        try:
+            import lark_oapi
+        except ImportError:
+            console.print("[yellow]⚠️  需要安装飞书 SDK[/yellow]")
+            console.print("   运行: pip install lark-oapi")
+            if not Confirm.ask("  现在安装？", default=True):
+                return
+            import subprocess
+            subprocess.run(["pip3", "install", "lark-oapi"], cwd=os.getcwd())
         from rich.prompt import Prompt
         console.print("请提供飞书应用凭证（在飞书开发者后台获取）")
         app_id = Prompt.ask("  飞书 App ID")
@@ -179,6 +190,32 @@ def interactive_setup():
     if channels:
         console.print(f"\n✅ 共 {len(channels)} 个渠道已配置")
         console.print("💡 运行 [bold]clawhermes gateway start[/bold] 启动")
+
+
+def _check_npm(console, pkg: str) -> bool:
+    """检查 npm 包是否已安装，未安装则提示"""
+    import subprocess
+    try:
+        subprocess.run(["npx", "--version"], capture_output=True, timeout=5)
+    except Exception:
+        console.print("[yellow]⚠️  需要 Node.js + npm[/yellow]")
+        console.print(f"   先安装 Node.js，然后运行:")
+        console.print(f"   npm install {pkg}")
+        return False
+
+    # 检查包是否已安装
+    try:
+        subprocess.run(["node", "-e", f"require('{pkg}')"], capture_output=True, timeout=5)
+        return True
+    except Exception:
+        console.print(f"[yellow]⚠️  需要安装 {pkg}[/yellow]")
+        console.print(f"   运行: npm install {pkg}")
+        if Confirm.ask("  现在安装？", default=True):
+            result = subprocess.run(["npm", "install", pkg], cwd=os.getcwd())
+            if result.returncode == 0:
+                console.print(f"  ✅ {pkg} 已安装")
+                return True
+        return False
 
 
 def show_status():

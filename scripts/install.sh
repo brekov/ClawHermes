@@ -84,19 +84,12 @@ echo -e "${CYAN}📦 安装 Python 依赖...${NC}"
 $PIP_CMD install -e . --quiet 2>&1 | tail -1
 echo -e "${GREEN}✅ Python 依赖安装完成${NC}"
 
-# ── 可选：安装 Node.js SDK（微信/飞书渠道需要）────────────
-echo ""
-echo -e "${CYAN}📦 安装消息渠道 SDK（可选）...${NC}"
-
+# ── 检测 npm（微信/飞书渠道需要，按需安装）───────────────
 if command -v npm &>/dev/null; then
-    echo "   检测到 npm，安装微信和飞书 SDK..."
-    cd "$INSTALL_DIR"
-    npm install @tencent-weixin/openclaw-weixin @larksuite/openclaw-lark --save 2>&1 | tail -3
-    echo -e "${GREEN}✅ Node SDK 安装完成${NC}"
+    echo -e "${GREEN}✅ npm $(npm --version)${NC}"
 else
-    echo -e "${YELLOW}⚠️  未检测到 npm，跳过 SDK 安装${NC}"
-    echo "   微信和飞书渠道需要: npm install @tencent-weixin/openclaw-weixin"
-    echo ""
+    echo -e "${YELLOW}⚠️  未检测到 npm${NC}"
+    echo "   配置微信/飞书渠道需要 Node.js，届时会提示安装"
 fi
 
 # 验证核心依赖
