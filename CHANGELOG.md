@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.12.1 (2026-06-17)
+
+文档修复与环境配置完善
+
+### 修复
+
+- **CLI 重命名**：`clawhermes agent set-persona` → `clawhermes agent set`，与 `create/list/show/switch` 风格统一
+- **.env.example**：重写为清晰的分组注释，移除内部变量 `CH_GW_API_KEY`/`CH_GW_MODEL`
+- **配置示例**：补全 `config.yaml.example`、`providers/deepseek.yaml.example`、渠道配置（slack/feishu/discord）、Agent 文件（SOUL/AGENTS/config.json）
+- **FEATURES.md**：CLI 命令同步、渠道配置说明、统计数字对齐实际代码
+- **README**：端点计数修正 19→18
+- **CHANGELOG/RELEASE.md**：端点计数、源文件数同步修正
+
 ## v0.12.0 (2026-06-17)
 
 功能增强与扩展 — Phase 2 完成
