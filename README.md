@@ -7,7 +7,7 @@
 [![Tests: 165 passed](https://img.shields.io/badge/tests-165%20passed-brightgreen)](tests/)
 [![Coverage: 65%](https://img.shields.io/badge/coverage-65%25-yellow)](tests/)
 [![Ruff](https://img.shields.io/badge/ruff-0%20errors-brightgreen)](pyproject.toml)
-[![v0.12.1](https://img.shields.io/badge/version-0.12.1-blue)](CHANGELOG.md)
+[![v0.12.2](https://img.shields.io/badge/version-0.12.2-blue)](CHANGELOG.md)
 
 ---
 
