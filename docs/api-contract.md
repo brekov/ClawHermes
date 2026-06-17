@@ -258,6 +258,14 @@ POST /curator/run ?dry_run=false → { status, stats }
 GET  /sessions   ?limit=50 → { sessions: [...], count }
 GET  /sessions/{id}  → { session: {...}, messages: [...] }
 DELETE /sessions/{id}  → { status }
+
+POST /cron/jobs         创建定时任务 { name, task, mode, interval_seconds?, session_id? }
+                       → { status, job: {...} }
+GET  /cron/jobs         列出所有定时任务 ?status=pending → { jobs: [...], count }
+GET  /cron/jobs/{id}    获取定时任务详情 → { job: {...} }
+DELETE /cron/jobs/{id}  删除定时任务 → { status }
+POST /cron/jobs/{id}/pause   暂停定时任务 → { status }
+POST /cron/jobs/{id}/resume  恢复定时任务 → { status }
 ```
 
 ### 数据模型

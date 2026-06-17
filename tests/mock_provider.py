@@ -1,6 +1,8 @@
 """
 Mock LLM Provider - 用于测试，不依赖真实 API
 """
+import asyncio
+
 from clawhermes.llm.provider import LLMProvider, LLMResponse
 
 
@@ -33,3 +35,8 @@ class MockProvider(LLMProvider):
                 )
 
         return LLMResponse(content=resp, model="mock")
+
+    async def chat_async(self, messages, tools=None):
+        """异步聊天接口，模拟异步行为"""
+        await asyncio.sleep(0)  # 让出控制权，模拟异步操作
+        return self.chat(messages, tools)

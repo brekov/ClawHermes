@@ -1,7 +1,7 @@
 # ClawHermes · 数据模型文档
 
-> 版本：v0.6-draft
-> 日期：2026-06-16
+> 版本：v2.1
+> 日期：2026-06-17
 
 ---
 
@@ -120,6 +120,43 @@
 | `context_window` | int | 64000 | 上下文窗口大小 |
 | `compress_threshold` | float | 0.75 | 压缩触发阈值 |
 
+### 2.8 CronJob（定时任务）
+
+| 字段 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `job_id` | str | 自动生成 | 任务唯一标识 |
+| `name` | str | — | 任务名称 |
+| `spec` | ScheduleSpec | — | 调度规格（cron/interval/oneshot） |
+| `task` | str | — | 任务内容（Agent 提示词） |
+| `session_id` | str | "" | 关联的会话 ID |
+| `status` | JobStatus | "pending" | 任务状态 |
+| `created_at` | float | 当前时间 | 创建时间戳 |
+| `last_run` | float | 0.0 | 最后执行时间戳 |
+| `next_run` | float | 0.0 | 下次执行时间戳 |
+| `run_count` | int | 0 | 已执行次数 |
+| `error_count` | int | 0 | 失败次数 |
+| `last_error` | str | "" | 最后错误信息 |
+
+### 2.9 ChannelMessage（渠道消息）
+
+| 字段 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `message_id` | str | — | 消息唯一标识 |
+| `channel_type` | ChannelType | — | 渠道类型 |
+| `user` | ChannelUser | — | 用户信息 |
+| `content` | str | — | 消息内容 |
+| `session_id` | str | "" | 关联的会话 ID |
+| `reply_to` | str \| None | None | 回复的消息 ID |
+| `metadata` | dict | {} | 额外元数据 |
+
+### 2.10 ChannelUser（渠道用户）
+
+| 字段 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `user_id` | str | — | 用户唯一标识 |
+| `display_name` | str | "" | 显示名称 |
+| `metadata` | dict | {} | 额外元数据 |
+
 ## 3. 枚举定义
 
 ### MessageRole
@@ -152,4 +189,27 @@ STEER = "steer"        # 注入当前轮次
 FOLLOWUP = "followup"  # 排队等下一轮
 COLLECT = "collect"    # 安静窗口后合并
 INTERRUPT = "interrupt" # 中止当前执行
+```
+
+### ChannelType
+```
+CLI = "cli"            # 命令行
+REST = "rest"          # REST API
+WEBSOCKET = "websocket" # WebSocket
+SLACK = "slack"        # Slack
+DISCORD = "discord"    # Discord
+FEISHU = "feishu"      # 飞书
+WECHAT = "wechat"      # 微信
+TELEGRAM = "telegram"  # Telegram
+CUSTOM = "custom"      # 自定义渠道
+```
+
+### JobStatus
+```
+PENDING = "pending"    # 等待执行
+RUNNING = "running"    # 执行中
+COMPLETED = "completed" # 已完成
+FAILED = "failed"      # 执行失败
+PAUSED = "paused"      # 已暂停
+CANCELLED = "cancelled" # 已取消
 ```

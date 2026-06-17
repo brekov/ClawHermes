@@ -39,8 +39,8 @@
 
 ### 测试
 
-- 测试用例：73 → 152（+108%）
-- ruff: 0 errors | mypy: 0 errors (6 项严格检查) | pytest: 152 passed
+- 测试用例：73 → 165（+126%）
+- ruff: 0 errors | mypy: 0 errors (6 项严格检查) | pytest: 165 passed
 
 ### 异步钩子
 

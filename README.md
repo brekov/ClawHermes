@@ -7,7 +7,7 @@
 [![Tests: 165 passed](https://img.shields.io/badge/tests-165%20passed-brightgreen)](tests/)
 [![Coverage: 65%](https://img.shields.io/badge/coverage-65%25-yellow)](tests/)
 [![Ruff](https://img.shields.io/badge/ruff-0%20errors-brightgreen)](pyproject.toml)
-[![v0.12.0](https://img.shields.io/badge/version-0.12.0-blue)](CHANGELOG.md)
+[![v0.12.1](https://img.shields.io/badge/version-0.12.1-blue)](CHANGELOG.md)
 
 ---
 
@@ -91,7 +91,7 @@ curl http://127.0.0.1:18789/sessions
 │  └──────────┘ └──────────┘ └──────────┘ └──────────────┘    │
 │                                                               │
 │  ┌──────────┐ ┌──────────┐ ┌──────────────────────────────┐  │
-│  │ Cron调度 │ │ Docker  │ │   异常体系 (5大类17子类)      │  │
+│  │ Cron调度 │ │ Docker  │ │   异常体系 (5大类10子类)      │  │
 │  │ interval │ │ 沙箱执行 │ │   ClawHermesError → ...      │  │
 │  │ cron一次 │ │ 资源隔离 │ │                              │  │
 │  └──────────┘ └──────────┘ └──────────────────────────────┘  │
@@ -117,7 +117,7 @@ curl http://127.0.0.1:18789/sessions
 | F11 | **多凭证池** | 轮询/最少使用策略，401/429 故障冷却 |
 | F12 | **子Agent委派** | 并行执行，深度限制(MAX=2)，防死锁 |
 | F13 | **异步接口** | Agent.chat_async() + LLMProvider.chat_async() |
-| F14 | **异常体系** | ClawHermesError → 5大类17子类，结构化错误信息 |
+| F14 | **异常体系** | ClawHermesError → 5大类10子类，结构化错误信息 |
 | F15 | **Cron 调度** | 标准库零依赖调度器，cron/interval/oneshot，JSON 持久化 |
 | F16 | **Docker 沙箱** | 容器化安全执行，资源限制，网络隔离 |
 | F17 | **ACE 自适应压缩** | 对话类型检测（代码/问答/创意），策略自动切换 |
@@ -215,7 +215,7 @@ src/clawhermes/
 │   ├── memory.py           # 记忆系统（MemoryManager + JSONProvider）
 │   ├── context.py          # F10: 上下文压缩引擎
 │   ├── delegate.py         # F12: 子 Agent 委派
-│   ├── exceptions.py       # 异常类层次（5大类17子类）
+│   ├── exceptions.py       # 异常类层次（5大类10子类）
 │   ├── session.py          # 会话持久化（SQLite WAL）
 │   ├── scheduler.py        # 定时任务调度（cron/interval/oneshot）
 │   ├── ace.py              # 自适应上下文引擎（代码/问答/创意）
