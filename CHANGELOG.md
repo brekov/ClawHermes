@@ -26,8 +26,18 @@
 
 ### 测试
 
-- 测试用例：73 → 148（+103%）
-- ruff: 0 errors | mypy: 0 errors | pytest: 148 passed
+- 测试用例：73 → 152（+108%）
+- ruff: 0 errors | mypy: 0 errors (6 项严格检查) | pytest: 152 passed
+
+### 异步钩子
+
+- HookManager 支持 async handler 注册和超时保护
+- `trigger_async()` / `trigger_sync_with_async()` / `remove()`
+
+### 类型安全
+
+- mypy selective strict：warn_return_any、unused_ignores、redundant_casts、check_untyped_defs、no_implicit_optional、strict_equality
+- 零 `typing.Any` 导入，`assert isinstance()` 运行时守卫
 
 ### 文档
 

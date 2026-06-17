@@ -152,6 +152,8 @@ Agent 提供 REST API，上层应用（飞书/微信/网页等）通过 API 调�
 | M2.3 | Docker Sandbox（安全执行，资源限制，SandboxPool） | ✅ |
 | M2.4 | ACE 自适应上下文引擎（4种对话类型检测） | ✅ |
 | M2.5 | 内置工具扩展 15→26（+11 个工具） | ✅ |
+| M2.6 | 异步钩子（async handler，超时保护） | ✅ |
+| M2.7 | mypy selective strict（6 项检查，零 Any） | ✅ |
 
 ## 8. Phase 3-4 规划概要
 

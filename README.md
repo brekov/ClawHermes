@@ -4,7 +4,7 @@
 
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![Tests: 148 passed](https://img.shields.io/badge/tests-148%20passed-brightgreen)](tests/)
+[![Tests: 152 passed](https://img.shields.io/badge/tests-152%20passed-brightgreen)](tests/)
 [![Coverage: 65%](https://img.shields.io/badge/coverage-65%25-yellow)](tests/)
 [![Ruff](https://img.shields.io/badge/ruff-0%20errors-brightgreen)](pyproject.toml)
 [![v0.11.0](https://img.shields.io/badge/version-0.11.0-blue)](CHANGELOG.md)
@@ -267,7 +267,7 @@ src/clawhermes/
 ## 测试
 
 ```bash
-# 单元测试 + 集成测试（148 个测试，全部通过 ✅）
+# 单元测试 + 集成测试（152 个测试，全部通过 ✅）
 pytest tests/ -v
 
 # 带覆盖率
