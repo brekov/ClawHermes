@@ -190,7 +190,7 @@ class AdaptiveContextEngine:
         self._last_strategy: CompressionStrategy | None = None
 
     def should_compress(self, prompt_tokens: int | None = None) -> bool:
-        return self._compressor.should_compress(prompt_tokens)
+        return bool(self._compressor.should_compress(prompt_tokens))
 
     def compress(
         self,

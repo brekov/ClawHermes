@@ -200,7 +200,9 @@ Rules:
         end = text.rfind("}")
         if start >= 0 and end > start:
             try:
-                return json.loads(text[start:end + 1])
+                result = json.loads(text[start:end + 1])
+                assert isinstance(result, dict)
+                return result
             except json.JSONDecodeError:
                 pass
         return {"memories": [], "skills": []}

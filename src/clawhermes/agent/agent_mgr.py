@@ -139,7 +139,9 @@ def get_agent_config(name: str) -> dict:
     cfg_file = agent_path(name) / "config.json"
     if cfg_file.exists():
         try:
-            return json.loads(cfg_file.read_text())
+            cfg = json.loads(cfg_file.read_text())
+            assert isinstance(cfg, dict)
+            return cfg
         except Exception:
             return {}
     return {}

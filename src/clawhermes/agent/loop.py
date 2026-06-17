@@ -33,24 +33,73 @@ class HookPoint:
 
 
 class HookManager:
-    def __init__(self):
+    def __init__(self, default_timeout: float = 10.0):
         self._hooks: dict[str, list[Callable]] = {}
+        self._async_hooks: dict[str, list[Callable]] = {}
+        self._default_timeout = default_timeout
 
     def register(self, point: str, handler: Callable):
-        if point not in self._hooks:
-            self._hooks[point] = []
-        self._hooks[point].append(handler)
+        is_async = asyncio.iscoroutinefunction(handler)
+        if is_async:
+            target = self._async_hooks
+        else:
+            target = self._hooks
+        if point not in target:
+            target[point] = []
+        target[point].append(handler)
 
     def trigger(self, point: str, **kwargs) -> dict[str, Any]:
-        results = {}
+        results: dict[str, Any] = {}
         for handler in self._hooks.get(point, []):
             try:
                 result = handler(**kwargs)
                 if result:
                     results.update(result)
             except Exception as e:
-                logger.warning(f"Hook {point} failed: {e}")
+                logger.warning("Hook %s failed: %s", point, e)
         return results
+
+    async def trigger_async(self, point: str, timeout: float | None = None,
+                            **kwargs) -> dict[str, Any]:
+        results: dict[str, Any] = {}
+        for handler in self._hooks.get(point, []):
+            try:
+                result = handler(**kwargs)
+                if result:
+                    results.update(result)
+            except Exception as e:
+                logger.warning("Hook %s failed: %s", point, e)
+
+        for handler in self._async_hooks.get(point, []):
+            try:
+                effective_timeout = timeout or self._default_timeout
+                result = await asyncio.wait_for(handler(**kwargs), timeout=effective_timeout)
+                if result:
+                    results.update(result)
+            except asyncio.TimeoutError:
+                logger.warning("Hook %s async handler timed out (%.1fs)", point, effective_timeout)
+            except Exception as e:
+                logger.warning("Hook %s async failed: %s", point, e)
+
+        return results
+
+    def trigger_sync_with_async(self, point: str, timeout: float | None = None,
+                                **kwargs) -> dict[str, Any]:
+        if not self._async_hooks.get(point):
+            return self.trigger(point, **kwargs)
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            return asyncio.run(self.trigger_async(point, timeout, **kwargs))
+        return loop.run_until_complete(self.trigger_async(point, timeout, **kwargs))
+
+    def remove(self, point: str, handler: Callable) -> bool:
+        for store in (self._hooks, self._async_hooks):
+            handlers = store.get(point, [])
+            if handler in handlers:
+                handlers.remove(handler)
+                return True
+        return False
 
 
 @dataclass
@@ -236,7 +285,7 @@ class Agent:
                 iteration=iteration,
             )
             if hook_result.get("abort"):
-                return hook_result.get("response", "")
+                return str(hook_result.get("response", ""))
 
             if self._interrupt.is_set():
                 return "（已中断）"
@@ -271,7 +320,7 @@ class Agent:
                     HookPoint.BEFORE_AGENT_REPLY,
                     response=response.content or "",
                 )
-                final = hook_result.get("override_response", response.content or "")
+                final = str(hook_result.get("override_response", response.content or ""))
 
                 self._last_conversation = [
                     {"role": m["role"], "content": str(m.get("content", ""))[:500]}

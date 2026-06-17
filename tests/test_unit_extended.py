@@ -453,6 +453,70 @@ class TestHookManager:
         result = hm.trigger(HookPoint.BEFORE_AGENT_RUN)
         assert result == {}
 
+    def test_async_handler_registration(self):
+        hm = HookManager()
+        results = []
+
+        async def async_handler(**kwargs):
+            results.append(kwargs.get("value", 0))
+            return {"async_processed": True}
+
+        hm.register(HookPoint.BEFORE_TOOL_CALL, async_handler)
+        result = hm.trigger_sync_with_async(HookPoint.BEFORE_TOOL_CALL, value=99)
+
+        assert len(results) == 1
+        assert results[0] == 99
+        assert result["async_processed"] is True
+
+    def test_async_timeout_protection(self):
+        hm = HookManager(default_timeout=0.5)
+
+        async def slow_handler(**kwargs):
+            import asyncio
+            await asyncio.sleep(10)
+            return {"never": True}
+
+        hm.register(HookPoint.AFTER_AGENT_END, slow_handler)
+        result = hm.trigger_sync_with_async(HookPoint.AFTER_AGENT_END, timeout=0.3)
+
+        assert result == {}
+
+    def test_mixed_sync_and_async(self):
+        hm = HookManager()
+        sync_results = []
+        async_results = []
+
+        def sync_handler(**kwargs):
+            sync_results.append(1)
+            return {"sync": True}
+
+        async def async_handler(**kwargs):
+            async_results.append(1)
+            return {"async": True}
+
+        hm.register(HookPoint.BEFORE_AGENT_REPLY, sync_handler)
+        hm.register(HookPoint.BEFORE_AGENT_REPLY, async_handler)
+        result = hm.trigger_sync_with_async(HookPoint.BEFORE_AGENT_REPLY)
+
+        assert len(sync_results) == 1
+        assert len(async_results) == 1
+        assert result["sync"] is True
+        assert result["async"] is True
+
+    def test_remove_handler(self):
+        hm = HookManager()
+        results = []
+
+        def handler(**kwargs):
+            results.append(1)
+
+        hm.register(HookPoint.BEFORE_TOOL_CALL, handler)
+        assert hm.remove(HookPoint.BEFORE_TOOL_CALL, handler) is True
+        assert hm.remove(HookPoint.BEFORE_TOOL_CALL, handler) is False
+
+        hm.trigger(HookPoint.BEFORE_TOOL_CALL)
+        assert len(results) == 0
+
 
 class TestToolDispatcher:
     def test_unknown_tool_returns_error(self):
