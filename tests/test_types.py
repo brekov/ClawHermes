@@ -1,10 +1,14 @@
 """
 ClawHermes - 核心类型测试
 """
-import pytest
 from clawhermes.types import (
-    Message, MessageRole, ToolCall, ToolCallStatus,
-    MemoryItem, MemoryScope, Skill,
+    MemoryItem,
+    MemoryScope,
+    Message,
+    MessageRole,
+    Skill,
+    ToolCall,
+    ToolCallStatus,
 )
 
 
