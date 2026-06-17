@@ -4,8 +4,7 @@ stable / context / volatile 分层，缓存友好
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from datetime import datetime
+from dataclasses import dataclass
 
 
 @dataclass
@@ -30,11 +29,12 @@ class StableLayer:
         """从 Agent 配置加载身份设定"""
         try:
             from clawhermes.agent.agent_mgr import (
-                build_persona_prompt, get_agent_config,
+                build_persona_prompt,
+                get_agent_config,
             )
             self.agent_name = agent_name
             self.identity = build_persona_prompt(agent_name)
-            cfg = get_agent_config(agent_name)
+            get_agent_config(agent_name)
         except Exception:
             pass
 

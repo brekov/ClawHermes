@@ -7,7 +7,7 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Optional
+from typing import Any
 
 
 class MessageRole(str, Enum):
@@ -64,19 +64,6 @@ class ToolCall:
     result: Any = None
     error: str | None = None
     duration_ms: float = 0.0
-
-
-@dataclass
-class ToolDefinition:
-    """工具定义"""
-    name: str
-    description: str
-    parameters: dict  # JSON Schema
-    handler: callable
-    group: str = "core"        # 工具分组
-    parallel_safe: bool = False  # 是否可并行
-    timeout_ms: int = 30000
-    require_confirm: bool = False  # 是否需要用户确认
 
 
 @dataclass

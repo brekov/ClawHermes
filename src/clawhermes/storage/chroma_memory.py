@@ -6,7 +6,6 @@ from __future__ import annotations
 import logging
 import uuid
 from pathlib import Path
-from typing import Any
 
 from clawhermes.agent.memory import MemoryProvider
 from clawhermes.types import MemoryItem, MemoryScope
@@ -55,11 +54,10 @@ class ChromaMemoryProvider(MemoryProvider):
         if results["documents"] and results["documents"][0]:
             for i, doc in enumerate(results["documents"][0]):
                 meta = results["metadatas"][0][i] if results["metadatas"] else {}
-                dist = results["distances"][0][i] if results["distances"] else 0
                 items.append(MemoryItem(
                     content=doc,
                     scope=MemoryScope(meta.get("scope", "user")),
-                    importance=meta.get("importance", 0.5),
+                    importance=float(str(meta.get("importance") or "0.5")),
                     metadata={k: v for k, v in meta.items() if k not in ("scope", "importance", "created_at")},
                 ))
         return items
@@ -74,7 +72,7 @@ class ChromaMemoryProvider(MemoryProvider):
                 items.append(MemoryItem(
                     content=doc,
                     scope=MemoryScope(meta.get("scope", "user")),
-                    importance=meta.get("importance", 0.5),
+                    importance=float(str(meta.get("importance") or "0.5")),
                 ))
         return items
 

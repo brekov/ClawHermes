@@ -4,22 +4,25 @@ ClawHermes - Agent 核心循环（思考-行动）
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import threading
-from dataclasses import dataclass, field
-from typing import Any, Callable
+from dataclasses import dataclass
+from typing import Any, Callable, List
 
+from clawhermes.agent.exceptions import (
+    ClawHermesError,
+    LLMConnectionError,
+    LLMError,
+)
 from clawhermes.agent.prompt import SystemPrompt
 from clawhermes.llm.provider import LLMProvider, LLMResponse
 
 logger = logging.getLogger(__name__)
 
 
-# ===== 钩子系统（来自 OpenClaw） =====
-
 class HookPoint:
-    """钩子定义"""
     BEFORE_TOOL_CALL = "before_tool_call"
     AFTER_TOOL_CALL = "after_tool_call"
     BEFORE_AGENT_RUN = "before_agent_run"
@@ -30,19 +33,15 @@ class HookPoint:
 
 
 class HookManager:
-    """钩子管理器 - 注册和触发"""
-
     def __init__(self):
         self._hooks: dict[str, list[Callable]] = {}
 
     def register(self, point: str, handler: Callable):
-        """注册钩子"""
         if point not in self._hooks:
             self._hooks[point] = []
         self._hooks[point].append(handler)
 
     def trigger(self, point: str, **kwargs) -> dict[str, Any]:
-        """触发钩子，返回所有 handler 的返回值和改写"""
         results = {}
         for handler in self._hooks.get(point, []):
             try:
@@ -54,11 +53,8 @@ class HookManager:
         return results
 
 
-# ===== 工具注册与调度 =====
-
 @dataclass
 class ToolDef:
-    """工具定义"""
     name: str
     description: str
     parameters: dict
@@ -70,8 +66,6 @@ class ToolDef:
 
 
 class ToolRegistry:
-    """工具注册中心 - 自动发现 + 手动注册"""
-
     def __init__(self):
         self._tools: dict[str, ToolDef] = {}
 
@@ -81,11 +75,10 @@ class ToolRegistry:
     def get(self, name: str) -> ToolDef | None:
         return self._tools.get(name)
 
-    def list(self) -> list[ToolDef]:
+    def list(self) -> List[ToolDef]:
         return list(self._tools.values())
 
-    def schemas(self) -> list[dict]:
-        """生成 OpenAI-compatible tool schemas"""
+    def schemas(self) -> List[dict]:
         return [
             {
                 "type": "function",
@@ -100,8 +93,6 @@ class ToolRegistry:
 
 
 class ToolDispatcher:
-    """工具调度器 - 支持并行/串行规则"""
-
     NEVER_PARALLEL = frozenset({"clarify", "confirm"})
     PARALLEL_SAFE = frozenset({
         "web_search", "web_fetch", "read_file",
@@ -114,10 +105,8 @@ class ToolDispatcher:
         self.hooks = hook_manager
 
     def execute(self, tool_calls: list[dict], context: dict) -> list[dict]:
-        """执行一组工具调用，自动判断并行/串行"""
         results = []
 
-        # 按类型分组
         for tc in tool_calls:
             name = tc.get("function", {}).get("name", "")
             args_str = tc.get("function", {}).get("arguments", "{}")
@@ -133,7 +122,6 @@ class ToolDispatcher:
                 results.append(self._error_result(tool_id, name, f"未知工具: {name}"))
                 continue
 
-            # before_tool_call 钩子
             hook_result = self.hooks.trigger(
                 HookPoint.BEFORE_TOOL_CALL,
                 tool_name=name,
@@ -148,24 +136,30 @@ class ToolDispatcher:
             if hook_result.get("override_args"):
                 args = hook_result["override_args"]
 
-            # 执行
+            tool_context = dict(context)
+            if context.get("_memory_manager"):
+                tool_context["_memory_manager"] = context["_memory_manager"]
+            if context.get("_delegate_manager"):
+                tool_context["_delegate_manager"] = context["_delegate_manager"]
+
             try:
-                result = tool_def.handler(**args)
+                result = tool_def.handler(**args, **tool_context)
                 results.append({
                     "role": "tool",
                     "tool_call_id": tool_id,
                     "name": name,
                     "content": json.dumps(result, ensure_ascii=False),
                 })
+            except ClawHermesError as e:
+                results.append(self._error_result(tool_id, name, str(e)))
             except Exception as e:
                 results.append(self._error_result(tool_id, name, str(e)))
 
-            # after_tool_call 钩子
             self.hooks.trigger(
                 HookPoint.AFTER_TOOL_CALL,
                 tool_name=name,
                 tool_args=args,
-                tool_result=result,
+                tool_result=result if 'result' in dir() else None,
                 duration_ms=0,
             )
 
@@ -180,19 +174,14 @@ class ToolDispatcher:
         }
 
 
-# ===== Agent 核心 =====
-
 @dataclass
 class AgentConfig:
-    """Agent 配置"""
     max_iterations: int = 20
     max_tool_calls_per_round: int = 10
     queue_mode: str = "steer"
 
 
 class Agent:
-    """Agent 核心 - 思考-行动循环"""
-
     def __init__(
         self,
         llm_provider: LLMProvider,
@@ -202,6 +191,7 @@ class Agent:
         skill_manager=None,
         context_engine=None,
         agent_name: str | None = None,
+        delegate_manager=None,
     ):
         self.llm = llm_provider
         self.prompt = SystemPrompt()
@@ -212,19 +202,26 @@ class Agent:
         self.memory = memory_manager
         self.skills = skill_manager
         self.context_engine = context_engine
+        self.delegate_manager = delegate_manager
         self._agent_name = agent_name or "ClawHermes"
         self._interrupt = threading.Event()
         self._last_conversation: list[dict] = []
 
-        # 加载 Agent 身份设定
         if agent_name:
             try:
                 self.prompt.stable.load_from_agent(agent_name)
             except Exception:
                 pass
 
+    def _build_tool_context(self, session_id: str = "") -> dict:
+        ctx: dict[str, Any] = {"session_id": session_id}
+        if self.memory:
+            ctx["_memory_manager"] = self.memory
+        if self.delegate_manager:
+            ctx["_delegate_manager"] = self.delegate_manager
+        return ctx
+
     def chat(self, user_message: str, session_id: str = "") -> str:
-        """简单接口：输入用户消息，返回最终响应"""
         messages = []
         messages.append({
             "role": "system",
@@ -244,7 +241,6 @@ class Agent:
             if self._interrupt.is_set():
                 return "（已中断）"
 
-            # 上下文压缩（F10）
             if self.context_engine and iteration > 1:
                 prompt_tokens = sum(len(m.get("content", "")) for m in messages)
                 if self.context_engine.should_compress(prompt_tokens):
@@ -256,16 +252,19 @@ class Agent:
                     messages,
                     tools=self.tools.schemas() if self.tools.list() else None,
                 )
+            except LLMError:
+                raise
             except Exception as e:
-                return f"LLM 调用失败: {e}"
+                raise LLMConnectionError(f"LLM 调用失败: {e}") from e
 
             self.hooks.trigger(HookPoint.MODEL_CALL_ENDED, response=response)
 
-            messages.append({
+            assistant_msg: dict[str, Any] = {
                 "role": "assistant",
                 "content": response.content or "",
                 "tool_calls": response.tool_calls,
-            })
+            }
+            messages.append(assistant_msg)
 
             if not response.tool_calls:
                 hook_result = self.hooks.trigger(
@@ -274,28 +273,34 @@ class Agent:
                 )
                 final = hook_result.get("override_response", response.content or "")
 
-                # 保存对话记录用于 Background Review
                 self._last_conversation = [
                     {"role": m["role"], "content": str(m.get("content", ""))[:500]}
-                    for m in messages[-6:]  # 只保留最近几轮
+                    for m in messages[-6:]
                 ]
 
-                # 触发 after_agent_end 钩子
                 self.hooks.trigger(HookPoint.AFTER_AGENT_END, messages=messages)
 
                 return final
 
+            tool_context = self._build_tool_context(session_id)
+            tool_context["iteration"] = iteration
+
             tool_results = self.dispatcher.execute(
                 response.tool_calls,
-                context={"session_id": session_id, "iteration": iteration},
+                context=tool_context,
             )
             messages.extend(tool_results)
 
         return "（已达最大迭代次数）"
 
+    async def chat_async(self, user_message: str, session_id: str = "") -> str:
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(
+            None, self.chat, user_message, session_id,
+        )
+
     def interrupt(self):
         self._interrupt.set()
 
     def get_conversation(self) -> list[dict]:
-        """获取最近对话记录（供 Background Review 使用）"""
         return self._last_conversation

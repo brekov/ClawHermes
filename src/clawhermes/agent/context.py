@@ -4,10 +4,8 @@ ContextEngine 抽象基类 + LLMCompressor 实现
 """
 from __future__ import annotations
 
-import json
 import logging
 from abc import ABC, abstractmethod
-from typing import Any
 
 logger = logging.getLogger(__name__)
 

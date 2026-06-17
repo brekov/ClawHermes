@@ -66,19 +66,42 @@ def test_tool_registry_and_dispatch():
     registry = ToolRegistry()
     register_builtin_tools(registry)
 
-    # 应该有8个工具
     tools = registry.list()
-    assert len(tools) == 8
+    assert len(tools) == 9
     names = {t.name for t in tools}
     assert names == {
         "session_status", "read_file", "write_file", "exec",
         "get_time", "web_search", "memory_search", "memory_save",
+        "delegate_task",
     }
 
-    # schema 生成
     schemas = registry.schemas()
-    assert len(schemas) == 8
+    assert len(schemas) == 9
     print(f"✅ 工具系统 OK → {len(tools)} 个工具")
+
+
+def test_tool_profiles():
+    """测试：工具 profile 分级"""
+    registry_min = ToolRegistry()
+    register_builtin_tools(registry_min, profile="minimal")
+    assert len(registry_min.list()) == 5
+
+    registry_std = ToolRegistry()
+    register_builtin_tools(registry_std, profile="standard")
+    assert len(registry_std.list()) == 9
+
+    registry_full = ToolRegistry()
+    register_builtin_tools(registry_full, profile="full")
+    assert len(registry_full.list()) == 15
+
+    full_names = {t.name for t in registry_full.list()}
+    assert "web_fetch" in full_names
+    assert "list_dir" in full_names
+    assert "patch_file" in full_names
+    assert "grep" in full_names
+    assert "search_replace" in full_names
+    assert "code_eval" in full_names
+    print(f"✅ 工具 profiles OK → minimal=5, standard=9, full=15")
 
 
 def test_system_prompt_three_layers():
@@ -143,6 +166,64 @@ def test_credential_pool():
         pass  # 冷却期内
 
     print("✅ 多凭证池 OK")
+
+
+def test_exception_hierarchy():
+    """测试：自定义异常类层次"""
+    from clawhermes.agent.exceptions import (
+        ClawHermesError,
+        LLMError, LLMConnectionError, LLMRateLimitError, LLMResponseError,
+        ToolError, ToolNotFoundError, ToolExecutionError, ToolBlockedError,
+        MemoryError, MemoryStorageError, MemorySearchError,
+        ConfigError, ConfigValidationError, ConfigNotFoundError,
+        SessionError, SessionNotFoundError, SessionExpiredError,
+    )
+
+    assert issubclass(LLMError, ClawHermesError)
+    assert issubclass(LLMConnectionError, LLMError)
+    assert issubclass(LLMRateLimitError, LLMError)
+    assert issubclass(LLMResponseError, LLMError)
+
+    assert issubclass(ToolError, ClawHermesError)
+    assert issubclass(ToolNotFoundError, ToolError)
+    assert issubclass(ToolExecutionError, ToolError)
+    assert issubclass(ToolBlockedError, ToolError)
+
+    assert issubclass(MemoryError, ClawHermesError)
+    assert issubclass(MemoryStorageError, MemoryError)
+    assert issubclass(MemorySearchError, MemoryError)
+
+    assert issubclass(ConfigError, ClawHermesError)
+    assert issubclass(ConfigValidationError, ConfigError)
+    assert issubclass(ConfigNotFoundError, ConfigError)
+
+    assert issubclass(SessionError, ClawHermesError)
+    assert issubclass(SessionNotFoundError, SessionError)
+    assert issubclass(SessionExpiredError, SessionError)
+
+    e = LLMRateLimitError("test", retry_after=60)
+    assert e.retry_after == 60
+
+    e2 = ToolBlockedError("blocked", tool_name="exec", reason="unsafe")
+    assert e2.tool_name == "exec"
+    assert e2.reason == "unsafe"
+
+    e3 = SessionNotFoundError("not found", session_id="abc")
+    assert e3.session_id == "abc"
+
+    print("✅ 异常类层次 OK")
+
+
+def test_chat_async():
+    """测试：异步对话接口"""
+    import asyncio
+
+    provider = MockProvider(responses=["异步响应"])
+    agent = Agent(llm_provider=provider, config=AgentConfig(max_iterations=5))
+
+    result = asyncio.run(agent.chat_async("测试异步"))
+    assert result == "异步响应"
+    print("✅ chat_async OK")
 
 
 if __name__ == "__main__":
