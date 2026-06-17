@@ -8,6 +8,8 @@ services:
       - "18789:18789"
     environment:
       - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}
+      - CH_GATEWAY_HOST=0.0.0.0
+      - CH_TOOLS_PROFILE=${CH_TOOLS_PROFILE:-standard}
       - CH_DATA_DIR=/data/.clawhermes
     volumes:
       - clawhermes_data:/data/.clawhermes

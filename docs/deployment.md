@@ -1,7 +1,6 @@
 # ClawHermes · 部署指南
 
-> 版本：v2.0
-> 日期：2026-06-16
+> 版本：v2.1 | 日期：2026-06-17
 
 ---
 
@@ -15,6 +14,7 @@ docker build -t clawhermes .
 docker run -d \
   --name clawhermes \
   -e DEEPSEEK_API_KEY=sk-xxx \
+  -e CH_TOOLS_PROFILE=standard \
   -p 18789:18789 \
   --restart unless-stopped \
   clawhermes
@@ -61,10 +61,9 @@ bash <(curl -fsSL https://raw.githubusercontent.com/brekov/ClawHermes/main/scrip
 
 ## Gateway 说明
 
-> ClawHermes 的 Gateway 是一个 **REST API** 服务，用于 Agent 交互，**并非**聊天平台网关。
-> 
-> Gateway 提供 10 个 REST 端点，通过 HTTP API 暴露 Agent 核心能力（对话、工具、记忆、技能等）。
-> 上层应用可以通过这些 API 接入 ClawHermes 的 Agent 能力，无需依赖任何特定聊天平台。
+ClawHermes Gateway 是一个 **REST API** 服务，提供 18 个端点，通过 HTTP API 暴露 Agent 核心能力。
+
+### 启动
 
 ```bash
 # 启动 Gateway 服务
@@ -72,15 +71,44 @@ clawhermes gateway start --host 0.0.0.0
 
 # 配置 LLM Provider
 clawhermes gateway setup
+
+# 交互式对话
+clawhermes chat
 ```
 
-## 健康检查
+### 常见 HTTP API 用法
 
 ```bash
+# 健康检查
 curl http://localhost:18789/health
-# {"status":"ok","version":"0.10.0","tools":9,"skills":0,"sessions":0}
+# {"status":"ok","version":"0.12.0","uptime":3600,"tools":26}
+
+# 初始化 Agent
+curl -X POST http://localhost:18789/init \
+  -H "Content-Type: application/json" \
+  -d '{"api_key":"sk-xxx","model":"deepseek/deepseek-chat","profile":"standard"}'
+
+# 对话
+curl -X POST http://localhost:18789/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message":"你好"}'
+
+# 列出会话
+curl http://localhost:18789/sessions
+
+# 定时任务
+curl -X POST http://localhost:18789/cron/jobs \
+  -H "Content-Type: application/json" \
+  -d '{"name":"daily","task":"send report","mode":"cron","hour":"9","minute":"0"}'
 ```
 
 ## 环境变量
 
-所有配置项见 [env-reference.md](env-reference.md)。
+完整配置参考见 [env-reference.md](env-reference.md)。
+
+| 变量 | 说明 | 默认值 |
+|------|------|--------|
+| `DEEPSEEK_API_KEY` | DeepSeek API Key | — |
+| `CH_GATEWAY_PORT` | Gateway 端口 | 18789 |
+| `CH_TOOLS_PROFILE` | 工具集级别 | standard |
+| `CH_DATA_DIR` | 数据目录 | ~/.clawhermes |
