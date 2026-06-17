@@ -1,11 +1,13 @@
 # ClawHermes
 
-融合 **Hermes** 自进化能力与 **OpenClaw** Gateway 体系的 Python AI Agent 框架。
+融合 **Hermes** 自进化能力与 **OpenClaw** 钩子体系的 Python AI Agent 框架。
 
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![PRD 12/12](https://img.shields.io/badge/PRD-12%E2%81%8F12-green)](docs/PRD.md)
-[![tests: 56](https://img.shields.io/badge/tests-56%E2%81%8F56-brightgreen)](tests/test_all.py)
+[![Tests: 73 passed](https://img.shields.io/badge/tests-73%20passed-brightgreen)](tests/)
+[![Coverage: 65%](https://img.shields.io/badge/coverage-65%25-yellow)](tests/)
+[![Ruff](https://img.shields.io/badge/ruff-0%20errors-brightgreen)](pyproject.toml)
+[![v0.11.0](https://img.shields.io/badge/version-0.11.0-blue)](CHANGELOG.md)
 
 ---
 
@@ -15,9 +17,9 @@
 |:---|:---|
 | 三层 System Prompt → 缓存友好，省 token | 插件钩子体系 → 工具级拦截/改写/审批 |
 | Background Review → 对话后自动沉淀记忆/技能 | 工具策略引擎 → profile + allow/deny 精细权限 |
-| ContextEngine 可插拔 → 压缩策略可替换 | 双层持久化 → 树形 transcript |
-| Curator → 技能库自动维护（stale→archived） | 配置校验 fail-fast → 不带病运行 |
-| 多凭证池 → 高可用（故障自动冷却） |  |
+| ContextEngine 可插拔 → 压缩策略可替换 | 配置校验 fail-fast → 不带病运行 |
+| Curator → 技能库自动维护（stale→archived） | |
+| 多凭证池 → 高可用（故障自动冷却） | |
 
 ---
 
@@ -44,10 +46,18 @@ docker run -e DEEPSEEK_API_KEY=sk-xxx -p 18789:18789 clawhermes
 ### HTTP API
 
 ```bash
+# 初始化（可选指定工具 profile）
+curl -X POST http://127.0.0.1:18789/init \
+  -H "Content-Type: application/json" \
+  -d '{"api_key":"sk-xxx","model":"deepseek/deepseek-chat","profile":"standard"}'
+
 # 对话
 curl -X POST http://127.0.0.1:18789/chat \
   -H "Content-Type: application/json" \
   -d '{"message":"你好"}'
+
+# 查看会话
+curl http://127.0.0.1:18789/sessions
 ```
 
 ---
@@ -55,66 +65,100 @@ curl -X POST http://127.0.0.1:18789/chat \
 ## 架构
 
 ```
-┌────────────────────────────────────────────────────────────┐
-│                    Gateway 层（REST API）                   │
-│  CLI / HTTP（FastAPI · 10 个 REST 端点）                   │
-└────────────────────────┬───────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│                      Gateway 层（REST API）                   │
+│  CLI / HTTP（FastAPI · 13 个 REST 端点 · 会话持久化）         │
+└────────────────────────┬─────────────────────────────────────┘
                          │
-┌────────────────────────▼───────────────────────────────────┐
-│                  Agent 核心层                               │
-│                                                             │
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │          三层 System Prompt (stable/context/volatile)│   │
-│  └─────────────────────────────────────────────────────┘   │
-│                                                             │
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │        Agent Loop (思考-行动循环)                    │   │
-│  │  LLM → 工具 → LLM → ... → 回复                      │   │
-│  │  ← 上下文压缩 ←  ←  ←  ← (F10)                     │   │
-│  └─────────────────────────────────────────────────────┘   │
-│                                                             │
-│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────────┐  │
-│  │ 工具系统  │ │ 记忆系统  │ │ 技能系统  │ │ 子Agent委派  │  │
-│  │ 9工具+钩 │ │ JSON+    │ │ Manager+ │ │ 并行执行     │  │
-│  │ 子+策略   │ │ ChromaDB │ │ Review+  │ │ 防死锁(F12)  │  │
-│  │          │ │ 向量搜索  │ │ Curator  │ │              │  │
-│  └──────────┘ └──────────┘ └──────────┘ └──────────────┘  │
-└────────────────────────────────────────────────────────────┘
+┌────────────────────────▼─────────────────────────────────────┐
+│                    Agent 核心层                               │
+│                                                               │
+│  ┌───────────────────────────────────────────────────────┐   │
+│  │        三层 System Prompt (stable/context/volatile)    │   │
+│  └───────────────────────────────────────────────────────┘   │
+│                                                               │
+│  ┌───────────────────────────────────────────────────────┐   │
+│  │          Agent Loop (思考-行动循环)                    │   │
+│  │  LLM → 工具 → LLM → ... → 回复                        │   │
+│  │  ← 上下文压缩 ←  ←  ←  ← (F10)                       │   │
+│  └───────────────────────────────────────────────────────┘   │
+│                                                               │
+│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────────┐    │
+│  │ 工具系统  │ │ 记忆系统  │ │ 技能系统  │ │ 子Agent委派  │    │
+│  │ 15工具   │ │ JSON+    │ │ Manager+ │ │ 并行执行     │    │
+│  │ 3级Profile│ │ ChromaDB │ │ Review+  │ │ 防死锁(F12)  │    │
+│  │ 钩子+策略 │ │ 向量搜索  │ │ Curator  │ │              │    │
+│  └──────────┘ └──────────┘ └──────────┘ └──────────────┘    │
+│                                                               │
+│  ┌──────────────────────────────────────────────────────┐    │
+│  │          异常体系 (ClawHermesError → 5大类17子类)     │    │
+│  └──────────────────────────────────────────────────────┘    │
+└──────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 功能全景（PRD 12/12 ✅）
+## 功能全景
 
 | # | 功能 | 说明 |
 |:---:|:---|:---|
 | F1 | **多 LLM 接入** | litellm 驱动，132 个 provider，`provider/model` 格式切换 |
 | F2 | **对话主循环** | 思考-行动循环，50 次迭代上限，自动中断保护 |
-| F3 | **工具系统** | 9 个内置工具，自动注册，JSON Schema 生成 |
+| F3 | **工具系统** | 15 个内置工具，3 级 Profile，JSON Schema 生成 |
 | F4 | **持久化记忆** | JSON 文件 + ChromaDB 双存储，语义搜索 |
+| F5 | **会话持久化** | SQLite WAL 模式，重启不丢失，过期自动清理 |
 | F6 | **技能系统** | SkillManager，元数据持久化，上下文注入 |
 | F7 | **自进化** | Background Review，对话后自动审查沉淀记忆/技能 |
-| F8 | **钩子系统** | before/after tool call，before/after agent run |
-| F9 | **工具策略** | 并行/串行调度，路径冲突检测 |
+| F8 | **钩子系统** | 7 个钩子点（before/after tool_call、agent run/reply、model_call） |
+| F9 | **工具策略** | 并行/串行调度，路径冲突检测，allow/deny 精细权限 |
 | F10 | **上下文压缩** | ContextEngine 抽象，LLM 摘要，保护头尾 |
 | F11 | **多凭证池** | 轮询/最少使用策略，401/429 故障冷却 |
 | F12 | **子Agent委派** | 并行执行，深度限制(MAX=2)，防死锁 |
+| F13 | **异步接口** | Agent.chat_async() + LLMProvider.chat_async() |
+| F14 | **异常体系** | ClawHermesError → 5大类17子类，结构化错误信息 |
 
 ---
 
-## 内置工具（9个）
+## 内置工具（15个）
+
+### minimal（5个）— 轻量场景
 
 | 工具 | 说明 | 可并行 |
 |:---|:---|:----:|
 | `get_time` | 获取当前日期和时间 | ✅ |
-| `web_search` | 搜索互联网信息 | ✅ |
-| `memory_search` | 搜索记忆库 | ✅ |
 | `read_file` | 读取文件内容 | ✅ |
 | `session_status` | 会话状态信息 | ✅ |
 | `write_file` | 写入文件（覆盖） | ❌ |
 | `exec` | 执行 shell 命令 | ❌ |
+
+### standard（9个）— 默认
+
+在 minimal 基础上增加：
+
+| 工具 | 说明 | 可并行 |
+|:---|:---|:----:|
+| `web_search` | 搜索互联网信息 | ✅ |
+| `memory_search` | 搜索记忆库 | ✅ |
 | `memory_save` | 保存记忆 | ❌ |
 | `delegate_task` | 委派子任务给子 Agent 并行执行 | ❌ |
+
+### full（15个）— 完整能力
+
+在 standard 基础上增加：
+
+| 工具 | 说明 | 可并行 |
+|:---|:---|:----:|
+| `web_fetch` | 获取网页内容 | ✅ |
+| `list_dir` | 列出目录内容 | ✅ |
+| `grep` | 文件文本搜索 | ✅ |
+| `patch_file` | 文件差异补丁 | ❌ |
+| `search_replace` | 文件搜索替换 | ❌ |
+| `code_eval` | 执行 Python 代码片段 | ❌ |
+
+配置方式：
+```bash
+export CH_TOOLS_PROFILE=full  # minimal / standard / full
+```
 
 ---
 
@@ -145,17 +189,24 @@ src/clawhermes/
 ├── types.py                # 核心类型定义
 │
 ├── llm/
-│   └── provider.py         # LLM 调用封装 + CredentialPool
+│   └── provider.py         # LLM 调用封装 + CredentialPool + chat_async
 │
 ├── agent/
 │   ├── loop.py             # Agent 核心循环 + HookManager + ToolDispatcher
 │   ├── prompt.py           # 三层 System Prompt
 │   ├── memory.py           # 记忆系统（MemoryManager + JSONProvider）
 │   ├── context.py          # F10: 上下文压缩引擎
-│   └── delegate.py         # F12: 子 Agent 委派
+│   ├── delegate.py         # F12: 子 Agent 委派
+│   ├── exceptions.py       # 异常类层次（5大类17子类）
+│   ├── session.py          # 会话持久化（SQLite WAL）
+│   └── agent_mgr.py        # 多 Agent 管理
+│
+├── channel/
+│   ├── __init__.py         # Channel Adapter SDK
+│   └── adapter.py          # 渠道适配器 ABC + CLI/REST/WebSocket 适配器
 │
 ├── tools/
-│   └── builtin.py          # 9 个内置工具
+│   └── builtin.py          # 15 个内置工具 + 3 级 Profile
 │
 ├── skills/
 │   └── manager.py          # 技能系统 + Background Review + Curator
@@ -164,55 +215,81 @@ src/clawhermes/
 │   └── chroma_memory.py    # ChromaDB 向量记忆
 │
 └── gateway/
-    ├── app.py              # FastAPI Gateway（10 个 REST 端点）
+    ├── app.py              # FastAPI Gateway（13 个 REST 端点）
     └── setup.py            # Provider 配置管理
-
-scripts/
-└── install.sh              # 一键安装脚本
 ```
 
 ---
 
-## 关于本项目范围
+## 聊天渠道集成
 
-> **ClawHermes 是一个纯 Python AI Agent 框架，通过 REST API 暴露能力。**
+> ClawHermes 的最终目标是支持多平台聊天渠道集成（飞书、微信、Discord、Slack、Telegram 等）。
 >
-> 本框架**不包含**聊天渠道集成（飞书、微信、QQ、Telegram 等消息平台）。
-> ClawHermes 专注于 Agent 核心能力，消息渠道由部署者自行集成。
-> - Agent 思考-行动循环
-> - 工具系统与钩子/策略
-> - 记忆与技能管理
-> - 自进化（Background Review）
-> - 通过 REST API 对接任意前端或平台
+> 目前已实现 **Channel Adapter SDK**（`src/clawhermes/channel/`），定义了标准化的渠道适配器接口，
+> 并内置 CLI / REST / WebSocket 三个适配器。更多平台适配器将在后续版本中逐步提供。
+>
+> - **Phase 2**：Channel Adapter SDK 完善 + 示例适配器（Slack / Discord / 飞书）
+> - **Phase 3**：Federated Skill Hub + 社区适配器生态
+>
+> 如果你想为 ClawHermes 贡献渠道适配器，只需实现 `ChannelAdapter` ABC 的 4 个方法：
+>
+> ```python
+> from clawhermes.channel import ChannelAdapter, ChannelType
+>
+> class MyChannelAdapter(ChannelAdapter):
+>     async def start(self) -> None: ...
+>     async def stop(self) -> None: ...
+>     async def send_response(self, response, original) -> None: ...
+>     async def get_user_info(self, user_id) -> ChannelUser | None: ...
+> ```
 
 ---
 
 ## 测试
 
 ```bash
-# 完整测试套件（56 个测试，全部通过 ✅）
-python tests/test_all.py
+# 单元测试 + 集成测试（73 个测试，全部通过 ✅）
+pytest tests/ -v
 
-# 集成测试（MockProvider，不需要 API Key）
-python tests/test_integration.py
+# 带覆盖率
+pytest tests/ --cov=src/clawhermes --cov-report=term-missing
+
+# 代码质量检查
+ruff check src/
+mypy src/
 ```
 
 ---
 
 ## 文档
 
-| 文档 | 说明 | 状态 |
-|:---|:---|---:|
-| [PRD.md](docs/PRD.md) | 产品需求文档（含实现状态）| ✅ v1.0 |
-| [architecture.md](docs/architecture.md) | 架构设计文档 | ✅ v1.0 |
-| [data-model.md](docs/data-model.md) | 数据模型（6实体+枚举）| ✅ |
-| [api-contract.md](docs/api-contract.md) | 接口契约（6模块）| ✅ |
-| [sequence-diagrams.md](docs/sequence-diagrams.md) | 5个关键流程时序图 | ✅ |
-| [deployment.md](docs/deployment.md) | 部署指南（Docker/裸机/一键）| ✅ |
-| [env-reference.md](docs/env-reference.md) | 环境变量手册 | ✅ |
-| [development.md](docs/development.md) | 开发指南 | ✅ |
-| [CHANGELOG.md](CHANGELOG.md) | 变更日志（v0.1~v0.10）| ✅ |
-| [CONTRIBUTING.md](CONTRIBUTING.md) | 贡献指南 | ✅ |
+| 文档 | 说明 |
+|:---|:---|
+| [PRD.md](docs/PRD.md) | 产品需求文档（Phase 1 ✅ 已完成） |
+| [architecture.md](docs/architecture.md) | 架构设计文档（含 v1.0 目标架构） |
+| [development-plan.md](docs/development-plan.md) | 开发计划（竞争分析 + 4阶段路线图） |
+| [comparison.md](docs/comparison.md) | ClawHermes vs OpenClaw vs Hermes 对比 |
+| [data-model.md](docs/data-model.md) | 数据模型（6实体+枚举） |
+| [api-contract.md](docs/api-contract.md) | 接口契约（8模块） |
+| [sequence-diagrams.md](docs/sequence-diagrams.md) | 5个关键流程时序图 |
+| [deployment.md](docs/deployment.md) | 部署指南（Docker/裸机/一键） |
+| [env-reference.md](docs/env-reference.md) | 环境变量手册 |
+| [development.md](docs/development.md) | 开发指南 |
+| [CHANGELOG.md](CHANGELOG.md) | 变更日志（v0.1~v0.11） |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | 贡献指南 |
+
+---
+
+## 开发路线图
+
+| Phase | 版本 | 目标 | 状态 |
+|:------|:-----|:-----|:----:|
+| Phase 1 | v0.11.0 | 代码质量与稳定性 | ✅ |
+| Phase 2 | v0.12.0~v0.13.0 | 功能增强（Channel SDK / Cron / Docker Sandbox / ACE） | 📋 |
+| Phase 3 | v0.14.0~v0.15.0 | 生态建设（Skill Hub / Multi-Modal Memory） | 📋 |
+| Phase 4 | v1.0.0 | 体验与差异化（Dashboard / Workflow Builder） | 📋 |
+
+详见 [开发计划](docs/development-plan.md)
 
 ---
 
