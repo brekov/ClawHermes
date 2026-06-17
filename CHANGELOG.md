@@ -1,5 +1,40 @@
 # Changelog
 
+## v0.12.2 (2026-06-17)
+
+评审问题修复 — P0-P3 级问题系统性修复
+
+### P0 级修复（立即修复）
+
+- **/health 端点版本动态化**：修复版本硬编码为 "0.11.0" 的问题，改为动态读取 pyproject.toml 版本
+- **AgentConfig 默认值统一**：`max_iterations` 默认值从 20 改为 50，与文档保持一致
+- **README badge 版本更新**：版本显示从 v0.12.0 更新为 v0.12.1
+
+### P1 级修复（文档准确性）
+
+- **architecture.md 端点数更新**：10 → 18
+- **architecture.md 工具数更新**：15 → 26
+- **architecture.md 异常类数量修正**：17 子类 → 10 子类 + 2 个扩展异常类
+- **architecture.md 模块状态更新**：标记已完成模块（Channel SDK、Cron Scheduler、ACE 等）
+- **api-contract.md cron 端点补充**：新增 6 个 cron 端点定义
+- **data-model.md 版本更新**：v0.6-draft → v2.1，新增 CronJob/ChannelMessage/ChannelUser 数据模型
+
+### P2 级修复（质量问题）
+
+- **CHANGELOG 测试数修正**：v0.12.0 测试数从 152 更新为 165
+
+### P3 级修复（代码质量）
+
+- **ToolDispatcher 并行调度优化**：移除硬编码的 PARALLEL_SAFE 集合，改为使用 ToolDef.parallel_safe 属性判断
+- **原生异步 chat_async 实现**：使用 LLMProvider.chat_async 而非 run_in_executor 包装同步方法
+- **MockProvider 异步支持**：添加 chat_async 方法支持异步测试
+
+### 测试结果
+
+- ruff: All checks passed!
+- mypy: Success: no issues found in 24 source files
+- pytest: 165 passed in 11.81s
+
 ## v0.12.1 (2026-06-17)
 
 文档修复与环境配置完善

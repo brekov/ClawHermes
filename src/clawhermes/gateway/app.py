@@ -256,7 +256,7 @@ def health():
     try:
         app_version = get_version("clawhermes")
     except Exception:
-        app_version = "0.12.1"
+        app_version = "0.12.2"
     return {
         "status": "ok",
         "version": app_version,
