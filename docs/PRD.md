@@ -1,8 +1,8 @@
 # ClawHermes · 产品需求文档
 
-> 版本：v2.1
+> 版本：v2.2
 > 日期：2026-06-17
-> 状态：✔️ Phase 1 ✅ | Phase 2 ✅
+> 状态：Phase 1 ✅ | Phase 2 ✅ | Phase 3 🔄
 
 > **v0.10.0 重要决策**：ClawHermes 移除全部消息渠道代码（飞书、微信、QQ、Telegram），回归纯 AI Agent 框架定位。
 > ClawHermes 专注 Agent 核心能力，消息渠道由部署者自行集成。
@@ -154,6 +154,20 @@ Agent 提供 REST API，上层应用（飞书/微信/网页等）通过 API 调�
 | M2.5 | 内置工具扩展 15→26（+11 个工具） | ✅ |
 | M2.6 | 异步钩子（async handler，超时保护） | ✅ |
 | M2.7 | mypy selective strict（6 项检查，零 Any） | ✅ |
+
+## 9. Phase 3 进行中（v0.12.0+）
+
+> 状态：🔄 进行中
+> 目标：生态建设 — 联邦技能中心、多模态记忆、用户建模
+
+| 里程碑 | 功能 | 状态 |
+|--------|------|:----:|
+| M3.1 | Federated Skill Hub（SkillManifest + SkillHub） | ✅ |
+| M3.2 | Skill Evolution Graph | 📋 |
+| M3.3 | Multi-Modal Memory | 📋 |
+| M3.4 | 用户画像持久化 | 📋 |
+| M3.5 | 技能审核流 | 📋 |
+| M3.6 | 示例渠道适配器（Slack/Discord/飞书） | 📋 |
 
 ## 8. Phase 3-4 规划概要
 

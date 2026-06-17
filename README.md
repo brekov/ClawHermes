@@ -4,10 +4,10 @@
 
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![Tests: 152 passed](https://img.shields.io/badge/tests-152%20passed-brightgreen)](tests/)
+[![Tests: 165 passed](https://img.shields.io/badge/tests-165%20passed-brightgreen)](tests/)
 [![Coverage: 65%](https://img.shields.io/badge/coverage-65%25-yellow)](tests/)
 [![Ruff](https://img.shields.io/badge/ruff-0%20errors-brightgreen)](pyproject.toml)
-[![v0.11.0](https://img.shields.io/badge/version-0.11.0-blue)](CHANGELOG.md)
+[![v0.12.0](https://img.shields.io/badge/version-0.12.0-blue)](CHANGELOG.md)
 
 ---
 
@@ -67,7 +67,7 @@ curl http://127.0.0.1:18789/sessions
 ```
 ┌──────────────────────────────────────────────────────────────┐
 │                      Gateway 层（REST API）                   │
-│  CLI / HTTP（FastAPI · 19 个 REST 端点 · Cron调度 · Docker沙箱） │
+│  CLI / HTTP（FastAPI · 18 个 REST 端点 · Cron调度 · Docker沙箱） │
 └────────────────────────┬─────────────────────────────────────┘
                          │
 ┌────────────────────────▼─────────────────────────────────────┐
@@ -122,6 +122,7 @@ curl http://127.0.0.1:18789/sessions
 | F16 | **Docker 沙箱** | 容器化安全执行，资源限制，网络隔离 |
 | F17 | **ACE 自适应压缩** | 对话类型检测（代码/问答/创意），策略自动切换 |
 | F18 | **Channel SDK** | 渠道适配器 ABC，内置 CLI/REST/WebSocket 适配器 |
+| F19 | **Federated Skill Hub** | Git 仓库技能发布/安装/验证，SHA-256 校验 + GPG 签名 |
 
 ---
 
@@ -228,13 +229,14 @@ src/clawhermes/
 │   └── builtin.py          # 26 个内置工具 + 3 级 Profile
 │
 ├── skills/
-│   └── manager.py          # 技能系统 + Background Review + Curator
+│   ├── manager.py          # 技能系统 + Background Review + Curator
+│   └── hub.py              # 联邦技能中心（发布/安装/验证）
 │
 ├── storage/
 │   └── chroma_memory.py    # ChromaDB 向量记忆
 │
 └── gateway/
-    ├── app.py              # FastAPI Gateway（13 个 REST 端点）
+    ├── app.py              # FastAPI Gateway（18 个 REST 端点）
     └── setup.py            # Provider 配置管理
 ```
 
@@ -267,7 +269,7 @@ src/clawhermes/
 ## 测试
 
 ```bash
-# 单元测试 + 集成测试（152 个测试，全部通过 ✅）
+# 单元测试 + 集成测试（165 个测试，全部通过 ✅）
 pytest tests/ -v
 
 # 带覆盖率
@@ -304,8 +306,8 @@ mypy src/
 | Phase | 版本 | 目标 | 状态 |
 |:------|:-----|:-----|:----:|
 | Phase 1 | v0.11.0 | 代码质量与稳定性 | ✅ |
-| Phase 2 | v0.12.0~v0.13.0 | 功能增强（Channel SDK / Cron / Docker Sandbox / ACE） | 📋 |
-| Phase 3 | v0.14.0~v0.15.0 | 生态建设（Skill Hub / Multi-Modal Memory） | 📋 |
+| Phase 2 | v0.12.0~v0.13.0 | 功能增强（Channel SDK / Cron / Docker Sandbox / ACE） | ✅ |
+| Phase 3 | v0.14.0~v0.15.0 | 生态建设（Skill Hub / Multi-Modal Memory） | 🔄 |
 | Phase 4 | v1.0.0 | 体验与差异化（Dashboard / Workflow Builder） | 📋 |
 
 详见 [开发计划](docs/development-plan.md)

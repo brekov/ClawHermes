@@ -1,7 +1,7 @@
 # ClawHermes · 架构设计文档
 
-> 版本：v1.0
-> 日期：2026-06-16
+> 版本：v1.1
+> 日期：2026-06-17
 > 状态：已实现
 
 ---
@@ -215,6 +215,7 @@ storage/session.py → storage/transcript.py
 | `agent/context.py` | 上下文压缩引擎 | ✅ |
 | `agent/memory.py` | 记忆管理器 | ✅ |
 | `agent/delegate.py` | 子 Agent 委派 | ✅ |
+| `skills/hub.py` | 联邦技能中心（SkillManifest + SkillHub） | ✅ |
 | `llm/provider.py` | LLM Provider + CredentialPool + chat_async | ✅ |
 | `gateway/app.py` | FastAPI REST 服务（13个端点） | ✅ |
 | `.github/workflows/ci.yml` | CI 流水线 | ✅ |
@@ -228,7 +229,6 @@ storage/session.py → storage/transcript.py
 | `agent/scheduler.py` | Cron 调度（APScheduler） | Phase 2 |
 | `tools/sandbox.py` | Docker 沙箱执行 | Phase 2 |
 | `agent/ace.py` | 自适应上下文引擎 | Phase 2 |
-| `skills/hub.py` | 联邦技能中心 | Phase 3 |
 | `skills/evolution.py` | 技能进化图谱 | Phase 3 |
 | `memory/multimodal.py` | 多模态记忆 | Phase 3 |
 | `agent/user_model.py` | 用户画像持久化 | Phase 3 |

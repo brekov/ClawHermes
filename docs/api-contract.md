@@ -1,7 +1,7 @@
 # ClawHermes · 接口契约文档
 
-> 版本：v0.11.0
-> 日期：2026-06-16
+> 版本：v0.12.0
+> 日期：2026-06-17
 > 说明：定义各模块之间的接口规格，供并行开发和测试 mock 使用
 
 ---
@@ -327,6 +327,46 @@ ClawHermesError (base, detail: str)
 └── SessionError
     ├── SessionNotFoundError (session_id: str)
     └── SessionExpiredError (session_id: str)
+```
+
+---
+
+## 9. SkillHub 接口
+
+### `SkillManifest`
+
+```python
+@dataclass
+class SkillManifest:
+    name: str
+    version: str
+    description: str
+    author: str
+    license: str
+    category: str
+    dependencies: list[str]
+    checksum: str           # SHA-256
+    signature: str          # GPG 签名
+```
+
+### `SkillHub`
+
+```python
+class SkillHub:
+    def add_registry(self, name: str, url: str)
+        """注册一个技能仓库"""
+
+    def search(self, query: str) -> list[SkillManifest]
+        """搜索技能"""
+
+    def install(self, name: str, registry: str | None = None) -> bool
+        """安装技能（从指定仓库或默认仓库）"""
+
+    def publish(self, name: str, registry_url: str) -> bool
+        """发布技能到仓库"""
+
+    def verify(self, content: str, manifest: SkillManifest) -> bool
+        """验证技能内容（SHA-256 + GPG 签名）"""
 ```
 
 ---

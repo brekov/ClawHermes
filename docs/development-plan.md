@@ -1,8 +1,8 @@
 # ClawHermes · 项目开发计划
 
-> 版本：v1.2
+> 版本：v1.3
 > 日期：2026-06-17
-> 状态：Phase 1 ✅ | Phase 2 ✅ | Phase 3 📋
+> 状态：Phase 1 ✅ | Phase 2 ✅ | Phase 3 🔄 M3.1 done
 
 ---
 
@@ -124,7 +124,7 @@
 | H4 | ContextEngine 可插拔 | 已实现 ABC + LLMCompressor + NoopCompressor | ✅ 已完成 |
 | H5 | CredentialPool 多凭证 | 已实现 4种调度策略 + 错误码冷却 | ✅ 已完成 |
 | H6 | 200+ LLM Provider | 通过 litellm 支持 132+ Provider | ✅ 已完成 |
-| H7 | Cron 调度 | Phase 2 实现：APScheduler 集成 | 📋 Phase 2 |
+| H7 | Cron 调度 | Phase 2 实现：APScheduler 集成 | ✅ 已完成 |
 | H8 | Honcho 用户建模 | Phase 3 实现：用户画像持久化 | 📋 Phase 3 |
 
 ### 2.2 取 OpenClaw 之长（9项）
@@ -137,8 +137,8 @@
 | O4 | 40+ 内置工具 | Phase 1-2 扩展至 25+ | 📋 Phase 1-2 |
 | O5 | 配置 fail-fast | 已实现 Pydantic field_validator | ✅ 已完成 |
 | O6 | 双层持久化 | Phase 1 实现：SQLite + JSONL | 📋 Phase 1 |
-| O7 | ClawHub 技能市场 | Phase 3 实现：Federated Skill Hub | 📋 Phase 3 |
-| O8 | Docker sandbox | Phase 2 实现：容器化工具执行 | 📋 Phase 2 |
+| O7 | ClawHub 技能市场 | Phase 3 实现：Federated Skill Hub（M3.1 已实现） | 🔄 Phase 3 |
+| O8 | Docker sandbox | Phase 2 实现：容器化工具执行 | ✅ 已完成 |
 | O9 | Web Dashboard | Phase 4 实现：Observability Dashboard | 📋 Phase 4 |
 
 ---
@@ -306,14 +306,14 @@
 | M2.6 | 异步钩子完善 | 全钩子点异步执行，超时保护 |
 | M2.7 | mypy strict | 逐步收紧至 strict=true |
 
-### Phase 3: 生态建设（v0.14.0 - v0.15.0）
+### Phase 3: 生态建设（v0.12.0+ — 已启动）
 
-**目标：** 建立技能生态，增强记忆与用户建模
+**目标：** 建立技能生态，增强记忆与用户建模。M3.1 Federated Skill Hub 已随 v0.12.0 首发。
 
 **里程碑：**
 | 里程碑 | 交付物 | 验收标准 |
 |--------|--------|---------|
-| M3.1 | Federated Skill Hub | Git-based 技能仓库 + 签名验证 |
+| M3.1 | Federated Skill Hub | Git-based 技能仓库 + 签名验证 | ✅ |
 | M3.2 | Skill Evolution Graph | DAG 技能演化图谱 |
 | M3.3 | Multi-Modal Memory | 图片/代码/结构化记忆 |
 | M3.4 | 用户画像持久化 | Honcho 式用户建模 |

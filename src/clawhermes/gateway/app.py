@@ -175,7 +175,7 @@ async def lifespan(app: FastAPI):
     logger.info("ClawHermes Gateway 关闭")
 
 
-app = FastAPI(title="ClawHermes Gateway", version="0.11.0", lifespan=lifespan)
+app = FastAPI(title="ClawHermes Gateway", version="0.12.0", lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True,
                    allow_methods=["*"], allow_headers=["*"])
 

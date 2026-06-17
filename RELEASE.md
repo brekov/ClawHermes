@@ -8,8 +8,9 @@
 
 ## 概览
 
-v0.12.0 完成 Phase 2 全部 7 个里程碑，新增 Channel SDK、Cron 调度、Docker 沙箱、
-ACE 自适应引擎、11 个新工具、异步钩子、mypy selective strict。
+v0.12.0 完成 Phase 2 全部 7 个里程碑，并启动了 Phase 3 的 M3.1 Skill Hub。
+新增 Channel SDK、Cron 调度、Docker 沙箱、ACE 自适应引擎、11 个新工具、异步钩子、
+mypy selective strict、SkillHub（技能发布/安装/验证）。
 
 ## 新增特性
 
@@ -23,15 +24,21 @@ ACE 自适应引擎、11 个新工具、异步钩子、mypy selective strict。
 | M2.6 | **异步钩子** | async handler + 超时保护 + trigger_async / trigger_sync_with_async |
 | M2.7 | **mypy strict** | 6 项严格检查，零 `typing.Any`，`assert isinstance()` 运行时守卫 |
 
+## Phase 3 启动
+
+| 里程碑 | 特性 | 说明 |
+|:---:|------|------|
+| M3.1 | **Federated Skill Hub** | SkillManifest + SkillHub，Git 仓库技能发布/安装/验证，SHA-256 校验 + GPG 签名 |
+
 ## 质量指标
 
 | 指标 | v0.11.0 | v0.12.0 | 变化 |
 |------|:---:|:---:|:---:|
 | 测试用例 | 73 | 152 | +108% |
 | 覆盖率 | 57% | 67% | +10pp |
-| 源文件 | 18 | 23 | +28% |
+| 源文件 | 18 | 24 | +33% |
 | 内置工具 | 15 | 26 | +73% |
-| API 端点 | 13 | 19 | +46% |
+| API 端点 | 13 | 18 | +38% |
 | 渠道适配器 | 0 | 3 | — |
 | ruff | 0 | 0 | ✅ |
 | mypy | 0 (loose) | 0 (6 strict) | ✅ |

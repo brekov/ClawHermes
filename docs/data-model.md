@@ -95,7 +95,21 @@
 | `status` | enum | DEFAULT active | active/stale/archived |
 | `source` | enum | DEFAULT user | user/bundled/review |
 
-### 2.6 AgentConfig（Agent 配置）
+### 2.6 SkillManifest（技能清单）
+
+| 字段 | 类型 | 约束 | 说明 |
+|------|------|------|------|
+| `name` | string | NOT NULL | 技能名称 |
+| `version` | string | NOT NULL | 语义化版本（如 "1.0.0"） |
+| `description` | string | NOT NULL | 技能描述 |
+| `author` | string | NOT NULL | 作者 |
+| `license` | string | DEFAULT "MIT" | 许可证 |
+| `category` | string | NOT NULL | 分类标签 |
+| `dependencies` | list[str] | DEFAULT [] | 依赖的其他技能 |
+| `checksum` | string | NOT NULL | SHA-256 内容校验和 |
+| `signature` | string | NOT NULL | GPG 数字签名 |
+
+### 2.7 AgentConfig（Agent 配置）
 
 | 字段 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|

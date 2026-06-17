@@ -21,7 +21,7 @@
 
 ### Gateway
 
-- API 端点：13 → 19（+6 cron 端点）
+- API 端点：13 → 18（+6 cron 端点）
 - POST/GET/DELETE /cron/jobs + pause/resume
 
 ### 测试
@@ -38,6 +38,10 @@
 
 - mypy selective strict：warn_return_any、unused_ignores、redundant_casts、check_untyped_defs、no_implicit_optional、strict_equality
 - 零 `typing.Any` 导入，`assert isinstance()` 运行时守卫
+
+### Phase 3 启动
+
+- **M3.1 Federated Skill Hub**：SkillManifest + SkillHub，Git 仓库技能发布/安装/验证，SHA-256 校验 + GPG 签名
 
 ### 文档
 
