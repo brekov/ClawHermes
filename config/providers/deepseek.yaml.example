@@ -1,0 +1,14 @@
+# ============================================
+# LLM Provider 配置示例
+# ============================================
+# 保存位置：~/.clawhermes/providers/deepseek.yaml
+# 运行 clawhermes gateway setup 交互式生成
+# 支持多个 provider 文件：openai.yaml、anthropic.yaml 等
+# ============================================
+
+name: deepseek
+api_base: https://api.deepseek.com
+model: deepseek/deepseek-chat
+max_tokens: 64000
+temperature: 0.7
+timeout_ms: 60000

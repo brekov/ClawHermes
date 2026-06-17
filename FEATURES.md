@@ -188,7 +188,7 @@ clawhermes agent list                 # 列出 Agent
 clawhermes agent create <name>        # 创建 Agent
 clawhermes agent switch <name>        # 切换 Agent
 clawhermes agent show [name]          # 查看 Agent
-clawhermes agent set-persona          # 设定 Agent 身份
+clawhermes agent set-persona [name]  # 编辑 Agent 身份（默认当前 Agent）
 ```
 
 ### 8. 部署
