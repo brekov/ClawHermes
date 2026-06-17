@@ -181,12 +181,14 @@
 clawhermes chat                       # 交互式对话
 clawhermes chat --one-shot "问题"     # 一次性提问
 clawhermes doctor                     # 系统诊断
-clawhermes setup                      # 初始化
+clawhermes setup                      # 初始化配置
 clawhermes gateway start              # 启动 Gateway
 clawhermes config show                # 查看配置
 clawhermes agent list                 # 列出 Agent
 clawhermes agent create <name>        # 创建 Agent
 clawhermes agent switch <name>        # 切换 Agent
+clawhermes agent show [name]          # 查看 Agent
+clawhermes agent set-persona          # 设定 Agent 身份
 ```
 
 ### 8. 部署

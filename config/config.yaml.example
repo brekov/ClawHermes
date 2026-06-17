@@ -1,0 +1,36 @@
+# ============================================
+# ClawHermes 主配置文件（config.yaml）
+# ============================================
+# 保存位置：~/.clawhermes/config.yaml
+# 运行 clawhermes setup 自动生成
+# 运行 clawhermes config show 查看当前配置
+# ============================================
+
+agent:
+  name: default
+  model: deepseek/deepseek-chat
+  max_iterations: 50
+
+gateway:
+  host: 127.0.0.1
+  port: 18789
+
+llm:
+  provider: deepseek
+
+memory:
+  engine: chromadb
+
+skills:
+  enabled: true
+  background_review: true
+  curator_interval_hours: 168   # 每 7 天自动整理一次技能
+
+context:
+  compress_threshold: 0.75      # 上下文占用超过 75% 窗口时触发压缩
+  protect_first_n: 3            # 压缩时保护前 3 条消息
+  protect_last_n: 6             # 压缩时保护后 6 条消息
+
+tools:
+  parallel_execution: true
+  profile: standard             # minimal | standard | full
