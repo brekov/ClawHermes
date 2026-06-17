@@ -1,8 +1,38 @@
 # Changelog
 
-## v0.11.0 (2026-06-16)
+## v0.12.0 (2026-06-17)
 
-代码质量与稳定性提升 — Phase 1 完成
+功能增强与扩展 — Phase 2 完成
+
+### 新增
+
+- **Channel Adapter SDK**：ChannelAdapter ABC + CLI/REST/WebSocket 3 个内置适配器 + ChannelManager
+- **Cron 调度器**：标准库零依赖调度器，cron/interval/oneshot 三种模式，JSON 持久化，6 个新 API 端点
+- **Docker 沙箱**：DockerSandbox 安全执行环境，run_python/run_command，资源限制，SandboxPool 预热
+- **ACE 自适应上下文引擎**：ConversationClassifier（代码/问答/创意/混合检测），CompressionStrategy 按类型选择
+- **11 个新内置工具**：compress_file/http_request/json_query/git_status/git_diff/git_log/env_list/timer/url_encode/url_decode/calc
+- **功能全景扩展**：F15 Cron调度 + F16 Docker沙箱 + F17 ACE + F18 Channel SDK
+
+### 工具系统
+
+- 内置工具：15 → 26（+73%）
+- 并行安全工具：7 个标记 parallel_safe
+- 需确认工具：2 个标记 require_confirm（http_request/git_diff）
+
+### Gateway
+
+- API 端点：13 → 19（+6 cron 端点）
+- POST/GET/DELETE /cron/jobs + pause/resume
+
+### 测试
+
+- 测试用例：73 → 148（+103%）
+- ruff: 0 errors | mypy: 0 errors | pytest: 148 passed
+
+### 文档
+
+- README：Badge 更新、功能全景 F15-F18、工具表 26 项、架构图更新
+- PRD/architecture/development-plan：Phase 2 状态更新
 
 ### 新增
 
