@@ -11,7 +11,7 @@
 ```
                          ┌─────────────────────────────────────────┐
                          │               Gateway 层                 │
-                         │     FastAPI REST 服务（10 个端点）        │
+                         │     FastAPI REST 服务（18 个端点）        │
                          │        CLI接口 / HTTP API                │
                          └──────────────────┬──────────────────────┘
                                             │
@@ -207,9 +207,9 @@ storage/session.py → storage/transcript.py
 
 | 模块 | 职责 | 状态 |
 |------|------|:----:|
-| `agent/exceptions.py` | 自定义异常类层次（5大类17子类） | ✅ |
+| `agent/exceptions.py` | 自定义异常类层次（5大类10子类 + 2个扩展异常类） | ✅ |
 | `agent/session.py` | 会话持久化管理（SQLite WAL） | ✅ |
-| `tools/builtin.py` | 15个内置工具 + 3级 Profile | ✅ |
+| `tools/builtin.py` | 26个内置工具 + 3级 Profile | ✅ |
 | `agent/loop.py` | Agent Loop + HookManager + ToolDispatcher | ✅ |
 | `agent/prompt.py` | 三层 System Prompt | ✅ |
 | `agent/context.py` | 上下文压缩引擎 | ✅ |
@@ -220,15 +220,23 @@ storage/session.py → storage/transcript.py
 | `gateway/app.py` | FastAPI REST 服务（13个端点） | ✅ |
 | `.github/workflows/ci.yml` | CI 流水线 | ✅ |
 
-### 6.2 待实现模块
+### 6.2 已实现模块（v0.12.0）
 
 | 模块 | 职责 | 阶段 |
 |------|------|------|
-| `channel/adapter.py` | Channel Adapter SDK ABC | Phase 2 |
-| `channel/adapters/` | 内置渠道适配器 | Phase 2 |
-| `agent/scheduler.py` | Cron 调度（APScheduler） | Phase 2 |
-| `tools/sandbox.py` | Docker 沙箱执行 | Phase 2 |
-| `agent/ace.py` | 自适应上下文引擎 | Phase 2 |
+| `channel/adapter.py` | Channel Adapter SDK ABC + 3个内置适配器 | Phase 2 ✅ |
+| `agent/scheduler.py` | Cron 调度器（cron/interval/oneshot） | Phase 2 ✅ |
+| `agent/ace.py` | 自适应上下文引擎（ACE） | Phase 2 ✅ |
+| `tools/sandbox.py` | Docker 沙箱执行环境 | Phase 2 ✅ |
+| `skills/hub.py` | 联邦技能中心（SkillHub） | Phase 3 ✅ |
+
+### 6.3 待实现模块
+
+| 模块 | 职责 | 阶段 |
+|------|------|------|
+| `channel/adapters/slack.py` | Slack 适配器实现 | Phase 3 |
+| `channel/adapters/discord.py` | Discord 适配器实现 | Phase 3 |
+| `channel/adapters/feishu.py` | 飞书适配器实现 | Phase 3 |
 | `skills/evolution.py` | 技能进化图谱 | Phase 3 |
 | `memory/multimodal.py` | 多模态记忆 | Phase 3 |
 | `agent/user_model.py` | 用户画像持久化 | Phase 3 |

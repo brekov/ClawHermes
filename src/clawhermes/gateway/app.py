@@ -252,9 +252,14 @@ def health():
         tools = len(a.tools.list())
     except Exception:
         tools = 0
+    from importlib.metadata import version as get_version
+    try:
+        app_version = get_version("clawhermes")
+    except Exception:
+        app_version = "0.12.1"
     return {
         "status": "ok",
-        "version": "0.11.0",
+        "version": app_version,
         "uptime_seconds": int(time.time() - _start_time),
         "tools": tools,
     }

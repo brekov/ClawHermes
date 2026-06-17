@@ -143,78 +143,105 @@ class ToolRegistry:
 
 class ToolDispatcher:
     NEVER_PARALLEL = frozenset({"clarify", "confirm"})
-    PARALLEL_SAFE = frozenset({
-        "web_search", "web_fetch", "read_file",
-        "memory_search", "skills_list",
-    })
     PATH_SCOPED = frozenset({"write_file", "patch", "read_file"})
 
     def __init__(self, registry: ToolRegistry, hook_manager: HookManager):
         self.registry = registry
         self.hooks = hook_manager
 
+    def _is_parallel_safe(self, tool_name: str) -> bool:
+        """检查工具是否可以并行执行"""
+        tool_def = self.registry.get(tool_name)
+        if not tool_def:
+            return False
+        return tool_def.parallel_safe
+
+    def _execute_single_tool(self, tc: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
+        """执行单个工具调用"""
+        name = tc.get("function", {}).get("name", "")
+        args_str = tc.get("function", {}).get("arguments", "{}")
+        tool_id = tc.get("id", "")
+
+        try:
+            args = json.loads(args_str) if isinstance(args_str, str) else args_str
+        except json.JSONDecodeError:
+            args = {}
+
+        tool_def = self.registry.get(name)
+        if not tool_def:
+            return self._error_result(tool_id, name, f"未知工具: {name}")
+
+        hook_result = self.hooks.trigger(
+            HookPoint.BEFORE_TOOL_CALL,
+            tool_name=name,
+            tool_args=args,
+            context=context,
+        )
+        if hook_result.get("blocked"):
+            return self._error_result(
+                tool_id, name, hook_result.get("reason", "被钩子阻止")
+            )
+        if hook_result.get("override_args"):
+            args = hook_result["override_args"]
+
+        tool_context = dict(context)
+        if context.get("_memory_manager"):
+            tool_context["_memory_manager"] = context["_memory_manager"]
+        if context.get("_delegate_manager"):
+            tool_context["_delegate_manager"] = context["_delegate_manager"]
+
+        try:
+            result = tool_def.handler(**args, **tool_context)
+            result_data = {
+                "role": "tool",
+                "tool_call_id": tool_id,
+                "name": name,
+                "content": json.dumps(result, ensure_ascii=False),
+            }
+        except ClawHermesError as e:
+            result_data = self._error_result(tool_id, name, str(e))
+        except Exception as e:
+            result_data = self._error_result(tool_id, name, str(e))
+
+        self.hooks.trigger(
+            HookPoint.AFTER_TOOL_CALL,
+            tool_name=name,
+            tool_args=args,
+            tool_result=result if 'result' in locals() else None,
+            duration_ms=0,
+        )
+
+        return result_data
+
     def execute(self, tool_calls: list[dict], context: dict) -> list[dict]:
         results = []
 
+        # 按并行安全性和不可并行性分组
+        parallel_safe_calls = []
+        serial_calls = []
+
         for tc in tool_calls:
             name = tc.get("function", {}).get("name", "")
-            args_str = tc.get("function", {}).get("arguments", "{}")
-            tool_id = tc.get("id", "")
+            if name in self.NEVER_PARALLEL:
+                serial_calls.append(tc)
+            elif self._is_parallel_safe(name):
+                parallel_safe_calls.append(tc)
+            else:
+                serial_calls.append(tc)
 
-            try:
-                args = json.loads(args_str) if isinstance(args_str, str) else args_str
-            except json.JSONDecodeError:
-                args = {}
+        # 先执行所有串行工具调用
+        for tc in serial_calls:
+            result = self._execute_single_tool(tc, context)
+            results.append(result)
 
-            tool_def = self.registry.get(name)
-            if not tool_def:
-                results.append(self._error_result(tool_id, name, f"未知工具: {name}"))
-                continue
-
-            hook_result = self.hooks.trigger(
-                HookPoint.BEFORE_TOOL_CALL,
-                tool_name=name,
-                tool_args=args,
-                context=context,
-            )
-            if hook_result.get("blocked"):
-                results.append(self._error_result(
-                    tool_id, name, hook_result.get("reason", "被钩子阻止")
-                ))
-                continue
-            if hook_result.get("override_args"):
-                args = hook_result["override_args"]
-
-            tool_context = dict(context)
-            if context.get("_memory_manager"):
-                tool_context["_memory_manager"] = context["_memory_manager"]
-            if context.get("_delegate_manager"):
-                tool_context["_delegate_manager"] = context["_delegate_manager"]
-
-            try:
-                result = tool_def.handler(**args, **tool_context)
-                results.append({
-                    "role": "tool",
-                    "tool_call_id": tool_id,
-                    "name": name,
-                    "content": json.dumps(result, ensure_ascii=False),
-                })
-            except ClawHermesError as e:
-                results.append(self._error_result(tool_id, name, str(e)))
-            except Exception as e:
-                results.append(self._error_result(tool_id, name, str(e)))
-
-            self.hooks.trigger(
-                HookPoint.AFTER_TOOL_CALL,
-                tool_name=name,
-                tool_args=args,
-                tool_result=result if 'result' in dir() else None,
-                duration_ms=0,
-            )
+        # 再执行并行安全的工具调用（当前仍为串行，为未来并行化预留）
+        for tc in parallel_safe_calls:
+            result = self._execute_single_tool(tc, context)
+            results.append(result)
 
         return results
 
-    def _error_result(self, tool_id, name, error):
+    def _error_result(self, tool_id: str, name: str, error: str) -> dict[str, Any]:
         return {
             "role": "tool",
             "tool_call_id": tool_id,
@@ -225,7 +252,7 @@ class ToolDispatcher:
 
 @dataclass
 class AgentConfig:
-    max_iterations: int = 20
+    max_iterations: int = 50
     max_tool_calls_per_round: int = 10
     queue_mode: str = "steer"
 
@@ -342,11 +369,83 @@ class Agent:
 
         return "（已达最大迭代次数）"
 
+    async def _chat_async_internal(self, user_message: str, session_id: str = "") -> str:
+        """内部异步聊天实现，使用原生异步LLM调用"""
+        messages = []
+        messages.append({
+            "role": "system",
+            "content": self.prompt.build(),
+        })
+        messages.append({"role": "user", "content": user_message})
+
+        for iteration in range(self.config.max_iterations):
+            hook_result = self.hooks.trigger(
+                HookPoint.BEFORE_AGENT_RUN,
+                messages=messages,
+                iteration=iteration,
+            )
+            if hook_result.get("abort"):
+                return str(hook_result.get("response", ""))
+
+            if self._interrupt.is_set():
+                return "（已中断）"
+
+            if self.context_engine and iteration > 1:
+                prompt_tokens = sum(len(m.get("content", "")) for m in messages)
+                if self.context_engine.should_compress(prompt_tokens):
+                    messages = self.context_engine.compress(messages, prompt_tokens)
+
+            self.hooks.trigger(HookPoint.MODEL_CALL_STARTED)
+            try:
+                response: LLMResponse = await self.llm.chat_async(
+                    messages,
+                    tools=self.tools.schemas() if self.tools.list() else None,
+                )
+            except LLMError:
+                raise
+            except Exception as e:
+                raise LLMConnectionError(f"LLM 异步调用失败: {e}") from e
+
+            self.hooks.trigger(HookPoint.MODEL_CALL_ENDED, response=response)
+
+            assistant_msg: dict[str, Any] = {
+                "role": "assistant",
+                "content": response.content or "",
+                "tool_calls": response.tool_calls,
+            }
+            messages.append(assistant_msg)
+
+            if not response.tool_calls:
+                hook_result = self.hooks.trigger(
+                    HookPoint.BEFORE_AGENT_REPLY,
+                    response=response.content or "",
+                )
+                final = str(hook_result.get("override_response", response.content or ""))
+
+                self._last_conversation = [
+                    {"role": m["role"], "content": str(m.get("content", ""))[:500]}
+                    for m in messages[-6:]
+                ]
+
+                self.hooks.trigger(HookPoint.AFTER_AGENT_END, messages=messages)
+
+                return final
+
+            tool_context = self._build_tool_context(session_id)
+            tool_context["iteration"] = iteration
+
+            # 注意：工具执行仍为同步，未来可进一步异步化
+            tool_results = self.dispatcher.execute(
+                response.tool_calls,
+                context=tool_context,
+            )
+            messages.extend(tool_results)
+
+        return "（已达最大迭代次数）"
+
     async def chat_async(self, user_message: str, session_id: str = "") -> str:
-        loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(
-            None, self.chat, user_message, session_id,
-        )
+        """异步聊天接口，使用原生异步LLM调用"""
+        return await self._chat_async_internal(user_message, session_id)
 
     def interrupt(self):
         self._interrupt.set()
