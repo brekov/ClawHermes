@@ -226,6 +226,58 @@ def test_chat_async():
     print("✅ chat_async OK")
 
 
+def test_session_persistence():
+    """测试：会话持久化"""
+    import tempfile
+    from clawhermes.agent.session import SessionManager
+    from clawhermes.agent.exceptions import SessionNotFoundError, SessionExpiredError
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        sm = SessionManager(tmpdir)
+
+        sid = sm.create_session(agent_name="test")
+        assert sid.startswith("sess_")
+
+        info = sm.get_session(sid)
+        assert info["id"] == sid
+        assert info["agent_name"] == "test"
+
+        sm.add_message(sid, "user", "你好")
+        sm.add_message(sid, "assistant", "你好！有什么可以帮你的？")
+        sm.add_message(sid, "user", "再见")
+
+        messages = sm.get_messages(sid)
+        assert len(messages) == 3
+        assert messages[0]["role"] == "user"
+        assert messages[0]["content"] == "你好"
+        assert messages[1]["role"] == "assistant"
+        assert messages[2]["content"] == "再见"
+
+        sessions = sm.list_sessions()
+        assert len(sessions) == 1
+        assert sessions[0]["id"] == sid
+
+        sm2 = SessionManager(tmpdir)
+        info2 = sm2.get_session(sid)
+        assert info2["id"] == sid
+        messages2 = sm2.get_messages(sid)
+        assert len(messages2) == 3
+
+        assert sm.delete_session(sid) is True
+        try:
+            sm.get_session(sid)
+            assert False, "应该抛出 SessionNotFoundError"
+        except SessionNotFoundError:
+            pass
+
+        assert sm.delete_session("nonexistent") is False
+
+        sm.close()
+        sm2.close()
+
+    print("✅ 会话持久化 OK")
+
+
 if __name__ == "__main__":
     test_system_prompt_three_layers()
     test_hook_system()
