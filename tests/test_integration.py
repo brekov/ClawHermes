@@ -1,12 +1,12 @@
 """
 ClawHermes - 集成测试（用 MockProvider，不依赖真实 API）
 """
-import json
-from clawhermes.agent.loop import Agent, AgentConfig, ToolRegistry
-from clawhermes.tools.builtin import register_builtin_tools
-from clawhermes.agent.memory import MemoryManager, JSONMemoryProvider
-from tests.mock_provider import MockProvider
 import tempfile
+
+from clawhermes.agent.loop import Agent, AgentConfig, ToolRegistry
+from clawhermes.agent.memory import JSONMemoryProvider, MemoryManager
+from clawhermes.tools.builtin import register_builtin_tools
+from tests.mock_provider import MockProvider
 
 
 def test_agent_simple_chat():
@@ -101,7 +101,7 @@ def test_tool_profiles():
     assert "grep" in full_names
     assert "search_replace" in full_names
     assert "code_eval" in full_names
-    print(f"✅ 工具 profiles OK → minimal=5, standard=9, full=15")
+    print("✅ 工具 profiles OK → minimal=5, standard=9, full=15")
 
 
 def test_system_prompt_three_layers():
@@ -160,8 +160,8 @@ def test_credential_pool():
     # 标记一个失败
     pool.mark_failed("key_b", 429)
     # 暂时拿不到 key_b
-    from unittest.mock import patch
     import time
+    from unittest.mock import patch
     with patch("time.time", return_value=time.time() + 10):
         pass  # 冷却期内
 
@@ -172,11 +172,23 @@ def test_exception_hierarchy():
     """测试：自定义异常类层次"""
     from clawhermes.agent.exceptions import (
         ClawHermesError,
-        LLMError, LLMConnectionError, LLMRateLimitError, LLMResponseError,
-        ToolError, ToolNotFoundError, ToolExecutionError, ToolBlockedError,
-        MemoryError, MemoryStorageError, MemorySearchError,
-        ConfigError, ConfigValidationError, ConfigNotFoundError,
-        SessionError, SessionNotFoundError, SessionExpiredError,
+        ConfigError,
+        ConfigNotFoundError,
+        ConfigValidationError,
+        LLMConnectionError,
+        LLMError,
+        LLMRateLimitError,
+        LLMResponseError,
+        MemoryError,
+        MemorySearchError,
+        MemoryStorageError,
+        SessionError,
+        SessionExpiredError,
+        SessionNotFoundError,
+        ToolBlockedError,
+        ToolError,
+        ToolExecutionError,
+        ToolNotFoundError,
     )
 
     assert issubclass(LLMError, ClawHermesError)
@@ -229,8 +241,9 @@ def test_chat_async():
 def test_session_persistence():
     """测试：会话持久化"""
     import tempfile
+
+    from clawhermes.agent.exceptions import SessionNotFoundError
     from clawhermes.agent.session import SessionManager
-    from clawhermes.agent.exceptions import SessionNotFoundError, SessionExpiredError
 
     with tempfile.TemporaryDirectory() as tmpdir:
         sm = SessionManager(tmpdir)

@@ -2,11 +2,8 @@
 ClawHermes - 完整端到端测试
 覆盖 CLI、Gateway、Agent、工具、记忆全链路
 """
-import json
-import os
 import sys
 import tempfile
-import time
 from pathlib import Path
 
 # 确保能找到 src
@@ -28,7 +25,7 @@ def check(name, condition, detail=""):
 
 def test_core_types():
     """测试核心类型"""
-    from clawhermes.types import Message, MessageRole, ToolCall, MemoryItem, Skill
+    from clawhermes.types import MemoryItem, Message, MessageRole, Skill, ToolCall
 
     msg = Message(role=MessageRole.USER, content="你好")
     check("Message 创建", msg.role == MessageRole.USER and msg.content == "你好")
@@ -48,7 +45,7 @@ def test_core_types():
 
 def test_llm_provider():
     """测试 LLM Provider"""
-    from clawhermes.llm.provider import LLMProvider, CredentialPool
+    from clawhermes.llm.provider import CredentialPool, LLMProvider
 
     p = LLMProvider(model="test-model", api_key="test")
     check("LLMProvider 创建", p.model == "test-model")
@@ -86,7 +83,7 @@ def test_system_prompt():
 
 def test_tool_system():
     """测试工具系统"""
-    from clawhermes.agent.loop import ToolRegistry, ToolDef, HookManager, ToolDispatcher
+    from clawhermes.agent.loop import HookManager, ToolDispatcher, ToolRegistry
     from clawhermes.tools.builtin import register_builtin_tools
 
     # 注册
@@ -126,9 +123,7 @@ def test_tool_system():
 
 def test_memory_system():
     """测试记忆系统"""
-    from clawhermes.agent.memory import MemoryManager, JSONMemoryProvider
-    from clawhermes.types import MemoryScope
-    import tempfile
+    from clawhermes.agent.memory import JSONMemoryProvider, MemoryManager
 
     with tempfile.TemporaryDirectory() as tmp:
         mem = MemoryManager()
@@ -150,9 +145,9 @@ def test_memory_system():
 def test_agent_loop():
     """测试 Agent 循环（用 MockProvider）"""
     sys.path.insert(0, str(Path(__file__).parent))
-    from tests.mock_provider import MockProvider
     from clawhermes.agent.loop import Agent, AgentConfig, ToolRegistry
     from clawhermes.tools.builtin import register_builtin_tools
+    from tests.mock_provider import MockProvider
 
     # 简单对话
     p = MockProvider(responses=["我是 ClawHermes。"])
@@ -195,7 +190,7 @@ def test_gateway_api():
           "/memory/save" in routes and "/memory/search" in routes)
 
     # 检查初始化请求 schema
-    from clawhermes.gateway.app import InitRequest, ChatRequest
+    from clawhermes.gateway.app import InitRequest
     req = InitRequest(api_key="test", model="test/model")
     check("InitRequest schema", req.model == "test/model")
     check("InitRequest 默认值", req.max_iterations == 50)
@@ -302,7 +297,7 @@ if __name__ == "__main__":
     print(f"\n{'=' * 50}")
     print(f"  总计: {total}  |  ✅ 通过: {pass_count}  |  ❌ 失败: {fail_count}")
     if fail_count == 0:
-        print(f"  🎉 全部通过！")
+        print("  🎉 全部通过！")
     else:
         print(f"  ⚠️  有 {fail_count} 个测试失败")
     print(f"{'=' * 50}")
