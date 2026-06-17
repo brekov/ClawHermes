@@ -10,3 +10,4 @@ site/
 .coverage
 .pytest_cache/
 .vscode/
+.trae/

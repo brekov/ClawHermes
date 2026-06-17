@@ -4,7 +4,11 @@ ClawHermes - 内置工具集
 from __future__ import annotations
 
 import datetime
+import gzip
+import json
+import os
 import subprocess
+import time
 import urllib.parse
 from pathlib import Path
 
@@ -20,6 +24,8 @@ STANDARD_TOOLS = MINIMAL_TOOLS | frozenset({
 
 FULL_TOOLS = STANDARD_TOOLS | frozenset({
     "web_fetch", "list_dir", "patch_file", "grep", "search_replace", "code_eval",
+    "compress_file", "http_request", "json_query", "git_status", "git_diff",
+    "git_log", "env_list", "timer", "url_encode", "url_decode", "calc",
 })
 
 PROFILE_MAP = {
@@ -233,6 +239,151 @@ def register_builtin_tools(registry: ToolRegistry, profile: str = "standard"):
             handler=_code_eval,
             require_confirm=True,
         ),
+        ToolDef(
+            name="compress_file",
+            description="使用 gzip 压缩文件",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "源文件路径"},
+                    "output": {"type": "string", "description": "输出文件路径（默认源文件路径 + .gz）"},
+                },
+                "required": ["path"],
+            },
+            handler=_compress_file,
+            parallel_safe=True,
+        ),
+        ToolDef(
+            name="http_request",
+            description="发送 HTTP GET/POST 请求",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "url": {"type": "string", "description": "请求 URL"},
+                    "method": {"type": "string", "description": "请求方法 GET/POST", "default": "GET", "enum": ["GET", "POST"]},
+                    "data": {"type": "string", "description": "POST 请求体数据"},
+                    "headers": {"type": "object", "description": "自定义请求头"},
+                },
+                "required": ["url"],
+            },
+            handler=_http_request,
+            require_confirm=True,
+        ),
+        ToolDef(
+            name="json_query",
+            description="从 JSON 数据中查询/提取字段",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "json_str": {"type": "string", "description": "JSON 字符串"},
+                    "path": {"type": "string", "description": "查询路径，用点号分隔，如 a.b.0.name"},
+                },
+                "required": ["json_str"],
+            },
+            handler=_json_query,
+        ),
+        ToolDef(
+            name="git_status",
+            description="显示 Git 工作区状态",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "仓库路径", "default": "."},
+                },
+            },
+            handler=_git_status,
+            parallel_safe=True,
+        ),
+        ToolDef(
+            name="git_diff",
+            description="显示 Git 差异",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "仓库路径", "default": "."},
+                    "staged": {"type": "boolean", "description": "是否查看暂存区差异", "default": False},
+                },
+            },
+            handler=_git_diff,
+            require_confirm=True,
+        ),
+        ToolDef(
+            name="git_log",
+            description="显示最近 Git 提交记录",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "仓库路径", "default": "."},
+                    "count": {"type": "integer", "description": "显示条数", "default": 10},
+                },
+            },
+            handler=_git_log,
+            parallel_safe=True,
+        ),
+        ToolDef(
+            name="env_list",
+            description="列出环境变量（敏感值已脱敏）",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "prefix": {"type": "string", "description": "按前缀过滤环境变量"},
+                },
+            },
+            handler=_env_list,
+            parallel_safe=True,
+        ),
+        ToolDef(
+            name="timer",
+            description="定时器/秒表：启动计时或查看已用时间",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "action": {"type": "string", "description": "start=启动计时, elapsed=查看已用时间", "enum": ["start", "elapsed"]},
+                    "timer_id": {"type": "string", "description": "计时器 ID（elapsed 时需提供）"},
+                },
+                "required": ["action"],
+            },
+            handler=_timer,
+        ),
+        ToolDef(
+            name="url_encode",
+            description="对字符串进行 URL 编码",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "text": {"type": "string", "description": "要编码的文本"},
+                },
+                "required": ["text"],
+            },
+            handler=_url_encode,
+            parallel_safe=True,
+        ),
+        ToolDef(
+            name="url_decode",
+            description="对 URL 编码的字符串进行解码",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "text": {"type": "string", "description": "要解码的文本"},
+                },
+                "required": ["text"],
+            },
+            handler=_url_decode,
+            parallel_safe=True,
+        ),
+        ToolDef(
+            name="calc",
+            description="计算数学表达式",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "expression": {"type": "string", "description": "数学表达式，如 2+3*4 或 sqrt(16)"},
+                },
+                "required": ["expression"],
+            },
+            handler=_calc,
+            parallel_safe=True,
+        ),
     ]
 
     for tool in all_tools:
@@ -441,3 +592,157 @@ def _code_eval(code: str, timeout: int = 10, **kwargs) -> dict:
         return {"error": f"代码执行超时 ({timeout}s)"}
     except Exception as e:
         return {"error": str(e)}
+
+
+def _compress_file(path: str, output: str = "", **kwargs) -> dict:
+    try:
+        src = Path(path).resolve()
+        if not src.exists():
+            return {"error": f"文件不存在: {path}"}
+        dst = Path(output) if output else src.with_suffix(src.suffix + ".gz")
+        with open(src, "rb") as f_in:
+            with gzip.open(dst, "wb") as f_out:
+                f_out.writelines(f_in)
+        return {"success": True, "source": str(src), "output": str(dst), "size": dst.stat().st_size}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+def _http_request(url: str, method: str = "GET", data: str = "", headers: dict | None = None, **kwargs) -> dict:
+    try:
+        cmd = ["curl", "-sL", "-X", method, "--max-time", "30"]
+        if headers:
+            for k, v in headers.items():
+                cmd.extend(["-H", f"{k}: {v}"])
+        if method == "POST" and data:
+            cmd.extend(["-d", data])
+        cmd.append(url)
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=35)
+        return {
+            "status": "ok" if result.returncode == 0 else "error",
+            "body": result.stdout[:5000],
+            "stderr": result.stderr[:2000] if result.stderr else None,
+        }
+    except subprocess.TimeoutExpired:
+        return {"error": "HTTP 请求超时 (30s)"}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+def _json_query(json_str: str, path: str = "", **kwargs) -> dict:
+    try:
+        data = json.loads(json_str)
+        if not path:
+            return {"result": data}
+        parts = path.split(".")
+        current = data
+        for part in parts:
+            if isinstance(current, list):
+                idx = int(part)
+                current = current[idx]
+            elif isinstance(current, dict):
+                current = current[part]
+            else:
+                return {"error": f"无法访问路径 '{part}'，当前值不是容器类型"}
+        return {"result": current}
+    except json.JSONDecodeError as e:
+        return {"error": f"JSON 解析失败: {e}"}
+    except (KeyError, IndexError, ValueError) as e:
+        return {"error": f"路径查询失败: {e}"}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+def _git_status(path: str = ".", **kwargs) -> dict:
+    try:
+        p = Path(path).resolve()
+        result = subprocess.run(
+            ["git", "-C", str(p), "status", "--short"],
+            capture_output=True, text=True, timeout=10,
+        )
+        lines = result.stdout.strip().split("\n") if result.stdout.strip() else []
+        return {"path": str(p), "changes": lines[:100], "count": len(lines)}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+def _git_diff(path: str = ".", staged: bool = False, **kwargs) -> dict:
+    try:
+        p = Path(path).resolve()
+        cmd = ["git", "-C", str(p), "diff"]
+        if staged:
+            cmd.append("--staged")
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
+        return {"path": str(p), "diff": result.stdout[:8000] or "（无差异）"}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+def _git_log(path: str = ".", count: int = 10, **kwargs) -> dict:
+    try:
+        p = Path(path).resolve()
+        result = subprocess.run(
+            ["git", "-C", str(p), "log", f"-{count}", "--oneline", "--decorate"],
+            capture_output=True, text=True, timeout=10,
+        )
+        lines = result.stdout.strip().split("\n") if result.stdout.strip() else []
+        return {"path": str(p), "log": lines, "count": len(lines)}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+def _env_list(prefix: str = "", **kwargs) -> dict:
+    sensitive_keys = {"SECRET", "KEY", "TOKEN", "PASSWORD", "PASSWD", "AUTH", "PRIVATE", "CREDENTIAL"}
+    env_vars = {}
+    for key, value in sorted(os.environ.items()):
+        if prefix and not key.startswith(prefix):
+            continue
+        upper_key = key.upper()
+        if any(s in upper_key for s in sensitive_keys):
+            env_vars[key] = "***（已脱敏）***"
+        else:
+            env_vars[key] = value
+    return {"variables": env_vars, "count": len(env_vars)}
+
+
+_TIMERS: dict[str, float] = {}
+
+
+def _timer(action: str, timer_id: str = "", **kwargs) -> dict:
+    if action == "start":
+        tid = timer_id or f"timer_{len(_TIMERS) + 1}"
+        _TIMERS[tid] = time.time()
+        return {"action": "started", "timer_id": tid, "timestamp": _TIMERS[tid]}
+    elif action == "elapsed":
+        if not timer_id or timer_id not in _TIMERS:
+            return {"error": f"计时器不存在: {timer_id or '（未提供）'}"}
+        elapsed = time.time() - _TIMERS[timer_id]
+        return {"action": "elapsed", "timer_id": timer_id, "seconds": round(elapsed, 3)}
+    return {"error": f"未知操作: {action}"}
+
+
+def _url_encode(text: str, **kwargs) -> dict:
+    return {"result": urllib.parse.quote(text, safe="")}
+
+
+def _url_decode(text: str, **kwargs) -> dict:
+    return {"result": urllib.parse.unquote(text)}
+
+
+def _calc(expression: str, **kwargs) -> dict:
+    allowed_names = {
+        "abs": abs, "round": round, "min": min, "max": max,
+        "sqrt": __import__("math").sqrt,
+        "sin": __import__("math").sin,
+        "cos": __import__("math").cos,
+        "tan": __import__("math").tan,
+        "log": __import__("math").log,
+        "log10": __import__("math").log10,
+        "pow": pow, "pi": __import__("math").pi, "e": __import__("math").e,
+        "int": int, "float": float,
+    }
+    try:
+        result = eval(expression, {"__builtins__": {}}, allowed_names)
+        return {"expression": expression, "result": result}
+    except Exception as e:
+        return {"error": f"计算失败: {e}"}

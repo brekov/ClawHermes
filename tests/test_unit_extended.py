@@ -126,7 +126,7 @@ class TestToolProfiles:
         register_builtin_tools(registry, profile="full")
         names = {t.name for t in registry.list()}
         assert names == FULL_TOOLS
-        assert len(names) == 15
+        assert len(names) >= 25
 
     def test_default_profile_is_standard(self):
         registry = ToolRegistry()
