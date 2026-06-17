@@ -24,6 +24,7 @@ from clawhermes.agent.exceptions import (
 )
 from clawhermes.agent.loop import Agent, AgentConfig, HookPoint, ToolRegistry
 from clawhermes.agent.memory import JSONMemoryProvider, MemoryManager
+from clawhermes.agent.scheduler import CronScheduler, ScheduleMode, ScheduleSpec
 from clawhermes.agent.session import SessionManager
 from clawhermes.llm.provider import LLMProvider
 from clawhermes.tools.builtin import register_builtin_tools
@@ -35,6 +36,7 @@ _memory: MemoryManager | None = None
 _skill_manager = None
 _delegate_manager: DelegateManager | None = None
 _session_mgr: SessionManager | None = None
+_scheduler: CronScheduler | None = None
 _start_time = time.time()
 
 
@@ -48,7 +50,7 @@ def _create_agent_components(
     base_url: str | None = None,
     max_iterations: int = 50,
     profile: str = "standard",
-) -> tuple[Agent, MemoryManager, object, DelegateManager, SessionManager]:
+) -> tuple[Agent, MemoryManager, object, DelegateManager, SessionManager, CronScheduler]:
     data_dir = _get_data_dir()
     provider = LLMProvider(model=model, api_key=api_key, base_url=base_url)
     registry = ToolRegistry()
@@ -100,12 +102,14 @@ def _create_agent_components(
                 pass
     threading.Thread(target=_curator_loop, daemon=True).start()
 
+    scheduler = CronScheduler(data_dir)
+
     logger.info("Agent 初始化完成: %s (%d tools, profile=%s)", model, len(registry.list()), profile)
-    return agent, memory, sm, delegate_mgr, session_mgr
+    return agent, memory, sm, delegate_mgr, session_mgr, scheduler
 
 
 def _auto_init():
-    global _agent, _memory, _skill_manager, _delegate_manager, _session_mgr
+    global _agent, _memory, _skill_manager, _delegate_manager, _session_mgr, _scheduler
     if _agent is not None:
         return
     api_key = os.getenv("CH_GW_API_KEY") or os.getenv("DEEPSEEK_API_KEY")
@@ -114,9 +118,13 @@ def _auto_init():
     model = os.getenv("CH_GW_MODEL", "deepseek/deepseek-chat")
     profile = os.getenv("CH_TOOLS_PROFILE", "standard")
     try:
-        _agent, _memory, _skill_manager, _delegate_manager, _session_mgr = _create_agent_components(
+        _agent, _memory, _skill_manager, _delegate_manager, _session_mgr, _scheduler = _create_agent_components(
             api_key=api_key, model=model, profile=profile,
         )
+        if _agent is None or _scheduler is None:
+            return
+        _scheduler.set_executor(lambda task, sid: _agent.chat(task, session_id=sid))
+        _scheduler.start()
     except ClawHermesError as e:
         logger.error("Auto-init failed: %s", e)
     except Exception as e:
@@ -174,19 +182,23 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True,
 
 @app.post("/init")
 def initialize(req: InitRequest):
-    global _agent, _memory, _skill_manager, _delegate_manager, _session_mgr
+    global _agent, _memory, _skill_manager, _delegate_manager, _session_mgr, _scheduler
     try:
         api_key = req.api_key or os.getenv("DEEPSEEK_API_KEY")
         if not api_key:
             raise HTTPException(400, "请设置 api_key")
         base_url = req.base_url or os.getenv("DEEPSEEK_BASE_URL")
-        _agent, _memory, _skill_manager, _delegate_manager, _session_mgr = _create_agent_components(
+        _agent, _memory, _skill_manager, _delegate_manager, _session_mgr, _scheduler = _create_agent_components(
             api_key=api_key,
             model=req.model,
             base_url=base_url,
             max_iterations=req.max_iterations,
             profile=req.profile,
         )
+        assert _agent is not None
+        assert _scheduler is not None
+        _scheduler.set_executor(lambda task, sid: _agent.chat(task, session_id=sid))
+        _scheduler.start()
         return {
             "status": "ok",
             "model": req.model,
@@ -325,6 +337,81 @@ def delete_session(session_id: str):
     if _session_mgr.delete_session(session_id):
         return {"status": "ok"}
     raise HTTPException(404, f"会话不存在: {session_id}")
+
+
+class CronJobRequest(BaseModel):
+    name: str
+    task: str
+    mode: str = "interval"
+    interval_seconds: int = 3600
+    minute: str = "*"
+    hour: str = "*"
+    day_of_week: str = "*"
+    delay_seconds: int = 0
+    session_id: str = ""
+
+
+@app.post("/cron/jobs")
+def create_cron_job(req: CronJobRequest):
+    if _scheduler is None:
+        raise HTTPException(500, "调度器未初始化")
+    try:
+        mode = ScheduleMode(req.mode)
+        if mode == ScheduleMode.CRON:
+            spec = ScheduleSpec.cron(req.minute, req.hour, req.day_of_week)
+        elif mode == ScheduleMode.ONESHOT:
+            spec = ScheduleSpec.oneshot(delay_seconds=req.delay_seconds)
+        else:
+            spec = ScheduleSpec.interval(req.interval_seconds)
+        job = _scheduler.create_job(req.name, req.task, spec, session_id=req.session_id)
+        return {"status": "ok", "job": job.to_dict()}
+    except ValueError as e:
+        raise HTTPException(400, f"无效的调度模式: {e}")
+
+
+@app.get("/cron/jobs")
+def list_cron_jobs(status: str | None = None):
+    if _scheduler is None:
+        return {"jobs": [], "count": 0}
+    jobs = _scheduler.list_jobs(status=status)
+    return {"jobs": [j.to_dict() for j in jobs], "count": len(jobs)}
+
+
+@app.get("/cron/jobs/{job_id}")
+def get_cron_job(job_id: str):
+    if _scheduler is None:
+        raise HTTPException(500, "调度器未初始化")
+    job = _scheduler.get_job(job_id)
+    if job is None:
+        raise HTTPException(404, f"任务不存在: {job_id}")
+    return {"job": job.to_dict()}
+
+
+@app.delete("/cron/jobs/{job_id}")
+def delete_cron_job(job_id: str):
+    if _scheduler is None:
+        raise HTTPException(500, "调度器未初始化")
+    if _scheduler.delete_job(job_id):
+        return {"status": "ok"}
+    raise HTTPException(404, f"任务不存在: {job_id}")
+
+
+@app.post("/cron/jobs/{job_id}/pause")
+def pause_cron_job(job_id: str):
+    if _scheduler is None:
+        raise HTTPException(500, "调度器未初始化")
+    if _scheduler.pause_job(job_id):
+        return {"status": "ok"}
+    raise HTTPException(400, f"无法暂停任务: {job_id}")
+
+
+@app.post("/cron/jobs/{job_id}/resume")
+def resume_cron_job(job_id: str):
+    if _scheduler is None:
+        raise HTTPException(500, "调度器未初始化")
+    if _scheduler.resume_job(job_id):
+        return {"status": "ok"}
+    raise HTTPException(400, f"无法恢复任务: {job_id}")
 
 
 if __name__ == "__main__":
