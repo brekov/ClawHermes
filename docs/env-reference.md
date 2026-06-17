@@ -23,6 +23,9 @@
 | `CH_GATEWAY_HOST` | 绑定地址 | `127.0.0.1` |
 | `CH_GATEWAY_PORT` | 端口 | `18789` |
 | `CH_GATEWAY_SECRET` | 非回环绑定时必须设置 | `""` |
+| `CH_GW_API_KEY` | Gateway 自动初始化 API Key | — |
+| `CH_GW_MODEL` | Gateway 自动初始化模型 | `deepseek/deepseek-chat` |
+| `CH_TOOLS_PROFILE` | 工具集级别 | `standard` |
 
 ## 存储
 
