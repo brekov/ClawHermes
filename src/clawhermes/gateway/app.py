@@ -7,7 +7,6 @@ import logging
 import os
 import threading
 import time
-import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -25,6 +24,7 @@ from clawhermes.agent.exceptions import (
 )
 from clawhermes.agent.loop import Agent, AgentConfig, HookPoint, ToolRegistry
 from clawhermes.agent.memory import JSONMemoryProvider, MemoryManager
+from clawhermes.agent.session import SessionManager
 from clawhermes.llm.provider import LLMProvider
 from clawhermes.tools.builtin import register_builtin_tools
 
@@ -34,7 +34,7 @@ _agent: Agent | None = None
 _memory: MemoryManager | None = None
 _skill_manager = None
 _delegate_manager: DelegateManager | None = None
-_sessions: dict[str, list[dict]] = {}
+_session_mgr: SessionManager | None = None
 _start_time = time.time()
 
 
@@ -48,7 +48,7 @@ def _create_agent_components(
     base_url: str | None = None,
     max_iterations: int = 50,
     profile: str = "standard",
-) -> tuple[Agent, MemoryManager, object, DelegateManager]:
+) -> tuple[Agent, MemoryManager, object, DelegateManager, SessionManager]:
     data_dir = _get_data_dir()
     provider = LLMProvider(model=model, api_key=api_key, base_url=base_url)
     registry = ToolRegistry()
@@ -71,6 +71,8 @@ def _create_agent_components(
         memory_manager=memory,
         skill_manager=sm,
     )
+
+    session_mgr = SessionManager(data_dir)
 
     agent = Agent(
         llm_provider=provider,
@@ -99,11 +101,11 @@ def _create_agent_components(
     threading.Thread(target=_curator_loop, daemon=True).start()
 
     logger.info("Agent 初始化完成: %s (%d tools, profile=%s)", model, len(registry.list()), profile)
-    return agent, memory, sm, delegate_mgr
+    return agent, memory, sm, delegate_mgr, session_mgr
 
 
 def _auto_init():
-    global _agent, _memory, _skill_manager, _delegate_manager
+    global _agent, _memory, _skill_manager, _delegate_manager, _session_mgr
     if _agent is not None:
         return
     api_key = os.getenv("CH_GW_API_KEY") or os.getenv("DEEPSEEK_API_KEY")
@@ -112,7 +114,7 @@ def _auto_init():
     model = os.getenv("CH_GW_MODEL", "deepseek/deepseek-chat")
     profile = os.getenv("CH_TOOLS_PROFILE", "standard")
     try:
-        _agent, _memory, _skill_manager, _delegate_manager = _create_agent_components(
+        _agent, _memory, _skill_manager, _delegate_manager, _session_mgr = _create_agent_components(
             api_key=api_key, model=model, profile=profile,
         )
     except ClawHermesError as e:
@@ -172,13 +174,13 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True,
 
 @app.post("/init")
 def initialize(req: InitRequest):
-    global _agent, _memory, _skill_manager, _delegate_manager
+    global _agent, _memory, _skill_manager, _delegate_manager, _session_mgr
     try:
         api_key = req.api_key or os.getenv("DEEPSEEK_API_KEY")
         if not api_key:
             raise HTTPException(400, "请设置 api_key")
         base_url = req.base_url or os.getenv("DEEPSEEK_BASE_URL")
-        _agent, _memory, _skill_manager, _delegate_manager = _create_agent_components(
+        _agent, _memory, _skill_manager, _delegate_manager, _session_mgr = _create_agent_components(
             api_key=api_key,
             model=req.model,
             base_url=base_url,
@@ -202,13 +204,22 @@ def initialize(req: InitRequest):
 @app.post("/chat", response_model=ChatResponse)
 def chat(req: ChatRequest):
     agent = get_agent()
-    sid = req.session_id or f"session_{uuid.uuid4().hex[:8]}"
-    if sid not in _sessions:
-        _sessions[sid] = []
+    if _session_mgr is None:
+        raise HTTPException(500, "Session 管理器未初始化")
+
+    if req.session_id:
+        try:
+            _session_mgr.get_session(req.session_id)
+        except SessionNotFoundError:
+            pass
+        sid = req.session_id
+    else:
+        sid = _session_mgr.create_session()
+
     try:
+        _session_mgr.add_message(sid, "user", req.message)
         resp = agent.chat(req.message, session_id=sid)
-        _sessions[sid].append({"role": "user", "content": req.message})
-        _sessions[sid].append({"role": "assistant", "content": resp})
+        _session_mgr.add_message(sid, "assistant", resp)
         return ChatResponse(response=resp, session_id=sid, model=agent.llm.model)
     except LLMRateLimitError as e:
         raise HTTPException(429, f"速率限制: {e}")
@@ -288,8 +299,32 @@ def run_curator(dry_run: bool = False):
 
 
 @app.get("/sessions")
-def list_sessions():
-    return {"sessions": list(_sessions.keys()), "count": len(_sessions)}
+def list_sessions(limit: int = 50):
+    if _session_mgr is None:
+        return {"sessions": [], "count": 0}
+    sessions = _session_mgr.list_sessions(limit=limit)
+    return {"sessions": sessions, "count": len(sessions)}
+
+
+@app.get("/sessions/{session_id}")
+def get_session(session_id: str):
+    if _session_mgr is None:
+        raise HTTPException(500, "Session 管理器未初始化")
+    try:
+        info = _session_mgr.get_session(session_id)
+        messages = _session_mgr.get_messages(session_id)
+        return {"session": info, "messages": messages}
+    except SessionNotFoundError as e:
+        raise HTTPException(404, str(e))
+
+
+@app.delete("/sessions/{session_id}")
+def delete_session(session_id: str):
+    if _session_mgr is None:
+        raise HTTPException(500, "Session 管理器未初始化")
+    if _session_mgr.delete_session(session_id):
+        return {"status": "ok"}
+    raise HTTPException(404, f"会话不存在: {session_id}")
 
 
 if __name__ == "__main__":
