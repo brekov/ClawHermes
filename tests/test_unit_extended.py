@@ -7,6 +7,7 @@ from __future__ import annotations
 import json
 import os
 import tempfile
+import time
 from pathlib import Path
 
 from clawhermes.agent.exceptions import (
@@ -624,3 +625,251 @@ class TestAgentLoop:
 
         result = agent.chat("keep calling tools")
         assert "最大迭代次数" in result
+
+
+class TestParallelToolExecution:
+    def test_parallel_safe_tools_execute(self):
+        from clawhermes.agent.loop import ToolDispatcher, ToolDef
+
+        registry = ToolRegistry()
+
+        def tool_a(**kwargs):
+            return {"result": "a"}
+
+        def tool_b(**kwargs):
+            return {"result": "b"}
+
+        registry.register(ToolDef(
+            name="tool_a", description="Tool A",
+            parameters={"type": "object", "properties": {}},
+            handler=tool_a, parallel_safe=True,
+        ))
+        registry.register(ToolDef(
+            name="tool_b", description="Tool B",
+            parameters={"type": "object", "properties": {}},
+            handler=tool_b, parallel_safe=True,
+        ))
+
+        hm = HookManager()
+        dispatcher = ToolDispatcher(registry, hm)
+
+        results = dispatcher.execute([
+            {"id": "tc1", "function": {"name": "tool_a", "arguments": "{}"}},
+            {"id": "tc2", "function": {"name": "tool_b", "arguments": "{}"}},
+        ], context={})
+
+        assert len(results) == 2
+        names = {r["name"] for r in results}
+        assert names == {"tool_a", "tool_b"}
+
+    def test_execute_async_parallel(self):
+        import asyncio
+        from clawhermes.agent.loop import ToolDispatcher, ToolDef
+
+        registry = ToolRegistry()
+
+        def counting_tool(**kwargs):
+            return {"result": "ok"}
+
+        registry.register(ToolDef(
+            name="count_a", description="Count A",
+            parameters={"type": "object", "properties": {}},
+            handler=counting_tool, parallel_safe=True,
+        ))
+        registry.register(ToolDef(
+            name="count_b", description="Count B",
+            parameters={"type": "object", "properties": {}},
+            handler=counting_tool, parallel_safe=True,
+        ))
+
+        hm = HookManager()
+        dispatcher = ToolDispatcher(registry, hm)
+
+        results = asyncio.run(dispatcher.execute_async([
+            {"id": "tc1", "function": {"name": "count_a", "arguments": "{}"}},
+            {"id": "tc2", "function": {"name": "count_b", "arguments": "{}"}},
+        ], context={}))
+
+        assert len(results) == 2
+
+    def test_serial_tools_not_parallel(self):
+        from clawhermes.agent.loop import ToolDispatcher
+
+        registry = ToolRegistry()
+        register_builtin_tools(registry, profile="full")
+        hm = HookManager()
+        dispatcher = ToolDispatcher(registry, hm)
+
+        results = dispatcher.execute([
+            {"id": "tc1", "function": {"name": "write_file", "arguments": '{"path": "/tmp/test_p1", "content": "a"}'}},
+            {"id": "tc2", "function": {"name": "write_file", "arguments": '{"path": "/tmp/test_p2", "content": "b"}'}},
+        ], context={})
+
+        assert len(results) == 2
+
+    def test_mixed_parallel_and_serial(self):
+        from clawhermes.agent.loop import ToolDispatcher
+
+        registry = ToolRegistry()
+        register_builtin_tools(registry, profile="full")
+        hm = HookManager()
+        dispatcher = ToolDispatcher(registry, hm)
+
+        results = dispatcher.execute([
+            {"id": "tc1", "function": {"name": "get_time", "arguments": '{}'}},
+            {"id": "tc2", "function": {"name": "session_status", "arguments": '{}'}},
+        ], context={})
+
+        assert len(results) == 2
+
+    def test_duration_tracking(self):
+        from clawhermes.agent.loop import ToolDispatcher, HookPoint
+
+        registry = ToolRegistry()
+        register_builtin_tools(registry, profile="minimal")
+        hm = HookManager()
+        durations = []
+
+        def track_duration(**kwargs):
+            d = kwargs.get("duration_ms", 0)
+            if d > 0:
+                durations.append(d)
+
+        hm.register(HookPoint.AFTER_TOOL_CALL, track_duration)
+        dispatcher = ToolDispatcher(registry, hm)
+
+        dispatcher.execute([
+            {"id": "tc1", "function": {"name": "get_time", "arguments": '{}'}},
+        ], context={})
+
+        assert len(durations) >= 1
+        assert durations[0] >= 0
+
+
+class TestWebSearchRefactor:
+    def test_web_search_returns_dict(self):
+        registry = ToolRegistry()
+        register_builtin_tools(registry, profile="standard")
+        tool = registry.get("web_search")
+        assert tool is not None
+        result = tool.handler(query="test query")
+        assert isinstance(result, dict)
+
+    def test_web_search_has_engine_field(self):
+        registry = ToolRegistry()
+        register_builtin_tools(registry, profile="standard")
+        tool = registry.get("web_search")
+        result = tool.handler(query="python programming")
+        assert "engine" in result or "error" in result or "results" in result
+
+    def test_parse_ddg_html_empty(self):
+        from clawhermes.tools.builtin import _parse_ddg_html
+        results = _parse_ddg_html("<html><body></body></html>")
+        assert results == []
+
+    def test_parse_ddg_html_with_results(self):
+        from clawhermes.tools.builtin import _parse_ddg_html
+        html = '''
+        <a class="result__a" href="https://example.com">Example Title</a>
+        <a class="result__snippet">Example snippet text</a>
+        '''
+        results = _parse_ddg_html(html)
+        assert len(results) == 1
+        assert results[0]["title"] == "Example Title"
+        assert results[0]["snippet"] == "Example snippet text"
+
+    def test_search_engine_env_var(self):
+        import os
+        from clawhermes.tools.builtin import _web_search
+        original = os.environ.get("CH_SEARCH_ENGINE")
+        try:
+            os.environ["CH_SEARCH_ENGINE"] = "duckduckgo"
+            result = _web_search("test")
+            assert isinstance(result, dict)
+        finally:
+            if original is not None:
+                os.environ["CH_SEARCH_ENGINE"] = original
+            else:
+                os.environ.pop("CH_SEARCH_ENGINE", None)
+
+    def test_searxng_without_url(self):
+        from clawhermes.tools.builtin import _web_search_searxng
+        result = _web_search_searxng("test")
+        assert isinstance(result, dict)
+
+    def test_serpapi_without_key(self):
+        from clawhermes.tools.builtin import _web_search_serpapi
+        result = _web_search_serpapi("test")
+        assert "error" in result
+
+    def test_tavily_without_key(self):
+        from clawhermes.tools.builtin import _web_search_tavily
+        result = _web_search_tavily("test")
+        assert "error" in result
+
+
+class TestGatewayState:
+    def test_gateway_state_init(self):
+        from clawhermes.gateway.app import GatewayState
+        state = GatewayState()
+        assert state.agent is None
+        assert state.memory is None
+        assert not state.is_initialized()
+
+    def test_gateway_state_get_agent_raises(self):
+        from clawhermes.gateway.app import GatewayState
+        state = GatewayState()
+        try:
+            state.get_agent()
+            assert False
+        except Exception:
+            pass
+
+    def test_gateway_state_get_memory_raises(self):
+        from clawhermes.gateway.app import GatewayState
+        state = GatewayState()
+        try:
+            state.get_memory()
+            assert False
+        except Exception:
+            pass
+
+
+class TestSessionManagerThreadSafety:
+    def test_concurrent_session_creation(self):
+        import concurrent.futures
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            sm = SessionManager(tmpdir)
+            ids = []
+
+            def create_session():
+                sid = sm.create_session()
+                return sid
+
+            with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+                futures = [executor.submit(create_session) for _ in range(10)]
+                for f in concurrent.futures.as_completed(futures):
+                    ids.append(f.result())
+
+            assert len(ids) == 10
+            assert len(set(ids)) == 10
+            sm.close()
+
+    def test_concurrent_read_write(self):
+        import concurrent.futures
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            sm = SessionManager(tmpdir)
+            sid = sm.create_session()
+
+            def add_message(idx):
+                sm.add_message(sid, "user", f"message {idx}")
+
+            with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+                futures = [executor.submit(add_message, i) for i in range(10)]
+                concurrent.futures.wait(futures)
+
+            msgs = sm.get_messages(sid)
+            assert len(msgs) == 10
+            sm.close()

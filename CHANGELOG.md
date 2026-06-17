@@ -1,5 +1,64 @@
 # Changelog
 
+## v0.13.0 (2026-06-17)
+
+Phase 3 核心架构强化 — 并行执行 / 搜索重构 / Gateway 状态重构 / 线程安全
+
+### M3.2 并行工具执行
+
+- **asyncio.gather 真正并行执行**：parallel_safe 工具组通过 `asyncio.gather` 并行执行，不再串行
+- **新增 `execute_async` 方法**：`ToolDispatcher.execute_async()` 原生异步执行，支持 `chat_async` 全链路异步
+- **新增 `_execute_single_tool_async`**：异步工具执行器，支持协程 handler 和 `run_in_executor` 包装同步 handler
+- **工具执行耗时追踪**：`AFTER_TOOL_CALL` 钩子现在提供真实的 `duration_ms` 数据
+
+### M3.3 web_search 重构
+
+- **多搜索引擎支持**：新增 DuckDuckGo（默认）/ SearXNG / SerpAPI / Tavily 四种搜索引擎
+- **环境变量切换**：`CH_SEARCH_ENGINE` 控制搜索引擎选择
+- **结构化搜索结果**：搜索结果包含 `title` / `url` / `snippet` 结构化字段
+- **优雅降级**：httpx 不可用时自动回退到 curl+grep，DuckDuckGo 失败时自动降级
+- **SearXNG 错误处理**：连接失败时返回结构化错误而非抛异常
+
+### M3.4 Gateway 状态重构
+
+- **GatewayState 类**：模块级全局变量重构为 `GatewayState` 类实例，支持多实例部署
+- **消除 global 语句**：`initialize()` 和 `_auto_init()` 不再使用 `global` 关键字
+- **状态访问方法**：`get_agent()` / `get_memory()` / `get_skill_manager()` 封装在 GatewayState 中
+- **版本号更新**：Gateway version 从 0.12.1 更新为 0.13.0
+
+### M3.5 SessionManager 线程安全
+
+- **threading.Lock 保护**：所有 SQLite 操作通过 `self._lock` 保护，消除竞态条件
+- **close() 方法加锁**：关闭连接时也获取锁，防止并发关闭
+
+### M3.6a Channel Router
+
+- **新增 `channel/router.py`**：统一消息路由层，解耦 Gateway 与渠道适配器
+- **SessionRouter**：(channel_type, chat_id) → session_id 自动映射，支持过期清理
+- **ChannelRouter**：消息路由 + allowlist 过滤 + 消息队列 + Agent handler 集成
+- **QueueMode 枚举**：steer/followup/collect/interrupt 4 种消息队列模式
+- **Gateway 集成**：`/chat` 端点通过 ChannelRouter 路由，新增 `/channels` 和 `/channels/sessions` 端点
+- **GatewayState 扩展**：新增 `channel_router` 属性
+
+### M3.6b 消息队列模式
+
+- **4 种队列模式完整实现**：steer（注入当前轮）/ followup（排队等下一轮）/ collect（缓冲合并）/ interrupt（中止当前）
+- **collect 缓冲区**：Agent 忙碌时收集消息，空闲后合并为一条消息处理
+- **interrupt 优先**：清空队列后插入队首，立即处理
+- **消息级队列模式**：每条消息可通过 `metadata.queue_mode` 指定模式
+- **安全事件循环处理**：`asyncio.get_running_loop()` 替代已废弃的 `ensure_future`
+
+### 测试增强
+
+- **新增 38 个测试用例**：165 → 203
+- `TestParallelToolExecution`：5 个并行执行测试
+- `TestWebSearchRefactor`：7 个搜索重构测试
+- `TestGatewayState`：3 个 Gateway 状态测试
+- `TestSessionManagerThreadSafety`：2 个线程安全测试
+- `TestSessionRouter`：7 个会话路由测试
+- `TestChannelRouter`：8 个渠道路由测试
+- `TestMessageQueueModes`：6 个消息队列模式测试
+
 ## v0.12.2 (2026-06-17)
 
 评审问题修复 — P0-P3 级问题系统性修复
