@@ -6,19 +6,23 @@ from __future__ import annotations
 
 import logging
 import time
-from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from threading import Lock
 from typing import Any
 
 import litellm
+
+from clawhermes.agent.exceptions import (
+    LLMConnectionError,
+    LLMError,
+    LLMRateLimitError,
+)
 
 logger = logging.getLogger(__name__)
 
 
 @dataclass
 class LLMResponse:
-    """LLM 调用结果"""
     content: str | None
     tool_calls: list[dict] | None = None
     usage: dict | None = None
@@ -28,8 +32,6 @@ class LLMResponse:
 
 
 class CredentialPool:
-    """多凭证池（来自 Hermes）- 支持故障转移"""
-
     STRATEGY_FILL_FIRST = "fill_first"
     STRATEGY_ROUND_ROBIN = "round_robin"
     STRATEGY_RANDOM = "random"
@@ -44,7 +46,6 @@ class CredentialPool:
         self._lock = Lock()
 
     def get_key(self) -> str | None:
-        """获取当前可用的 API key"""
         with self._lock:
             now = time.time()
             available = [
@@ -66,18 +67,15 @@ class CredentialPool:
             return key
 
     def mark_failed(self, api_key: str, status_code: int | None = None):
-        """标记 key 失败，设置冷却时间"""
         ttl = {
-            401: 300,    # 5 分钟（token 过期）
-            429: 3600,   # 1 小时（速率限制）
-        }.get(status_code, 600)  # 默认 10 分钟
+            401: 300,
+            429: 3600,
+        }.get(status_code or 0, 600)
         with self._lock:
             self._cooldown_until[api_key] = time.time() + ttl
 
 
 class LLMProvider:
-    """LLM 提供商标一接口"""
-
     def __init__(
         self,
         model: str,
@@ -96,16 +94,16 @@ class LLMProvider:
         self.timeout_ms = timeout_ms
         self.credential_pool = credential_pool
 
-    def chat(
+    def _build_kwargs(
         self,
         messages: list[dict],
         tools: list[dict] | None = None,
-    ) -> LLMResponse:
-        """调用 LLM，统一返回格式"""
-        start = time.time()
+    ) -> tuple[dict, str | None]:
         api_key = self.api_key
         if self.credential_pool:
-            api_key = self.credential_pool.get_key() or api_key
+            pool_key = self.credential_pool.get_key()
+            if pool_key:
+                api_key = pool_key
 
         kwargs = dict(
             model=self.model,
@@ -120,6 +118,16 @@ class LLMProvider:
             kwargs["api_base"] = self.base_url
         if tools:
             kwargs["tools"] = tools
+
+        return kwargs, api_key
+
+    def chat(
+        self,
+        messages: list[dict],
+        tools: list[dict] | None = None,
+    ) -> LLMResponse:
+        start = time.time()
+        kwargs, used_key = self._build_kwargs(messages, tools)
 
         try:
             response = litellm.completion(**kwargs)
@@ -137,13 +145,63 @@ class LLMProvider:
                 duration_ms=duration,
                 raw=response,
             )
+        except litellm.RateLimitError as e:
+            if self.credential_pool and used_key:
+                self.credential_pool.mark_failed(used_key, 429)
+            raise LLMRateLimitError(
+                f"速率限制: {e}", retry_after=60,
+            ) from e
+        except litellm.AuthenticationError as e:
+            if self.credential_pool and used_key:
+                self.credential_pool.mark_failed(used_key, 401)
+            raise LLMConnectionError(f"认证失败: {e}") from e
+        except litellm.APIConnectionError as e:
+            raise LLMConnectionError(f"连接失败: {e}") from e
         except Exception as e:
             duration = (time.time() - start) * 1000
-            if self.credential_pool and api_key:
+            if self.credential_pool and used_key:
                 status = getattr(e, "status_code", None)
-                self.credential_pool.mark_failed(api_key, status)
-            raise
+                self.credential_pool.mark_failed(used_key, status)
+            raise LLMError(f"LLM 调用异常: {e}") from e
 
-    def chat_async(self, messages, tools=None):
-        """异步调用（TODO: 用 litellm.acompletion）"""
-        return self.chat(messages, tools)
+    async def chat_async(
+        self,
+        messages: list[dict],
+        tools: list[dict] | None = None,
+    ) -> LLMResponse:
+        start = time.time()
+        kwargs, used_key = self._build_kwargs(messages, tools)
+
+        try:
+            response = await litellm.acompletion(**kwargs)
+            choice = response.choices[0]
+            duration = (time.time() - start) * 1000
+
+            return LLMResponse(
+                content=choice.message.content,
+                tool_calls=(
+                    [tc.model_dump() for tc in choice.message.tool_calls]
+                    if choice.message.tool_calls else None
+                ),
+                usage=dict(response.usage) if response.usage else None,
+                model=response.model,
+                duration_ms=duration,
+                raw=response,
+            )
+        except litellm.RateLimitError as e:
+            if self.credential_pool and used_key:
+                self.credential_pool.mark_failed(used_key, 429)
+            raise LLMRateLimitError(
+                f"速率限制: {e}", retry_after=60,
+            ) from e
+        except litellm.AuthenticationError as e:
+            if self.credential_pool and used_key:
+                self.credential_pool.mark_failed(used_key, 401)
+            raise LLMConnectionError(f"认证失败: {e}") from e
+        except litellm.APIConnectionError as e:
+            raise LLMConnectionError(f"连接失败: {e}") from e
+        except Exception as e:
+            if self.credential_pool and used_key:
+                status = getattr(e, "status_code", None)
+                self.credential_pool.mark_failed(used_key, status)
+            raise LLMError(f"LLM 异步调用异常: {e}") from e

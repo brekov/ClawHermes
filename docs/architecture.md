@@ -196,3 +196,64 @@ storage/session.py → storage/transcript.py
 
     无循环依赖 ✓
 ```
+
+---
+
+## 6. v1.0 目标架构
+
+> 以下为 v1.0 完整目标架构，与当前实现（v0.10.0）对比
+
+### 6.1 新增模块
+
+| 模块 | 职责 | 阶段 |
+|------|------|------|
+| `agent/exceptions.py` | 自定义异常类层次 | Phase 1 |
+| `agent/session.py` | 会话持久化管理 | Phase 1 |
+| `tools/profiles.py` | 工具 profile 管理 | Phase 1 |
+| `channel/adapter.py` | Channel Adapter SDK ABC | Phase 2 |
+| `channel/adapters/` | 内置渠道适配器 | Phase 2 |
+| `agent/scheduler.py` | Cron 调度（APScheduler） | Phase 2 |
+| `tools/sandbox.py` | Docker 沙箱执行 | Phase 2 |
+| `agent/ace.py` | 自适应上下文引擎 | Phase 2 |
+| `skills/hub.py` | 联邦技能中心 | Phase 3 |
+| `skills/evolution.py` | 技能进化图谱 | Phase 3 |
+| `memory/multimodal.py` | 多模态记忆 | Phase 3 |
+| `agent/user_model.py` | 用户画像持久化 | Phase 3 |
+| `dashboard/` | 可观测性仪表盘 | Phase 4 |
+| `workflow/` | 工作流构建器 | Phase 4 |
+| `playground/` | 提示词实验场 | Phase 4 |
+
+### 6.2 异常类层次
+
+```
+ClawHermesError (base)
+├── LLMError
+│   ├── LLMConnectionError
+│   ├── LLMRateLimitError
+│   └── LLMResponseError
+├── ToolError
+│   ├── ToolNotFoundError
+│   ├── ToolExecutionError
+│   └── ToolBlockedError
+├── MemoryError
+│   ├── MemoryStorageError
+│   └── MemorySearchError
+├── ConfigError
+│   ├── ConfigValidationError
+│   └── ConfigNotFoundError
+└── SessionError
+    ├── SessionNotFoundError
+    └── SessionExpiredError
+```
+
+### 6.3 工具 Profile 架构
+
+```
+ToolProfile
+├── minimal (5 tools)
+│   └── session_status, read_file, write_file, exec, get_time
+├── standard (9 tools) — 默认
+│   └── minimal + web_search, memory_search, memory_save, delegate_task
+└── full (15+ tools)
+    └── standard + web_fetch, list_dir, patch_file, grep, search_replace, code_eval
+```

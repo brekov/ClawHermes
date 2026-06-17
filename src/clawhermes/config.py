@@ -7,7 +7,7 @@ import os
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field, field_validator
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -20,30 +20,6 @@ class LLMProviderConf(BaseSettings):
     temperature: float = 0.7
     timeout_ms: int = 60000
 
-
-class ChannelFeishuConf(BaseSettings):
-    """飞书渠道配置"""
-    enabled: bool = False
-    app_id: str = ""
-    app_secret: str = ""
-
-class ChannelWechatConf(BaseSettings):
-    """企业微信渠道配置"""
-    enabled: bool = False
-    corp_id: str = ""
-    corp_secret: str = ""
-    agent_id: int = 0
-
-class ChannelQQConf(BaseSettings):
-    """QQ 渠道配置"""
-    enabled: bool = False
-    ws_url: str = "ws://127.0.0.1:6700"
-    token: str = ""
-
-class ChannelTelegramConf(BaseSettings):
-    """Telegram 渠道配置"""
-    enabled: bool = False
-    token: str = ""
 
 class MemoryConf(BaseSettings):
     """记忆系统配置"""
@@ -212,5 +188,5 @@ config: ClawHermesConfig | None = None
 def load_config(env_file: str | None = None) -> ClawHermesConfig:
     """加载配置（环境变量 + YAML）"""
     global config
-    config = ClawHermesConfig(_env_file=env_file)
+    config = ClawHermesConfig()
     return config

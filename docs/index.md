@@ -67,6 +67,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/brekov/ClawHermes/main/scrip
 | [环境变量](env-reference.md) | 配置项参考 |
 | [开发指南](development.md) | 开发环境与规范 |
 | [对比分析](comparison.md) | ClawHermes vs OpenClaw vs Hermes |
+| [开发计划](development-plan.md) | 竞争分析、路线图、质量标准 |
 | [变更日志](changelog.md) | 版本记录 |
 
 ---

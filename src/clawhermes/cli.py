@@ -1,7 +1,10 @@
 """ClawHermes - CLI"""
 from __future__ import annotations
-import logging, os
+
+import logging
+import os
 from pathlib import Path
+
 import click
 from rich.console import Console
 from rich.markdown import Markdown
@@ -13,7 +16,7 @@ logging.basicConfig(level=logging.WARNING)
 
 def _create_agent(api_key=None, model=None):
     from clawhermes.agent.loop import Agent, AgentConfig, ToolRegistry
-    from clawhermes.agent.memory import MemoryManager, JSONMemoryProvider
+    from clawhermes.agent.memory import JSONMemoryProvider, MemoryManager
     from clawhermes.llm.provider import LLMProvider
     from clawhermes.tools.builtin import register_builtin_tools
     provider = LLMProvider(
@@ -49,7 +52,8 @@ def chat(model, api_key, one_shot):
     try:
         agent, memory = _create_agent(api_key, model)
     except Exception as e:
-        console.print(f"❌ {e}", style="red"); return
+        console.print(f"❌ {e}", style="red")
+        return
     console.print(f"🚀 已就绪 | 工具: {len(agent.tools.list())} 个 | 模型: {agent.llm.model}")
     if one_shot:
         with console.status("思考中..."):
@@ -60,10 +64,12 @@ def chat(model, api_key, one_shot):
         return
     while True:
         user = Prompt.ask("\n[bold cyan]You[/bold cyan]")
-        if user in ("/exit", "/quit"): break
+        if user in ("/exit", "/quit"):
+            break
         if user.startswith("/save "):
             memory.save(user[6:], MemoryScope.USER)
-            console.print("✅ 已保存", style="green"); continue
+            console.print("✅ 已保存", style="green")
+            continue
         if user == "/tools":
             for t in agent.tools.list():
                 console.print(f"  • {t.name}: {t.description}")
@@ -92,8 +98,10 @@ def start(port, host, api_key, model):
     """启动 Gateway"""
     api_key = api_key or os.getenv("DEEPSEEK_API_KEY")
     if not api_key:
-        console.print("❌ 请设置 DEEPSEEK_API_KEY", style="red"); return
+        console.print("❌ 请设置 DEEPSEEK_API_KEY", style="red")
+        return
     import uvicorn
+
     from clawhermes.gateway.app import app
     os.environ["CH_GW_API_KEY"] = api_key
     if model:
@@ -113,9 +121,10 @@ def config():
 @config.command("show")
 def config_show():
     """查看 config.yaml"""
-    from clawhermes.config import load_yaml
-    from rich.syntax import Syntax
     import yaml
+    from rich.syntax import Syntax
+
+    from clawhermes.config import load_yaml
     cfg = load_yaml()
     if cfg:
         console.print(Syntax(yaml.dump(cfg, allow_unicode=True), "yaml", theme="monokai"))
@@ -162,7 +171,7 @@ def show(name):
 @agent.command()
 @click.argument("name")
 def switch(name):
-    from clawhermes.agent.agent_mgr import set_default_agent, agent_exists
+    from clawhermes.agent.agent_mgr import agent_exists, set_default_agent
     if agent_exists(name):
         set_default_agent(name)
         console.print(f"✅ 已切换到 '{name}'")

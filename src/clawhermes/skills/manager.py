@@ -6,12 +6,10 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import time
-from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable
+from typing import List
 
 logger = logging.getLogger(__name__)
 
@@ -129,10 +127,10 @@ class SkillManager:
             skill.last_used = time.time()
             self._save_meta(skill)
 
-    def get_context(self, active_skills: list[str] | None = None) -> str:
+    def get_context(self, active_skills: List[str] | None = None) -> str:
         """生成技能上下文（供 System Prompt 使用）"""
         if active_skills:
-            skills = [self._skills.get(n) for n in active_skills if n in self._skills]
+            skills = [self._skills[n] for n in active_skills if n in self._skills]
         else:
             skills = [s for s in self._skills.values() if s.status == "active"][:5]
 

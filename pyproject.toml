@@ -1,6 +1,6 @@
 [project]
 name = "clawhermes"
-version = "0.10.0"
+version = "0.11.0"
 description = "融合 Hermes 自进化能力与 OpenClaw Gateway 体系的 Python AI Agent 框架"
 requires-python = ">=3.12"
 authors = [
@@ -17,13 +17,7 @@ dependencies = [
     "httpx>=0.28",
 
     # === 存储 ===
-    "sqlalchemy[asyncio]>=2.0",
-    "sqlite-utils>=0.38",
     "chromadb>=0.6",
-
-    # === 工具执行 ===
-    "beautifulsoup4>=4.12",
-    "markdownify>=0.14",
 
     # === 配置 ===
     "pydantic-settings>=2.7",
@@ -54,7 +48,8 @@ line-length = 100
 target-version = "py312"
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "N", "W", "D"]
+select = ["E", "F", "I", "N", "W"]
+ignore = ["E501"]
 
 [tool.mypy]
 python_version = "3.12"

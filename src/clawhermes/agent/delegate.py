@@ -8,7 +8,6 @@ import logging
 import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Any, Callable
 
 from clawhermes.agent.loop import Agent, AgentConfig
 from clawhermes.llm.provider import LLMProvider

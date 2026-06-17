@@ -1,6 +1,6 @@
 # ClawHermes vs OpenClaw vs Hermes 对比分析
 
-> 日期：2026-06-16
+> 日期：2026-06-16（v2.0 更新：新增竞争分析与路线图引用）
 > 说明：从架构设计、功能完整度、实现方式三个维度对比
 
 ---
@@ -175,3 +175,32 @@ ClawHermes:  融合两者设计 + Python 纯原生 → 轻量级 Agent 框架
 ```
 
 **一句话：** ClawHermes 在核心能力上对齐了 OpenClaw 和 Hermes 的设计精华，专注 Agent 核心（REST API），在 Python 生态、向量记忆等方面有自己的优势。消息渠道集成不是 ClawHermes 的职责，而是 OpenClaw 的优势所在。
+
+---
+
+## 六、竞争策略与路线图
+
+> 详细的竞争分析、优势融合方案、劣势规避策略、创新功能设计及分阶段开发路线图，请参阅 [开发计划](development-plan.md)。
+
+### 6.1 关键差距与追赶计划
+
+| 差距 | 当前 | Phase 1 目标 | v1.0 目标 |
+|------|------|-------------|----------|
+| 内置工具数 | 9 | 15+ | 25+ |
+| 工具 profiles | ❌ | ✅ 3级 | ✅ 3+级 |
+| 技能 Hub | ❌ | ❌ | ✅ 联邦Hub |
+| Web UI | ❌ | ❌ | ✅ Dashboard |
+| 测试覆盖率 | ~40% | > 80% | > 90% |
+
+### 6.2 差异化竞争优势
+
+| 创新点 | 说明 | 阶段 |
+|--------|------|------|
+| ACE 自适应上下文 | 对话类型检测 + 策略自动切换 | Phase 2 |
+| Skill Evolution Graph | 技能演化 DAG 图谱 | Phase 3 |
+| Multi-Modal Memory | 图片/代码/结构化记忆 | Phase 3 |
+| Federated Skill Hub | 去中心化技能共享 | Phase 3 |
+| Observability Dashboard | 运行状态实时可视化 | Phase 4 |
+| Agent Workflow Builder | 可视化工作流编排 | Phase 4 |
+| Channel Adapter SDK | 标准化渠道适配器 | Phase 2 |
+| Prompt Playground | A/B 测试 + 自动评估 | Phase 4 |

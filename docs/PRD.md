@@ -108,3 +108,42 @@ Agent 提供 REST API，上层应用（飞书/微信/网页等）通过 API 调�
 | M4: 工具系统 | 注册/钩子/策略/调度 | ✅ |
 | M5: 记忆 + 技能 | Memory + Skills + 自进化 | ✅ |
 | M7: 测试 + 提交 | 单元测试 + GitHub | ✅ |
+
+---
+
+## 6. Phase 1 需求（v0.11.0）
+
+> 状态：📋 开发中
+> 目标：代码质量与稳定性提升
+
+### 6.1 功能需求
+
+| # | 功能 | 优先级 | 说明 | 状态 |
+|---|------|--------|------|:----:|
+| P1.1 | 存根工具接入 | P0 | memory_search/memory_save/delegate_task 接入实际管理器 | 📋 |
+| P1.2 | 异常类层次 | P0 | ClawHermesError → LLMError/ToolError/MemoryError/ConfigError | 📋 |
+| P1.3 | Gateway 去重 | P1 | _auto_init() 与 initialize() 合并 | 📋 |
+| P1.4 | 依赖清理 | P1 | 移除 sqlalchemy/sqlite-utils/beautifulsoup4/markdownify | 📋 |
+| P1.5 | chat_async 实现 | P1 | 异步对话接口 | 📋 |
+| P1.6 | 会话持久化 | P1 | SQLite 持久化，重启不丢失 | 📋 |
+| P1.7 | CI 流水线 | P0 | GitHub Actions: lint + typecheck + test | 📋 |
+| P1.8 | 工具 profiles | P1 | minimal(5)/standard(9)/full(15+) 三级工具集 | 📋 |
+| P1.9 | 内置工具扩展 | P2 | 新增 web_fetch/list_dir/patch_file/grep/search_replace/code_eval | 📋 |
+| P1.10 | 测试增强 | P0 | 测试用例 56→100+，覆盖率 > 80% | 📋 |
+
+### 6.2 非功能需求
+
+| # | 要求 | 指标 | 状态 |
+|---|------|------|:----:|
+| NP1 | 代码质量 | ruff 0 错误，mypy 0 错误 | 📋 |
+| NP2 | 测试覆盖率 | > 80% | 📋 |
+| NP3 | CI 全绿 | push/PR 自动检查 | 📋 |
+| NP4 | 无存根代码 | 所有公开接口有实际实现 | 📋 |
+
+## 7. Phase 2-4 规划概要
+
+| Phase | 版本 | 核心目标 | 关键特性 |
+|-------|------|---------|---------|
+| Phase 2 | v0.12.0-v0.13.0 | 功能增强与扩展 | Channel Adapter SDK / Cron 调度 / Docker Sandbox / ACE |
+| Phase 3 | v0.14.0-v0.15.0 | 生态建设 | Federated Skill Hub / Skill Evolution Graph / Multi-Modal Memory |
+| Phase 4 | v1.0.0 | 体验与差异化 | Observability Dashboard / Workflow Builder / Prompt Playground |

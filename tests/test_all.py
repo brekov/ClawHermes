@@ -93,11 +93,11 @@ def test_tool_system():
     registry = ToolRegistry()
     register_builtin_tools(registry)
     tools = registry.list()
-    check(f"{len(tools)}个内置工具", len(tools) >= 8)
+    check(f"{len(tools)}个内置工具", len(tools) >= 9)
 
     # Schema
     schemas = registry.schemas()
-    check("工具 Schema 生成", len(schemas) >= 8)
+    check("工具 Schema 生成", len(schemas) >= 9)
 
     # 调度
     hooks = HookManager()
@@ -258,6 +258,8 @@ def test_import_all():
         "clawhermes.agent.loop",
         "clawhermes.agent.prompt",
         "clawhermes.agent.memory",
+        "clawhermes.agent.exceptions",
+        "clawhermes.agent.delegate",
         "clawhermes.tools.builtin",
         "clawhermes.gateway.app",
     ]

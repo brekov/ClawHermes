@@ -10,14 +10,12 @@ import json
 import os
 import shutil
 from pathlib import Path
-from typing import Any
 
 from rich.console import Console
-from rich.prompt import Prompt, Confirm
-from rich.panel import Panel
-from rich.table import Table
 from rich.markdown import Markdown
-from rich.syntax import Syntax
+from rich.panel import Panel
+from rich.prompt import Confirm
+from rich.table import Table
 
 console = Console()
 
@@ -206,7 +204,7 @@ def cmd_set_persona(name: str | None = None):
     console.print("\n[bold cyan]请输入新的身份描述[/bold cyan]")
     console.print("[dim]（用 Markdown 格式，描述你是谁、你的语气、个性等。多行输入，输入空行结束）[/dim]")
 
-    lines = []
+    lines: list[str] = []
     while True:
         line = input()
         if line.strip() == "" and lines and lines[-1] == "":
@@ -237,7 +235,7 @@ def cmd_set_instructions(name: str | None = None):
     console.print("\n[bold cyan]请输入行为指令[/bold cyan]")
     console.print("[dim]（多行输入，空行结束）[/dim]")
 
-    lines = []
+    lines: list[str] = []
     while True:
         line = input()
         if line.strip() == "" and lines and lines[-1] == "":
@@ -263,9 +261,9 @@ def cmd_show(name: str | None = None):
 
     config = get_agent_config(name)
     console.print(f"模型: {config.get('model', '默认')}")
-    console.print(f"\n[bold]身份设定:[/bold]")
+    console.print("\n[bold]身份设定:[/bold]")
     console.print(Markdown(read_persona(name)))
-    console.print(f"\n[bold]行为指令:[/bold]")
+    console.print("\n[bold]行为指令:[/bold]")
     console.print(Markdown(read_instructions(name)))
-    console.print(f"\n[bold]用户信息:[/bold]")
+    console.print("\n[bold]用户信息:[/bold]")
     console.print(Markdown(read_user_info(name)))

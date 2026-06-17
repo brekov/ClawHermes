@@ -1,5 +1,29 @@
 # Changelog
 
+## v0.11.0 (开发中)
+
+代码质量与稳定性提升 — Phase 1
+
+### 计划变更
+
+- **存根工具接入**：memory_search/memory_save/delegate_task 接入实际管理器
+- **异常类层次**：ClawHermesError → LLMError/ToolError/MemoryError/ConfigError
+- **Gateway 去重**：_auto_init() 与 initialize() 合并
+- **依赖清理**：移除未使用的 sqlalchemy/sqlite-utils/beautifulsoup4/markdownify
+- **chat_async 实现**：异步对话接口
+- **会话持久化**：SQLite 持久化，重启不丢失
+- **CI 流水线**：GitHub Actions lint + typecheck + test
+- **工具 profiles**：minimal(5)/standard(9)/full(15+) 三级工具集
+- **内置工具扩展**：新增 web_fetch/list_dir/patch_file/grep/search_replace/code_eval
+- **测试增强**：测试用例 56→100+，覆盖率 > 80%
+
+### 文档更新
+
+- 新增 `docs/development-plan.md`：完整开发计划（竞争分析、路线图、质量标准）
+- 更新 `docs/PRD.md`：新增 Phase 1 需求和 Phase 2-4 规划
+- 更新 `docs/architecture.md`：新增 v1.0 目标架构
+- 更新 `docs/comparison.md`：新增竞争策略与路线图
+
 ## v0.10.0 (2026-06-16)
 
 回归 Agent 框架本分 — 移除全部消息渠道代码
