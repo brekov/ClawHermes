@@ -4,7 +4,7 @@
 
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![Tests: 73 passed](https://img.shields.io/badge/tests-73%20passed-brightgreen)](tests/)
+[![Tests: 148 passed](https://img.shields.io/badge/tests-148%20passed-brightgreen)](tests/)
 [![Coverage: 65%](https://img.shields.io/badge/coverage-65%25-yellow)](tests/)
 [![Ruff](https://img.shields.io/badge/ruff-0%20errors-brightgreen)](pyproject.toml)
 [![v0.11.0](https://img.shields.io/badge/version-0.11.0-blue)](CHANGELOG.md)
@@ -67,7 +67,7 @@ curl http://127.0.0.1:18789/sessions
 ```
 ┌──────────────────────────────────────────────────────────────┐
 │                      Gateway 层（REST API）                   │
-│  CLI / HTTP（FastAPI · 13 个 REST 端点 · 会话持久化）         │
+│  CLI / HTTP（FastAPI · 19 个 REST 端点 · Cron调度 · Docker沙箱） │
 └────────────────────────┬─────────────────────────────────────┘
                          │
 ┌────────────────────────▼─────────────────────────────────────┐
@@ -80,19 +80,21 @@ curl http://127.0.0.1:18789/sessions
 │  ┌───────────────────────────────────────────────────────┐   │
 │  │          Agent Loop (思考-行动循环)                    │   │
 │  │  LLM → 工具 → LLM → ... → 回复                        │   │
-│  │  ← 上下文压缩 ←  ←  ←  ← (F10)                       │   │
+│  │  ← ACE 自适应压缩 ← ← ← ← (F17)                       │   │
 │  └───────────────────────────────────────────────────────┘   │
 │                                                               │
 │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────────┐    │
 │  │ 工具系统  │ │ 记忆系统  │ │ 技能系统  │ │ 子Agent委派  │    │
-│  │ 15工具   │ │ JSON+    │ │ Manager+ │ │ 并行执行     │    │
+│  │ 26工具   │ │ JSON+    │ │ Manager+ │ │ 并行执行     │    │
 │  │ 3级Profile│ │ ChromaDB │ │ Review+  │ │ 防死锁(F12)  │    │
 │  │ 钩子+策略 │ │ 向量搜索  │ │ Curator  │ │              │    │
 │  └──────────┘ └──────────┘ └──────────┘ └──────────────┘    │
 │                                                               │
-│  ┌──────────────────────────────────────────────────────┐    │
-│  │          异常体系 (ClawHermesError → 5大类17子类)     │    │
-│  └──────────────────────────────────────────────────────┘    │
+│  ┌──────────┐ ┌──────────┐ ┌──────────────────────────────┐  │
+│  │ Cron调度 │ │ Docker  │ │   异常体系 (5大类17子类)      │  │
+│  │ interval │ │ 沙箱执行 │ │   ClawHermesError → ...      │  │
+│  │ cron一次 │ │ 资源隔离 │ │                              │  │
+│  └──────────┘ └──────────┘ └──────────────────────────────┘  │
 └──────────────────────────────────────────────────────────────┘
 ```
 
@@ -104,7 +106,7 @@ curl http://127.0.0.1:18789/sessions
 |:---:|:---|:---|
 | F1 | **多 LLM 接入** | litellm 驱动，132 个 provider，`provider/model` 格式切换 |
 | F2 | **对话主循环** | 思考-行动循环，50 次迭代上限，自动中断保护 |
-| F3 | **工具系统** | 15 个内置工具，3 级 Profile，JSON Schema 生成 |
+| F3 | **工具系统** | 26 个内置工具，3 级 Profile，JSON Schema 生成 |
 | F4 | **持久化记忆** | JSON 文件 + ChromaDB 双存储，语义搜索 |
 | F5 | **会话持久化** | SQLite WAL 模式，重启不丢失，过期自动清理 |
 | F6 | **技能系统** | SkillManager，元数据持久化，上下文注入 |
@@ -116,10 +118,14 @@ curl http://127.0.0.1:18789/sessions
 | F12 | **子Agent委派** | 并行执行，深度限制(MAX=2)，防死锁 |
 | F13 | **异步接口** | Agent.chat_async() + LLMProvider.chat_async() |
 | F14 | **异常体系** | ClawHermesError → 5大类17子类，结构化错误信息 |
+| F15 | **Cron 调度** | 标准库零依赖调度器，cron/interval/oneshot，JSON 持久化 |
+| F16 | **Docker 沙箱** | 容器化安全执行，资源限制，网络隔离 |
+| F17 | **ACE 自适应压缩** | 对话类型检测（代码/问答/创意），策略自动切换 |
+| F18 | **Channel SDK** | 渠道适配器 ABC，内置 CLI/REST/WebSocket 适配器 |
 
 ---
 
-## 内置工具（15个）
+## 内置工具（26个）
 
 ### minimal（5个）— 轻量场景
 
@@ -142,7 +148,7 @@ curl http://127.0.0.1:18789/sessions
 | `memory_save` | 保存记忆 | ❌ |
 | `delegate_task` | 委派子任务给子 Agent 并行执行 | ❌ |
 
-### full（15个）— 完整能力
+### full（26个）— 完整能力
 
 在 standard 基础上增加：
 
@@ -154,6 +160,17 @@ curl http://127.0.0.1:18789/sessions
 | `patch_file` | 文件差异补丁 | ❌ |
 | `search_replace` | 文件搜索替换 | ❌ |
 | `code_eval` | 执行 Python 代码片段 | ❌ |
+| `compress_file` | gzip 压缩文件 | ✅ |
+| `http_request` | HTTP GET/POST 请求 | ❌ |
+| `json_query` | JSON 路径查询提取 | ❌ |
+| `git_status` | Git 工作区状态 | ✅ |
+| `git_diff` | Git 差异对比 | ❌ |
+| `git_log` | Git 提交记录 | ✅ |
+| `env_list` | 环境变量列表（脱敏） | ✅ |
+| `timer` | 定时器/秒表 | ❌ |
+| `url_encode` | URL 编码 | ✅ |
+| `url_decode` | URL 解码 | ✅ |
+| `calc` | 安全数学表达式计算 | ✅ |
 
 配置方式：
 ```bash
@@ -199,6 +216,8 @@ src/clawhermes/
 │   ├── delegate.py         # F12: 子 Agent 委派
 │   ├── exceptions.py       # 异常类层次（5大类17子类）
 │   ├── session.py          # 会话持久化（SQLite WAL）
+│   ├── scheduler.py        # 定时任务调度（cron/interval/oneshot）
+│   ├── ace.py              # 自适应上下文引擎（代码/问答/创意）
 │   └── agent_mgr.py        # 多 Agent 管理
 │
 ├── channel/
@@ -206,7 +225,7 @@ src/clawhermes/
 │   └── adapter.py          # 渠道适配器 ABC + CLI/REST/WebSocket 适配器
 │
 ├── tools/
-│   └── builtin.py          # 15 个内置工具 + 3 级 Profile
+│   └── builtin.py          # 26 个内置工具 + 3 级 Profile
 │
 ├── skills/
 │   └── manager.py          # 技能系统 + Background Review + Curator
@@ -248,7 +267,7 @@ src/clawhermes/
 ## 测试
 
 ```bash
-# 单元测试 + 集成测试（73 个测试，全部通过 ✅）
+# 单元测试 + 集成测试（148 个测试，全部通过 ✅）
 pytest tests/ -v
 
 # 带覆盖率

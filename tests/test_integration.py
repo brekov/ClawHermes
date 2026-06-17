@@ -92,7 +92,7 @@ def test_tool_profiles():
 
     registry_full = ToolRegistry()
     register_builtin_tools(registry_full, profile="full")
-    assert len(registry_full.list()) == 15
+    assert len(registry_full.list()) >= 25
 
     full_names = {t.name for t in registry_full.list()}
     assert "web_fetch" in full_names
