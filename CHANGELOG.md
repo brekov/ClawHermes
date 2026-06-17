@@ -1,27 +1,47 @@
 # Changelog
 
-## v0.11.0 (开发中)
+## v0.11.0 (2026-06-16)
 
-代码质量与稳定性提升 — Phase 1
+代码质量与稳定性提升 — Phase 1 完成
 
-### 计划变更
+### 新增
 
-- **存根工具接入**：memory_search/memory_save/delegate_task 接入实际管理器
-- **异常类层次**：ClawHermesError → LLMError/ToolError/MemoryError/ConfigError
-- **Gateway 去重**：_auto_init() 与 initialize() 合并
-- **依赖清理**：移除未使用的 sqlalchemy/sqlite-utils/beautifulsoup4/markdownify
-- **chat_async 实现**：异步对话接口
-- **会话持久化**：SQLite 持久化，重启不丢失
-- **CI 流水线**：GitHub Actions lint + typecheck + test
-- **工具 profiles**：minimal(5)/standard(9)/full(15+) 三级工具集
-- **内置工具扩展**：新增 web_fetch/list_dir/patch_file/grep/search_replace/code_eval
-- **测试增强**：测试用例 56→100+，覆盖率 > 80%
+- **自定义异常类层次**：`ClawHermesError` → 5大类17子类（LLMError/ToolError/MemoryError/ConfigError/SessionError）
+- **工具 Profile 分级**：minimal(5)/standard(9)/full(15) 三级工具集，通过 `CH_TOOLS_PROFILE` 环境变量或 `/init` API 配置
+- **6个新内置工具**：web_fetch、list_dir、patch_file、grep、search_replace、code_eval
+- **chat_async 异步接口**：`Agent.chat_async()` + `LLMProvider.chat_async()`（基于 litellm.acompletion）
+- **会话持久化**：`SessionManager`（SQLite WAL 模式），会话重启不丢失，支持 CRUD + 过期清理
+- **CI 流水线**：GitHub Actions（lint + typecheck + test + build）
+- **3个新 API 端点**：`GET /sessions/{id}`、`DELETE /sessions/{id}`、`GET /sessions?limit=N`
 
-### 文档更新
+### 修复
+
+- **存根工具接入**：memory_search/memory_save 接入 MemoryManager，delegate_task 接入 DelegateManager
+- **Gateway 代码去重**：提取 `_create_agent_components()` 公共方法，消除 `_auto_init()` 与 `initialize()` 重复
+- **LLMProvider 异常处理**：使用自定义异常类替代宽泛 `except Exception`
+- **Agent Loop 工具上下文**：注入 MemoryManager/DelegateManager 到工具执行上下文
+
+### 变更
+
+- **移除4个未使用依赖**：sqlalchemy、sqlite-utils、beautifulsoup4、markdownify
+- **移除渠道配置类**：ChannelFeishuConf/ChannelWechatConf/ChannelQQConf/ChannelTelegramConf
+- **Gateway 版本**：0.10.0 → 0.11.0
+- **Gateway 端点数**：10 → 13
+
+### 测试
+
+- 测试用例：23 → 73（+217%）
+- 测试覆盖率：~40% → 65%
+- 核心模块覆盖率：exceptions 100%、session 96%、loop 86%、memory 85%、prompt 83%
+- ruff: 0 errors | mypy: 0 errors | pytest: 73 passed
+
+### 文档
 
 - 新增 `docs/development-plan.md`：完整开发计划（竞争分析、路线图、质量标准）
-- 更新 `docs/PRD.md`：新增 Phase 1 需求和 Phase 2-4 规划
-- 更新 `docs/architecture.md`：新增 v1.0 目标架构
+- 更新 `docs/PRD.md`：Phase 1 需求状态更新为已完成
+- 更新 `docs/architecture.md`：v1.0 目标架构（已实现/待实现模块分离）
+- 更新 `docs/api-contract.md`：新增 SessionManager 接口、异常类层次、Profile 参数
+- 更新 `docs/env-reference.md`：新增 CH_GW_API_KEY/CH_GW_MODEL/CH_TOOLS_PROFILE
 - 更新 `docs/comparison.md`：新增竞争策略与路线图
 
 ## v0.10.0 (2026-06-16)

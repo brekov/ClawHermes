@@ -201,15 +201,28 @@ storage/session.py → storage/transcript.py
 
 ## 6. v1.0 目标架构
 
-> 以下为 v1.0 完整目标架构，与当前实现（v0.10.0）对比
+> 以下为 v1.0 完整目标架构，与当前实现（v0.11.0）对比
 
-### 6.1 新增模块
+### 6.1 已实现模块（v0.11.0）
+
+| 模块 | 职责 | 状态 |
+|------|------|:----:|
+| `agent/exceptions.py` | 自定义异常类层次（5大类17子类） | ✅ |
+| `agent/session.py` | 会话持久化管理（SQLite WAL） | ✅ |
+| `tools/builtin.py` | 15个内置工具 + 3级 Profile | ✅ |
+| `agent/loop.py` | Agent Loop + HookManager + ToolDispatcher | ✅ |
+| `agent/prompt.py` | 三层 System Prompt | ✅ |
+| `agent/context.py` | 上下文压缩引擎 | ✅ |
+| `agent/memory.py` | 记忆管理器 | ✅ |
+| `agent/delegate.py` | 子 Agent 委派 | ✅ |
+| `llm/provider.py` | LLM Provider + CredentialPool + chat_async | ✅ |
+| `gateway/app.py` | FastAPI REST 服务（13个端点） | ✅ |
+| `.github/workflows/ci.yml` | CI 流水线 | ✅ |
+
+### 6.2 待实现模块
 
 | 模块 | 职责 | 阶段 |
 |------|------|------|
-| `agent/exceptions.py` | 自定义异常类层次 | Phase 1 |
-| `agent/session.py` | 会话持久化管理 | Phase 1 |
-| `tools/profiles.py` | 工具 profile 管理 | Phase 1 |
 | `channel/adapter.py` | Channel Adapter SDK ABC | Phase 2 |
 | `channel/adapters/` | 内置渠道适配器 | Phase 2 |
 | `agent/scheduler.py` | Cron 调度（APScheduler） | Phase 2 |
@@ -223,7 +236,7 @@ storage/session.py → storage/transcript.py
 | `workflow/` | 工作流构建器 | Phase 4 |
 | `playground/` | 提示词实验场 | Phase 4 |
 
-### 6.2 异常类层次
+### 6.3 异常类层次
 
 ```
 ClawHermesError (base)
@@ -246,7 +259,7 @@ ClawHermesError (base)
     └── SessionExpiredError
 ```
 
-### 6.3 工具 Profile 架构
+### 6.4 工具 Profile 架构
 
 ```
 ToolProfile

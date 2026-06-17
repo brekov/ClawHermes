@@ -1,6 +1,6 @@
 # ClawHermes · 接口契约文档
 
-> 版本：v0.6-draft
+> 版本：v0.11.0
 > 日期：2026-06-16
 > 说明：定义各模块之间的接口规格，供并行开发和测试 mock 使用
 
@@ -72,6 +72,9 @@ class Agent:
 
     def chat(self, user_message: str, session_id: str = "") -> str
         """输入用户消息，返回最终回复"""
+
+    async def chat_async(self, user_message: str, session_id: str = "") -> str
+        """异步对话接口"""
 
     def interrupt(self)
         """中断当前对话"""
@@ -154,9 +157,12 @@ class ToolDispatcher:
 ### 内置工具注册函数
 
 ```python
-def register_builtin_tools(registry: ToolRegistry)
-# 注册：session_status, read_file, write_file, exec, get_time,
-#       web_search, memory_search, memory_save
+def register_builtin_tools(registry: ToolRegistry, profile: str = "standard")
+# profile: "minimal"(5) / "standard"(9) / "full"(15)
+#
+# minimal:  session_status, read_file, write_file, exec, get_time
+# standard: minimal + web_search, memory_search, memory_save, delegate_task
+# full:     standard + web_fetch, list_dir, patch_file, grep, search_replace, code_eval
 ```
 
 ---
@@ -231,25 +237,27 @@ class Curator:
 ### 端点列表
 
 ```
-POST /init       初始化 Agent 配置 (api_key, model?, base_url?, max_iterations?)
-                → { status, model, tools, skills, chroma }
+POST /init       初始化 Agent 配置 (api_key, model?, base_url?, max_iterations?, profile?)
+                → { status, model, tools, profile }
 
 POST /chat       发送消息 { message, session_id? }
                 → { response, session_id, model }
 
-GET  /health     健康检查 → { status, version, uptime_seconds, tools, skills, sessions }
+GET  /health     健康检查 → { status, version, uptime_seconds, tools }
 
-GET  /tools      列出所有工具 → { tools: [{name, description, parallel_safe}] }
+GET  /tools      列出所有工具 → { tools: [{name, description, parallel_safe, group}] }
 
 POST /memory/save   ?content=xxx&importance=0.5 → { status }
 GET  /memory/search ?query=xxx → { results: [{content, importance}] }
 
 GET  /skills     ?status=active → { skills: [...] }
-POST /skills/create ?name=xxx&content=xxx → { status, name }
+POST /skills/create ?name=xxx&content=xxx&description= → { status, name }
 
 POST /curator/run ?dry_run=false → { status, stats }
 
-GET  /sessions   → { sessions: [...], count }
+GET  /sessions   ?limit=50 → { sessions: [...], count }
+GET  /sessions/{id}  → { session: {...}, messages: [...] }
+DELETE /sessions/{id}  → { status }
 ```
 
 ### 数据模型
@@ -269,6 +277,56 @@ GET  /sessions   → { sessions: [...], count }
     "tool_calls": int,
     "duration_ms": float,
 }
+```
+
+---
+
+## 7. 会话管理接口
+
+### `SessionManager`
+
+```python
+class SessionManager:
+    def __init__(self, data_dir: str | Path, max_age_hours: int = 720)
+
+    def create_session(self, agent_name: str = "", metadata: dict | None = None) -> str
+    def get_session(self, session_id: str) -> dict[str, Any]
+        # Raises: SessionNotFoundError, SessionExpiredError
+    def list_sessions(self, limit: int = 50) -> list[dict[str, Any]]
+    def delete_session(self, session_id: str) -> bool
+
+    def add_message(self, session_id: str, role: str, content: str = "",
+                    tool_calls: list | None = None, tool_call_id: str | None = None,
+                    name: str | None = None)
+    def get_messages(self, session_id: str, limit: int = 100) -> list[dict[str, Any]]
+
+    def cleanup_expired(self) -> int
+    def close(self)
+```
+
+---
+
+## 8. 异常类层次
+
+```python
+ClawHermesError (base, detail: str)
+├── LLMError
+│   ├── LLMConnectionError
+│   ├── LLMRateLimitError (retry_after: float)
+│   └── LLMResponseError
+├── ToolError
+│   ├── ToolNotFoundError
+│   ├── ToolExecutionError (tool_name: str)
+│   └── ToolBlockedError (tool_name: str, reason: str)
+├── MemoryError
+│   ├── MemoryStorageError (provider: str)
+│   └── MemorySearchError (provider: str)
+├── ConfigError
+│   ├── ConfigValidationError (field: str)
+│   └── ConfigNotFoundError
+└── SessionError
+    ├── SessionNotFoundError (session_id: str)
+    └── SessionExpiredError (session_id: str)
 ```
 
 ---
