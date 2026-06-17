@@ -1,0 +1,22 @@
+# ============================================
+# 消息渠道配置示例 — Discord
+# ============================================
+# 保存位置：~/.clawhermes/channels/discord.yaml
+# 适配器类：ChannelAdapter(channel_type=ChannelType.DISCORD)
+# ============================================
+
+channel_type: discord
+enabled: false
+
+# Discord Bot Token（从 https://discord.com/developers 获取）
+bot_token: "..."
+
+# 意图（Gateway Intents）
+intents:
+  message_content: true
+  guild_messages: true
+  direct_messages: true
+
+# 消息处理选项
+mention_only: true
+command_prefix: "!"     # 指令前缀（如 !ask）

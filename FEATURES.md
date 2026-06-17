@@ -164,6 +164,9 @@
 ### 6.3 Channel Adapter SDK（F18）
 - `ChannelAdapter` ABC + CLI/REST/WebSocket 内置适配器
 - `ChannelManager` 统一管理，消息处理器注入
+- 支持的渠道类型（配置模板见 `config/channels/`）：
+  - CLI / REST / WebSocket — 已实现
+  - Slack / Discord / 飞书 / 微信 / Telegram — Phase 3/4 规划
 
 ### 6.4 异常体系（F14）
 - `ClawHermesError` → 5 大类 17 子类
@@ -188,7 +191,7 @@ clawhermes agent list                 # 列出 Agent
 clawhermes agent create <name>        # 创建 Agent
 clawhermes agent switch <name>        # 切换 Agent
 clawhermes agent show [name]          # 查看 Agent
-clawhermes agent set-persona [name]  # 编辑 Agent 身份（默认当前 Agent）
+clawhermes agent set [name]          # 编辑 Agent 身份（默认当前 Agent）
 ```
 
 ### 8. 部署

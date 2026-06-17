@@ -1,0 +1,22 @@
+# ============================================
+# 消息渠道配置示例 — Slack
+# ============================================
+# 保存位置：~/.clawhermes/channels/slack.yaml
+# 适配器类：ChannelAdapter(channel_type=ChannelType.SLACK)
+# ============================================
+
+channel_type: slack
+enabled: false
+
+# Slack Bot Token（从 https://api.slack.com/apps 获取）
+bot_token: "xoxb-..."
+
+# 监听的频道（留空则监听所有已加入频道）
+channels:
+  - "#general"
+  - "#dev"
+
+# 消息处理选项
+mention_only: false      # 仅响应 @提及的消息
+ignore_bots: true        # 忽略其他 bot 的消息
+reply_in_thread: true    # 在消息线程中回复

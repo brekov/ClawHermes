@@ -15,6 +15,10 @@
 # │       ├── AGENTS.md         ← 行为指令
 # │       ├── USER.md           ← 用户信息
 # │       └── config.json       ← Agent 配置
+# ├── channels/
+# │   ├── slack.yaml.example   ← 渠道配置（示例见 channels/）
+# │   ├── feishu.yaml.example
+# │   └── discord.yaml.example
 # ├── skills/                  ← 技能文件目录
 # └── sessions.db              ← SQLite 会话持久化
 #

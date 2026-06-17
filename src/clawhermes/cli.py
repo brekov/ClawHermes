@@ -179,9 +179,9 @@ def switch(name):
         console.print(f"❌ Agent '{name}' 不存在")
 
 
-@agent.command()
+@agent.command(name="set")
 @click.argument("name", required=False)
-def set_persona(name):
+def cmd_agent_set(name):
     from clawhermes.agent.agent_mgr import cmd_set_persona
     cmd_set_persona(name)
 
