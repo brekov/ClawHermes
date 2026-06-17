@@ -448,16 +448,146 @@ def _get_time(**kwargs) -> dict:
 
 
 def _web_search(query: str, **kwargs) -> dict:
+    search_engine = os.getenv("CH_SEARCH_ENGINE", "duckduckgo")
     try:
-        encoded = urllib.parse.quote(query)
-        result = subprocess.run(
-            f'curl -sL "https://www.google.com/search?q={encoded}&num=5" 2>/dev/null | '
-            f'grep -oP \'<h3[^>]*>.*?</h3>\' | head -5',
-            shell=True, capture_output=True, text=True, timeout=10,
-        )
-        return {"results": result.stdout[:3000] or "（搜索结果为空）"}
+        if search_engine == "searxng":
+            return _web_search_searxng(query)
+        elif search_engine == "serpapi":
+            return _web_search_serpapi(query)
+        elif search_engine == "tavily":
+            return _web_search_tavily(query)
+        else:
+            return _web_search_duckduckgo(query)
     except Exception as e:
         return {"error": str(e)}
+
+
+def _web_search_duckduckgo(query: str) -> dict:
+    try:
+        import httpx
+    except ImportError:
+        return _web_search_fallback(query)
+    try:
+        with httpx.Client(timeout=15, follow_redirects=True) as client:
+            resp = client.get(
+                "https://html.duckduckgo.com/html/",
+                params={"q": query},
+                headers={"User-Agent": "Mozilla/5.0 (compatible; ClawHermes/1.0)"},
+            )
+            resp.raise_for_status()
+            results = _parse_ddg_html(resp.text)
+            if not results:
+                return {"results": [], "note": "搜索结果为空"}
+            return {"results": results, "engine": "duckduckgo"}
+    except Exception as e:
+        fallback = _web_search_fallback(query)
+        fallback["engine"] = "fallback"
+        fallback["error_detail"] = str(e)
+        return fallback
+
+
+def _parse_ddg_html(html: str) -> list[dict]:
+    import re
+    results = []
+    for match in re.finditer(
+        r'<a[^>]+class="result__a"[^>]*href="([^"]+)"[^>]*>(.*?)</a>'
+        r'.*?<a[^>]+class="result__snippet"[^>]*>(.*?)</a>',
+        html, re.DOTALL,
+    ):
+        url = match.group(1)
+        title = re.sub(r"<[^>]+>", "", match.group(2)).strip()
+        snippet = re.sub(r"<[^>]+>", "", match.group(3)).strip()
+        if title:
+            results.append({"title": title, "url": url, "snippet": snippet})
+        if len(results) >= 8:
+            break
+    return results
+
+
+def _web_search_searxng(query: str) -> dict:
+    base_url = os.getenv("CH_SEARXNG_URL", "http://localhost:8888")
+    try:
+        import httpx
+    except ImportError:
+        return {"error": "httpx 未安装，无法使用 SearXNG 搜索"}
+    try:
+        with httpx.Client(timeout=15) as client:
+            resp = client.get(
+                f"{base_url}/search",
+                params={"q": query, "format": "json"},
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            results = []
+            for item in data.get("results", [])[:8]:
+                results.append({
+                    "title": item.get("title", ""),
+                    "url": item.get("url", ""),
+                    "snippet": item.get("content", ""),
+                })
+            return {"results": results, "engine": "searxng"}
+    except Exception as e:
+        return {"error": f"SearXNG 连接失败: {e}", "results": []}
+
+
+def _web_search_serpapi(query: str) -> dict:
+    api_key = os.getenv("CH_SERPAPI_KEY", "")
+    if not api_key:
+        return {"error": "CH_SERPAPI_KEY 未设置"}
+    try:
+        import httpx
+    except ImportError:
+        return {"error": "httpx 未安装"}
+    with httpx.Client(timeout=15) as client:
+        resp = client.get(
+            "https://serpapi.com/search",
+            params={"q": query, "api_key": api_key, "engine": "google", "num": 5},
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        results = []
+        for item in data.get("organic_results", [])[:5]:
+            results.append({
+                "title": item.get("title", ""),
+                "url": item.get("link", ""),
+                "snippet": item.get("snippet", ""),
+            })
+        return {"results": results, "engine": "serpapi"}
+
+
+def _web_search_tavily(query: str) -> dict:
+    api_key = os.getenv("CH_TAVILY_KEY", "")
+    if not api_key:
+        return {"error": "CH_TAVILY_KEY 未设置"}
+    try:
+        import httpx
+    except ImportError:
+        return {"error": "httpx 未安装"}
+    with httpx.Client(timeout=15) as client:
+        resp = client.post(
+            "https://api.tavily.com/search",
+            json={"api_key": api_key, "query": query, "max_results": 5},
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        results = []
+        for item in data.get("results", [])[:5]:
+            results.append({
+                "title": item.get("title", ""),
+                "url": item.get("url", ""),
+                "snippet": item.get("content", ""),
+            })
+        return {"results": results, "engine": "tavily"}
+
+
+def _web_search_fallback(query: str) -> dict:
+    encoded = urllib.parse.quote(query)
+    result = subprocess.run(
+        f'curl -sL "https://www.google.com/search?q={encoded}&num=5" 2>/dev/null | '
+        f'grep -oP \'<h3[^>]*>.*?</h3>\' | head -5',
+        shell=True, capture_output=True, text=True, timeout=10,
+    )
+    return {"results": result.stdout[:3000] or "（搜索结果为空）"}
 
 
 def _memory_search(query: str, **kwargs) -> dict:

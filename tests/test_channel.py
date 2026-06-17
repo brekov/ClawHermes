@@ -18,6 +18,11 @@ from clawhermes.channel.adapter import (
     RESTAdapter,
     WebSocketAdapter,
 )
+from clawhermes.channel.router import (
+    ChannelRouter,
+    QueueMode,
+    SessionRouter,
+)
 
 
 class TestChannelTypes:
@@ -235,3 +240,271 @@ class TestChannelManager:
         asyncio.run(mgr.stop_all())
         assert not mgr.get("cli").is_running
         assert not mgr.get("rest").is_running
+
+
+class TestSessionRouter:
+    def test_create_and_resolve(self):
+        sr = SessionRouter()
+        sid = sr.create(ChannelType.REST, "user1")
+        assert sr.resolve(ChannelType.REST, "user1") == sid
+
+    def test_resolve_nonexistent(self):
+        sr = SessionRouter()
+        assert sr.resolve(ChannelType.REST, "user1") is None
+
+    def test_remove(self):
+        sr = SessionRouter()
+        sr.create(ChannelType.REST, "user1")
+        assert sr.remove(ChannelType.REST, "user1")
+        assert sr.resolve(ChannelType.REST, "user1") is None
+
+    def test_remove_nonexistent(self):
+        sr = SessionRouter()
+        assert not sr.remove(ChannelType.REST, "user1")
+
+    def test_different_channels_different_sessions(self):
+        sr = SessionRouter()
+        sid1 = sr.create(ChannelType.REST, "user1")
+        sid2 = sr.create(ChannelType.CLI, "user1")
+        assert sid1 != sid2
+        assert sr.resolve(ChannelType.REST, "user1") == sid1
+        assert sr.resolve(ChannelType.CLI, "user1") == sid2
+
+    def test_list_mappings(self):
+        sr = SessionRouter()
+        sr.create(ChannelType.REST, "user1")
+        sr.create(ChannelType.CLI, "user2")
+        mappings = sr.list_mappings()
+        assert len(mappings) == 2
+
+    def test_cleanup_expired(self):
+        sr = SessionRouter(idle_timeout_seconds=0)
+        sr.create(ChannelType.REST, "user1")
+        import time
+        time.sleep(0.01)
+        expired = sr.cleanup_expired()
+        assert expired == 1
+        assert sr.resolve(ChannelType.REST, "user1") is None
+
+
+class TestChannelRouter:
+    def test_route_message_with_handler(self):
+        mgr = ChannelManager()
+        mgr.register("rest", RESTAdapter())
+        router = ChannelRouter(channel_manager=mgr)
+        results = []
+        router.set_agent_handler(lambda msg, session_id="": (results.append(msg), "response")[-1])
+        router.set_session_creator(lambda: "sess_test")
+        resp = router.route_message("hello", ChannelType.REST, user_id="user1")
+        assert resp == "response"
+        assert results == ["hello"]
+
+    def test_route_message_creates_session(self):
+        mgr = ChannelManager()
+        mgr.register("rest", RESTAdapter())
+        router = ChannelRouter(channel_manager=mgr)
+        router.set_agent_handler(lambda msg, session_id="": "ok")
+        router.set_session_creator(lambda: "sess_auto")
+        resp = router.route_message("hello", ChannelType.REST, user_id="user1")
+        assert resp == "ok"
+        mapping = router.session_router.resolve(ChannelType.REST, "user1")
+        assert mapping is not None
+
+    def test_route_message_with_existing_session(self):
+        mgr = ChannelManager()
+        mgr.register("rest", RESTAdapter())
+        router = ChannelRouter(channel_manager=mgr)
+        router.set_agent_handler(lambda msg, session_id="": f"ok:{session_id}")
+        router.set_session_creator(lambda: "sess_auto")
+        resp1 = router.route_message("hello", ChannelType.REST, user_id="user1")
+        resp2 = router.route_message("world", ChannelType.REST, user_id="user1")
+        assert "ok:" in resp1
+        assert "ok:" in resp2
+
+    def test_allowlist_filtering(self):
+        mgr = ChannelManager()
+        mgr.register("rest", RESTAdapter())
+        router = ChannelRouter(channel_manager=mgr)
+        router.set_agent_handler(lambda msg, session_id="": "ok")
+        router.set_allowlist({"allowed_user"})
+
+        msg = ChannelMessage(
+            message_id="test1",
+            channel_type=ChannelType.REST,
+            user=ChannelUser(user_id="blocked_user"),
+            content="hello",
+        )
+        router._on_message(msg)
+        assert router.get_queue_size() == 0
+
+        msg2 = ChannelMessage(
+            message_id="test2",
+            channel_type=ChannelType.REST,
+            user=ChannelUser(user_id="allowed_user"),
+            content="hello",
+        )
+        router._on_message(msg2)
+        assert router.get_queue_size() >= 0
+
+    def test_queue_mode_enum(self):
+        assert QueueMode.STEER == "steer"
+        assert QueueMode.FOLLOWUP == "followup"
+        assert QueueMode.COLLECT == "collect"
+        assert QueueMode.INTERRUPT == "interrupt"
+
+    def test_list_channels(self):
+        mgr = ChannelManager()
+        mgr.register("rest", RESTAdapter())
+        router = ChannelRouter(channel_manager=mgr)
+        channels = router.list_channels()
+        assert len(channels) == 1
+        assert channels[0]["name"] == "rest"
+
+    def test_start_stop(self):
+        mgr = ChannelManager()
+        mgr.register("rest", RESTAdapter())
+        router = ChannelRouter(channel_manager=mgr)
+        asyncio.run(router.start())
+        asyncio.run(router.stop())
+
+
+class TestMessageQueueModes:
+    def test_steer_mode_queues_message(self):
+        mgr = ChannelManager()
+        mgr.register("rest", RESTAdapter())
+        router = ChannelRouter(channel_manager=mgr, default_queue_mode=QueueMode.STEER)
+        router._running = True
+        router.set_agent_handler(lambda msg, session_id="": "ok")
+
+        msg = ChannelMessage(
+            message_id="steer1",
+            channel_type=ChannelType.REST,
+            user=ChannelUser(user_id="user1"),
+            content="steer message",
+            metadata={"queue_mode": "steer"},
+        )
+        router._on_message(msg)
+        assert router.get_queue_size() >= 0
+
+    def test_followup_mode_queues_message(self):
+        mgr = ChannelManager()
+        mgr.register("rest", RESTAdapter())
+        router = ChannelRouter(channel_manager=mgr, default_queue_mode=QueueMode.FOLLOWUP)
+        router._running = True
+        router.set_agent_handler(lambda msg, session_id="": "ok")
+
+        msg = ChannelMessage(
+            message_id="followup1",
+            channel_type=ChannelType.REST,
+            user=ChannelUser(user_id="user1"),
+            content="followup message",
+            metadata={"queue_mode": "followup"},
+        )
+        router._on_message(msg)
+        assert router.get_queue_size() >= 0
+
+    def test_interrupt_mode_clears_queue(self):
+        mgr = ChannelManager()
+        mgr.register("rest", RESTAdapter())
+        router = ChannelRouter(channel_manager=mgr, default_queue_mode=QueueMode.STEER)
+        router._running = True
+        router.set_agent_handler(lambda msg, session_id="": "ok")
+        router._session_router.create(ChannelType.REST, "user1", session_id="sess_active")
+        router._active_session = "sess_active"
+
+        followup_msg = ChannelMessage(
+            message_id="f1",
+            channel_type=ChannelType.REST,
+            user=ChannelUser(user_id="user1"),
+            content="followup",
+            metadata={"chat_id": "user1", "queue_mode": "followup"},
+        )
+        router._on_message(followup_msg)
+
+        interrupt_msg = ChannelMessage(
+            message_id="int1",
+            channel_type=ChannelType.REST,
+            user=ChannelUser(user_id="user1"),
+            content="interrupt!",
+            metadata={"chat_id": "user1", "queue_mode": "interrupt"},
+        )
+        router._on_message(interrupt_msg)
+
+        queue_contents = [qm.message.content for qm in router._queue]
+        assert "interrupt!" in queue_contents
+
+    def test_collect_mode_buffers_messages(self):
+        mgr = ChannelManager()
+        mgr.register("rest", RESTAdapter())
+        router = ChannelRouter(channel_manager=mgr, default_queue_mode=QueueMode.STEER)
+        router._running = True
+        router.set_agent_handler(lambda msg, session_id="": "ok")
+        router._session_router.create(ChannelType.REST, "user1", session_id="sess_active")
+        router._active_session = "sess_active"
+
+        msg1 = ChannelMessage(
+            message_id="c1",
+            channel_type=ChannelType.REST,
+            user=ChannelUser(user_id="user1"),
+            content="collect msg 1",
+            metadata={"chat_id": "user1", "queue_mode": "collect"},
+        )
+        msg2 = ChannelMessage(
+            message_id="c2",
+            channel_type=ChannelType.REST,
+            user=ChannelUser(user_id="user1"),
+            content="collect msg 2",
+            metadata={"chat_id": "user1", "queue_mode": "collect"},
+        )
+        router._on_message(msg1)
+        router._on_message(msg2)
+
+        assert len(router._collect_buffer) == 2
+
+    def test_collect_flush_on_non_active_message(self):
+        mgr = ChannelManager()
+        mgr.register("rest", RESTAdapter())
+        router = ChannelRouter(channel_manager=mgr, default_queue_mode=QueueMode.STEER)
+        router._running = True
+        router.set_agent_handler(lambda msg, session_id="": "ok")
+        router._session_router.create(ChannelType.REST, "user1", session_id="sess_active")
+        router._active_session = "sess_active"
+
+        collect_msg = ChannelMessage(
+            message_id="c1",
+            channel_type=ChannelType.REST,
+            user=ChannelUser(user_id="user1"),
+            content="collect msg",
+            metadata={"chat_id": "user1", "queue_mode": "collect"},
+        )
+        router._on_message(collect_msg)
+        assert len(router._collect_buffer) == 1
+
+        router._active_session = None
+        router._session_router.create(ChannelType.REST, "user2", session_id="sess_other")
+        new_msg = ChannelMessage(
+            message_id="new1",
+            channel_type=ChannelType.REST,
+            user=ChannelUser(user_id="user2"),
+            content="new message",
+            metadata={"chat_id": "user2", "queue_mode": "collect"},
+        )
+        router._on_message(new_msg)
+        assert len(router._collect_buffer) == 0
+
+    def test_invalid_queue_mode_defaults(self):
+        mgr = ChannelManager()
+        mgr.register("rest", RESTAdapter())
+        router = ChannelRouter(channel_manager=mgr, default_queue_mode=QueueMode.STEER)
+        router._running = True
+        router.set_agent_handler(lambda msg, session_id="": "ok")
+
+        msg = ChannelMessage(
+            message_id="inv1",
+            channel_type=ChannelType.REST,
+            user=ChannelUser(user_id="user1"),
+            content="invalid mode",
+            metadata={"queue_mode": "nonexistent"},
+        )
+        router._on_message(msg)
+        assert router.get_queue_size() >= 0

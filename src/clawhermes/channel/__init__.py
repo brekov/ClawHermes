@@ -15,6 +15,13 @@ from clawhermes.channel.adapter import (
     RESTAdapter,
     WebSocketAdapter,
 )
+from clawhermes.channel.router import (
+    ChannelRouter,
+    QueuedMessage,
+    QueueMode,
+    SessionMapping,
+    SessionRouter,
+)
 
 __all__ = [
     "ChannelAdapter",
@@ -29,4 +36,9 @@ __all__ = [
     "CLIAdapter",
     "RESTAdapter",
     "WebSocketAdapter",
+    "ChannelRouter",
+    "QueueMode",
+    "QueuedMessage",
+    "SessionMapping",
+    "SessionRouter",
 ]

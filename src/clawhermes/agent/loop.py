@@ -8,6 +8,7 @@ import asyncio
 import json
 import logging
 import threading
+import time
 from dataclasses import dataclass
 from typing import Any, Callable, List
 
@@ -150,14 +151,12 @@ class ToolDispatcher:
         self.hooks = hook_manager
 
     def _is_parallel_safe(self, tool_name: str) -> bool:
-        """检查工具是否可以并行执行"""
         tool_def = self.registry.get(tool_name)
         if not tool_def:
             return False
         return tool_def.parallel_safe
 
     def _execute_single_tool(self, tc: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
-        """执行单个工具调用"""
         name = tc.get("function", {}).get("name", "")
         args_str = tc.get("function", {}).get("arguments", "{}")
         tool_id = tc.get("id", "")
@@ -190,8 +189,10 @@ class ToolDispatcher:
         if context.get("_delegate_manager"):
             tool_context["_delegate_manager"] = context["_delegate_manager"]
 
+        start_ms = time.monotonic() * 1000
         try:
             result = tool_def.handler(**args, **tool_context)
+            duration_ms = time.monotonic() * 1000 - start_ms
             result_data = {
                 "role": "tool",
                 "tool_call_id": tool_id,
@@ -199,8 +200,10 @@ class ToolDispatcher:
                 "content": json.dumps(result, ensure_ascii=False),
             }
         except ClawHermesError as e:
+            duration_ms = time.monotonic() * 1000 - start_ms
             result_data = self._error_result(tool_id, name, str(e))
         except Exception as e:
+            duration_ms = time.monotonic() * 1000 - start_ms
             result_data = self._error_result(tool_id, name, str(e))
 
         self.hooks.trigger(
@@ -208,15 +211,80 @@ class ToolDispatcher:
             tool_name=name,
             tool_args=args,
             tool_result=result if 'result' in locals() else None,
-            duration_ms=0,
+            duration_ms=duration_ms,
+        )
+
+        return result_data
+
+    async def _execute_single_tool_async(
+        self, tc: dict[str, Any], context: dict[str, Any]
+    ) -> dict[str, Any]:
+        name = tc.get("function", {}).get("name", "")
+        args_str = tc.get("function", {}).get("arguments", "{}")
+        tool_id = tc.get("id", "")
+
+        try:
+            args = json.loads(args_str) if isinstance(args_str, str) else args_str
+        except json.JSONDecodeError:
+            args = {}
+
+        tool_def = self.registry.get(name)
+        if not tool_def:
+            return self._error_result(tool_id, name, f"未知工具: {name}")
+
+        hook_result = await self.hooks.trigger_async(
+            HookPoint.BEFORE_TOOL_CALL,
+            tool_name=name,
+            tool_args=args,
+            context=context,
+        )
+        if hook_result.get("blocked"):
+            return self._error_result(
+                tool_id, name, hook_result.get("reason", "被钩子阻止")
+            )
+        if hook_result.get("override_args"):
+            args = hook_result["override_args"]
+
+        tool_context = dict(context)
+        if context.get("_memory_manager"):
+            tool_context["_memory_manager"] = context["_memory_manager"]
+        if context.get("_delegate_manager"):
+            tool_context["_delegate_manager"] = context["_delegate_manager"]
+
+        start_ms = time.monotonic() * 1000
+        try:
+            if asyncio.iscoroutinefunction(tool_def.handler):
+                result = await tool_def.handler(**args, **tool_context)
+            else:
+                loop = asyncio.get_running_loop()
+                result = await loop.run_in_executor(
+                    None, lambda: tool_def.handler(**args, **tool_context)
+                )
+            duration_ms = time.monotonic() * 1000 - start_ms
+            result_data = {
+                "role": "tool",
+                "tool_call_id": tool_id,
+                "name": name,
+                "content": json.dumps(result, ensure_ascii=False),
+            }
+        except ClawHermesError as e:
+            duration_ms = time.monotonic() * 1000 - start_ms
+            result_data = self._error_result(tool_id, name, str(e))
+        except Exception as e:
+            duration_ms = time.monotonic() * 1000 - start_ms
+            result_data = self._error_result(tool_id, name, str(e))
+
+        await self.hooks.trigger_async(
+            HookPoint.AFTER_TOOL_CALL,
+            tool_name=name,
+            tool_args=args,
+            tool_result=result if 'result' in locals() else None,
+            duration_ms=duration_ms,
         )
 
         return result_data
 
     def execute(self, tool_calls: list[dict], context: dict) -> list[dict]:
-        results = []
-
-        # 按并行安全性和不可并行性分组
         parallel_safe_calls = []
         serial_calls = []
 
@@ -229,15 +297,55 @@ class ToolDispatcher:
             else:
                 serial_calls.append(tc)
 
-        # 先执行所有串行工具调用
+        results = []
         for tc in serial_calls:
             result = self._execute_single_tool(tc, context)
             results.append(result)
 
-        # 再执行并行安全的工具调用（当前仍为串行，为未来并行化预留）
-        for tc in parallel_safe_calls:
-            result = self._execute_single_tool(tc, context)
+        if len(parallel_safe_calls) > 1:
+            async def _run_parallel():
+                return await asyncio.gather(*[
+                    self._execute_single_tool_async(tc, context)
+                    for tc in parallel_safe_calls
+                ])
+
+            loop = asyncio.new_event_loop()
+            try:
+                parallel_results = loop.run_until_complete(_run_parallel())
+                results.extend(parallel_results)
+            finally:
+                loop.close()
+        else:
+            for tc in parallel_safe_calls:
+                result = self._execute_single_tool(tc, context)
+                results.append(result)
+
+        return results
+
+    async def execute_async(self, tool_calls: list[dict], context: dict) -> list[dict]:
+        parallel_safe_calls = []
+        serial_calls = []
+
+        for tc in tool_calls:
+            name = tc.get("function", {}).get("name", "")
+            if name in self.NEVER_PARALLEL:
+                serial_calls.append(tc)
+            elif self._is_parallel_safe(name):
+                parallel_safe_calls.append(tc)
+            else:
+                serial_calls.append(tc)
+
+        results = []
+        for tc in serial_calls:
+            result = await self._execute_single_tool_async(tc, context)
             results.append(result)
+
+        if parallel_safe_calls:
+            parallel_results = await asyncio.gather(*[
+                self._execute_single_tool_async(tc, context)
+                for tc in parallel_safe_calls
+            ])
+            results.extend(parallel_results)
 
         return results
 
@@ -434,8 +542,7 @@ class Agent:
             tool_context = self._build_tool_context(session_id)
             tool_context["iteration"] = iteration
 
-            # 注意：工具执行仍为同步，未来可进一步异步化
-            tool_results = self.dispatcher.execute(
+            tool_results = await self.dispatcher.execute_async(
                 response.tool_calls,
                 context=tool_context,
             )
