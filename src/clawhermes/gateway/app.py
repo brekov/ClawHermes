@@ -284,7 +284,7 @@ def chat(req: ChatRequest):
         model_name = agent.llm.model if hasattr(agent, 'llm') else "unknown"
         return ChatResponse(response=response, session_id=sid, model=model_name)
     except LLMRateLimitError as e:
-        retry = e.detail.get("retry_after", 60) if hasattr(e, 'detail') else 60
+        retry = getattr(e, 'retry_after', 60)
         raise HTTPException(429, f"LLM 速率限制，{retry}秒后重试", headers={"Retry-After": str(retry)})
     except LLMConnectionError as e:
         raise HTTPException(502, f"LLM 连接失败: {e}")
@@ -323,8 +323,13 @@ def list_tools():
 
 @app.post("/memory/save")
 def save_memory(content: str = Query(...), importance: float = 0.5, scope: str = "user"):
+    from clawhermes.types import MemoryScope
     memory = _state.get_memory()
-    memory.save(content=content, importance=importance, scope=scope)
+    try:
+        ms = MemoryScope(scope)
+    except ValueError:
+        ms = MemoryScope.USER
+    memory.save(content=content, importance=importance, scope=ms)
     return {"status": "ok"}
 
 

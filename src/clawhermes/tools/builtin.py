@@ -127,7 +127,8 @@ def _base64_codec(action: str, text: str, **kwargs) -> dict:
 
 def _process_list(**kwargs) -> dict:
     """列出运行中的进程"""
-    import subprocess, platform
+    import platform
+    import subprocess
     try:
         if platform.system() == "Windows":
             result = subprocess.run(["tasklist"], capture_output=True, text=True, timeout=10)

@@ -8,7 +8,6 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import uuid
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -90,7 +89,7 @@ class MCPClient:
             raise ImportError("httpx is required for HTTP MCP transport")
 
         self._session = httpx.AsyncClient(
-            base_url=self.spec.url,
+            base_url=self.spec.url or "",
             headers=self.spec.headers or {},
             timeout=30.0,
         )
@@ -124,7 +123,8 @@ class MCPClient:
     async def list_tools(self) -> list[dict[str, Any]]:
         """列出 MCP Server 提供的所有工具"""
         result = await self._call("tools/list", {})
-        return result.get("tools", [])
+        tools: list[dict[str, Any]] = result.get("tools", [])
+        return tools
 
     async def call_tool(self, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         """调用 MCP 工具"""
@@ -164,7 +164,8 @@ class MCPClient:
 
         if "error" in response:
             raise RuntimeError(f"MCP error: {response['error']}")
-        return response.get("result", {})
+        result: dict[str, Any] = response.get("result", {})
+        return result
 
     async def _send_request_http(self, method: str, params: dict) -> dict[str, Any]:
         """通过 HTTP 发送 JSON-RPC 请求"""
@@ -182,7 +183,8 @@ class MCPClient:
         data = resp.json()
         if "error" in data:
             raise RuntimeError(f"MCP error: {data['error']}")
-        return data.get("result", {})
+        result: dict[str, Any] = data.get("result", {})
+        return result
 
     @property
     def is_connected(self) -> bool:
@@ -273,13 +275,10 @@ class MCPRegistry:
 
         def handler(**kwargs) -> dict:
             try:
-                loop = asyncio.get_running_loop()
+                asyncio.get_running_loop()
             except RuntimeError:
                 return asyncio.run(_mcp_handler(**kwargs))
-            # In running loop, use run_in_executor or create task
-            future = asyncio.ensure_future(_mcp_handler(**kwargs))
-            # For sync calls within async context, we need to block
-            # This is a known limitation; prefer async chat_async for MCP tools
+            # In running loop, prefer async chat_async for MCP tools
             return {"info": "MCP tool called; use chat_async for full support"}
 
         return handler
