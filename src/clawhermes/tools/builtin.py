@@ -26,6 +26,8 @@ FULL_TOOLS = STANDARD_TOOLS | frozenset({
     "web_fetch", "list_dir", "patch_file", "grep", "search_replace", "code_eval",
     "compress_file", "http_request", "json_query", "git_status", "git_diff",
     "git_log", "env_list", "timer", "url_encode", "url_decode", "calc",
+    "sqlite_query", "csv_parse", "hash_file", "disk_usage", "base64_codec",
+    "process_list", "image_info", "pdf_extract", "markdown_render",
 })
 
 PROFILE_MAP = {
@@ -33,6 +35,161 @@ PROFILE_MAP = {
     "standard": STANDARD_TOOLS,
     "full": FULL_TOOLS,
 }
+
+def _sqlite_query(db_path: str, query: str, params: list | None = None, **kwargs) -> dict:
+    """查询 SQLite 数据库"""
+    import sqlite3
+    try:
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        if params:
+            cursor.execute(query, params)
+        else:
+            cursor.execute(query)
+        if query.strip().upper().startswith("SELECT") or query.strip().upper().startswith("PRAGMA"):
+            rows = cursor.fetchall()
+            columns = [d[0] for d in cursor.description] if cursor.description else []
+            conn.close()
+            return {"columns": columns, "rows": [list(r) for r in rows], "count": len(rows)}
+        else:
+            conn.commit()
+            changes = conn.total_changes
+            conn.close()
+            return {"affected": changes}
+    except Exception as e:
+        return {"error": f"SQLite 查询失败: {e}"}
+
+
+def _csv_parse(path: str, delimiter: str = ",", has_header: bool = True, max_rows: int = 100, **kwargs) -> dict:
+    """解析 CSV 文件"""
+    import csv
+    try:
+        with open(path, newline="", encoding="utf-8") as f:
+            reader = csv.reader(f, delimiter=delimiter)
+            rows = []
+            headers = None
+            for i, row in enumerate(reader):
+                if i == 0 and has_header:
+                    headers = row
+                    continue
+                if i >= max_rows + (1 if has_header else 0):
+                    break
+                rows.append(row)
+            return {"headers": headers, "rows": rows, "count": len(rows)}
+    except Exception as e:
+        return {"error": f"CSV 解析失败: {e}"}
+
+
+def _hash_file(path: str, algorithm: str = "sha256", **kwargs) -> dict:
+    """计算文件哈希值"""
+    import hashlib
+    try:
+        h = hashlib.new(algorithm)
+        with open(path, "rb") as f:
+            for chunk in iter(lambda: f.read(8192), b""):
+                h.update(chunk)
+        return {"algorithm": algorithm, "hash": h.hexdigest()}
+    except Exception as e:
+        return {"error": f"哈希计算失败: {e}"}
+
+
+def _disk_usage(path: str = ".", **kwargs) -> dict:
+    """检查磁盘使用情况"""
+    import shutil
+    try:
+        usage = shutil.disk_usage(path)
+        return {
+            "path": path,
+            "total_gb": round(usage.total / (1024**3), 2),
+            "used_gb": round(usage.used / (1024**3), 2),
+            "free_gb": round(usage.free / (1024**3), 2),
+            "percent_used": round(usage.used / usage.total * 100, 1),
+        }
+    except Exception as e:
+        return {"error": f"磁盘检查失败: {e}"}
+
+
+def _base64_codec(action: str, text: str, **kwargs) -> dict:
+    """Base64 编解码"""
+    import base64
+    try:
+        if action == "encode":
+            result = base64.b64encode(text.encode()).decode()
+            return {"action": "encode", "result": result}
+        elif action == "decode":
+            result = base64.b64decode(text.encode()).decode()
+            return {"action": "decode", "result": result}
+        else:
+            return {"error": f"不支持的操作: {action}，仅支持 encode/decode"}
+    except Exception as e:
+        return {"error": f"Base64 处理失败: {e}"}
+
+
+def _process_list(**kwargs) -> dict:
+    """列出运行中的进程"""
+    import platform
+    import subprocess
+    try:
+        if platform.system() == "Windows":
+            result = subprocess.run(["tasklist"], capture_output=True, text=True, timeout=10)
+        else:
+            result = subprocess.run(["ps", "aux", "--no-headers"], capture_output=True, text=True, timeout=10)
+        lines = result.stdout.strip().split("\n")[:50]
+        return {"platform": platform.system(), "processes": lines, "count": len(lines)}
+    except Exception as e:
+        return {"error": f"进程列表获取失败: {e}"}
+
+
+def _image_info(path: str, **kwargs) -> dict:
+    """获取图片信息（宽高、格式、大小）"""
+    import os
+    try:
+        from PIL import Image
+        img = Image.open(path)
+        size_bytes = os.path.getsize(path)
+        return {
+            "format": img.format,
+            "mode": img.mode,
+            "width": img.width,
+            "height": img.height,
+            "size_bytes": size_bytes,
+            "size_kb": round(size_bytes / 1024, 1),
+        }
+    except ImportError:
+        return {"error": "Pillow 未安装 (pip install Pillow)"}
+    except Exception as e:
+        return {"error": f"图片读取失败: {e}"}
+
+
+def _pdf_extract(path: str, max_pages: int = 10, **kwargs) -> dict:
+    """提取 PDF 文本内容"""
+    try:
+        from pypdf import PdfReader
+        reader = PdfReader(path)
+        pages = []
+        for i, page in enumerate(reader.pages[:max_pages]):
+            text = page.extract_text()
+            if text:
+                pages.append({"page": i + 1, "text": text[:2000]})
+        return {"total_pages": len(reader.pages), "extracted": len(pages), "pages": pages}
+    except ImportError:
+        return {"error": "pypdf 未安装 (pip install pypdf)"}
+    except Exception as e:
+        return {"error": f"PDF 提取失败: {e}"}
+
+
+def _markdown_render(text: str, **kwargs) -> dict:
+    """将 Markdown 渲染为 HTML"""
+    try:
+        import markdown
+        html = markdown.markdown(text, extensions=["fenced_code", "tables"])
+        return {"html": html}
+    except ImportError:
+        # Fallback: basic markdown-like conversion
+        html = text.replace("\n\n", "</p><p>").replace("\n", "<br>")
+        return {"html": f"<p>{html}</p>", "note": "markdown 库未安装，使用基础转换"}
+    except Exception as e:
+        return {"error": f"Markdown 渲染失败: {e}"}
 
 
 def register_builtin_tools(registry: ToolRegistry, profile: str = "standard"):
@@ -383,6 +540,131 @@ def register_builtin_tools(registry: ToolRegistry, profile: str = "standard"):
             },
             handler=_calc,
             parallel_safe=True,
+        ),
+        ToolDef(
+            name="sqlite_query",
+            description="查询 SQLite 数据库，支持 SELECT 和 DML 语句",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "db_path": {"type": "string", "description": "SQLite 数据库文件路径"},
+                    "query": {"type": "string", "description": "SQL 查询语句"},
+                    "params": {"type": "array", "items": {"type": "string"}, "description": "查询参数"},
+                },
+                "required": ["db_path", "query"],
+            },
+            handler=_sqlite_query,
+            group="data",
+        ),
+        ToolDef(
+            name="csv_parse",
+            description="解析 CSV 文件，返回表头和行数据",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "CSV 文件路径"},
+                    "delimiter": {"type": "string", "description": "分隔符，默认逗号"},
+                    "has_header": {"type": "boolean", "description": "是否有表头行"},
+                    "max_rows": {"type": "integer", "description": "最大读取行数，默认 100"},
+                },
+                "required": ["path"],
+            },
+            handler=_csv_parse,
+            group="data",
+        ),
+        ToolDef(
+            name="hash_file",
+            description="计算文件哈希值（md5/sha1/sha256/sha512）",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "文件路径"},
+                    "algorithm": {"type": "string", "description": "哈希算法，默认 sha256"},
+                },
+                "required": ["path"],
+            },
+            handler=_hash_file,
+            parallel_safe=True,
+            group="file",
+        ),
+        ToolDef(
+            name="disk_usage",
+            description="检查磁盘使用情况，返回总容量/已用/可用",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "检查路径，默认当前目录"},
+                },
+                "required": [],
+            },
+            handler=_disk_usage,
+            parallel_safe=True,
+            group="system",
+        ),
+        ToolDef(
+            name="base64_codec",
+            description="Base64 编码或解码文本",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "action": {"type": "string", "description": "encode 或 decode"},
+                    "text": {"type": "string", "description": "要处理的文本"},
+                },
+                "required": ["action", "text"],
+            },
+            handler=_base64_codec,
+            parallel_safe=True,
+            group="util",
+        ),
+        ToolDef(
+            name="process_list",
+            description="列出系统运行中的进程",
+            parameters={"type": "object", "properties": {}},
+            handler=_process_list,
+            parallel_safe=True,
+            group="system",
+        ),
+        ToolDef(
+            name="image_info",
+            description="获取图片信息（格式、尺寸、大小），需要 Pillow",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "图片文件路径"},
+                },
+                "required": ["path"],
+            },
+            handler=_image_info,
+            parallel_safe=True,
+            group="media",
+        ),
+        ToolDef(
+            name="pdf_extract",
+            description="提取 PDF 文件文本内容，需要 pypdf",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "PDF 文件路径"},
+                    "max_pages": {"type": "integer", "description": "最大提取页数，默认 10"},
+                },
+                "required": ["path"],
+            },
+            handler=_pdf_extract,
+            group="media",
+        ),
+        ToolDef(
+            name="markdown_render",
+            description="将 Markdown 文本渲染为 HTML",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "text": {"type": "string", "description": "Markdown 文本"},
+                },
+                "required": ["text"],
+            },
+            handler=_markdown_render,
+            parallel_safe=True,
+            group="util",
         ),
     ]
 

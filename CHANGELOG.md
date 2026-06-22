@@ -1,5 +1,87 @@
 # Changelog
 
+## v0.14.0 (2026-06-22)
+
+Phase 3 中期 — 全链路异步化 / 测试覆盖率 / MCP 集成 / 工具扩展至 35
+
+### M3.11 全链路异步化
+
+- **消除全部 threading.Thread**：scheduler、BackgroundReview、Curator 全部改为 asyncio 原生
+- **CronScheduler 异步重构**：`sched.scheduler` + `threading.Thread` → `asyncio.create_task` + 动态 sleep
+- **GatewayState 增强**：`initialize()` async、`shutdown()` 优雅关闭、`_bg_tasks` 后台任务管理
+- **BackgroundReview**：`threading.Thread` → `asyncio.to_thread`，不阻塞事件循环
+- **Curator**：`threading.Thread` → `asyncio.create_task` + `asyncio.sleep`
+
+### M3.12 测试覆盖率提升
+
+- **66% → 71%**（+107 测试，203 → 310）
+- **Gateway 端点全覆盖**：health, tools, memory, skills, curator, sessions, cron, channels
+- **组件全覆盖**：SkillManager, BackgroundReview, Curator, MemoryProvider, SessionManager, ChannelManager, SessionRouter, HookManager, ToolRegistry, DelegateManager, GatewayState
+- **异常类 100%**、**类型模块 100%**
+
+### M3.7 MCP 客户端集成
+
+- **新增 `clawhermes/mcp/` 模块**：MCPClient (stdio + HTTP 双传输, JSON-RPC 2.0) + MCPRegistry
+- **MCPServerSpec**：声明式 MCP Server 配置
+- **Gateway 端点**：`POST /mcp/servers`、`GET /mcp/servers`、`DELETE /mcp/servers/{name}`
+
+### M3.10 内置工具扩展至 35
+
+- **新增 9 个工具**：
+  - `sqlite_query` — SQLite 数据库查询（stdlib sqlite3）
+  - `csv_parse` — CSV 文件解析（stdlib csv）
+  - `hash_file` — 文件哈希 (md5/sha1/sha256/sha512)（stdlib hashlib）
+  - `disk_usage` — 磁盘使用情况（stdlib shutil）
+  - `base64_codec` — Base64 编解码（stdlib base64）
+  - `process_list` — 系统进程列表
+  - `image_info` — 图片信息（可选 Pillow）
+  - `pdf_extract` — PDF 文本提取（可选 pypdf）
+  - `markdown_render` — Markdown → HTML（可选 markdown）
+- **工具总数**：26 → 35，跨越 data / file / system / util / media 5 个新分组
+
+### 质量
+
+- 310 测试全部通过
+- ruff 0 errors | mypy 0 errors（6 strict checks）
+- 代码行数：~3,700 行（+301 行 MCP 模块, +281 行工具扩展）
+
+
+## v0.14.0 (2026-06-22)
+
+Phase 3 中期 — 全链路异步化 / 测试覆盖率提升 / MCP 集成
+
+### M3.11 全链路异步化
+
+- **消除全部 threading.Thread**：scheduler、BackgroundReview、Curator 全部改为 asyncio 原生
+- **CronScheduler 异步重构**：`sched.scheduler` + `threading.Thread` → `asyncio.create_task` + `asyncio.sleep`，动态计算 sleep 时长
+- **GatewayState.shutdown()**：新增优雅关闭方法，取消所有后台任务
+- **GatewayState.initialize() → async**：支持异步初始化调度器和后台任务
+- **BackgroundReview 异步化**：`threading.Thread` → `asyncio.to_thread`，不阻塞事件循环
+- **Curator 异步化**：`threading.Thread` → `asyncio.create_task` + `asyncio.sleep`
+
+### M3.12 测试覆盖率提升
+
+- **66% → 73%**（+91 测试，203 → 301）
+- **Gateway 端点全覆盖**：health、tools、memory、skills、curator、sessions、cron、channels 全部端点
+- **内置工具 handlers**：18 个工具 handler 函数的新增测试
+- **组件全覆盖**：SkillManager、BackgroundReview、Curator、MemoryProvider、SessionManager、ChannelManager、SessionRouter、HookManager、ToolRegistry、DelegateManager、GatewayState
+- **异常类全覆盖**：ClawHermesError 层次结构 100% 覆盖
+
+### M3.7 MCP 客户端集成
+
+- **新增 `clawhermes/mcp/` 模块**：MCP (Model Context Protocol) 客户端实现
+- **MCPClient**：支持 stdio（子进程）和 HTTP 两种传输方式，JSON-RPC 2.0 协议
+- **MCPRegistry**：管理多个 MCP Server，自动发现工具并注册到 ToolRegistry
+- **MCPServerSpec**：声明式 MCP Server 配置描述
+- **Gateway 集成**：`POST /mcp/servers`、`GET /mcp/servers`、`DELETE /mcp/servers/{name}` 三个端点
+
+### 质量
+
+- 301 测试全部通过
+- ruff 0 errors | mypy 0 errors（6 strict checks）
+- 测试覆盖率 71%（TOTAL: 3220 stmts / 935 missed）
+
+
 ## v0.13.0 (2026-06-17)
 
 Phase 3 核心架构强化 — 并行执行 / 搜索重构 / Gateway 状态重构 / 线程安全

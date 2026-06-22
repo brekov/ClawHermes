@@ -1,13 +1,12 @@
 """
 ClawHermes - Cron 调度器
-基于 Python 标准库的轻量级任务调度，支持 cron / interval / oneshot 三种模式
+基于 asyncio 的轻量级任务调度，支持 cron / interval / oneshot 三种模式
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
-import sched
-import threading
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -130,17 +129,16 @@ class ScheduledJob:
 
 
 class CronScheduler:
-    """基于标准库 sched 的任务调度器"""
+    """基于 asyncio 的任务调度器"""
 
     def __init__(self, data_dir: str | Path):
         self._data_dir = Path(data_dir)
         self._data_dir.mkdir(parents=True, exist_ok=True)
         self._db_path = self._data_dir / "schedules.json"
         self._jobs: dict[str, ScheduledJob] = {}
-        self._scheduler = sched.scheduler(time.time, time.sleep)
-        self._lock = threading.Lock()
+        self._lock = asyncio.Lock()
         self._running = False
-        self._thread: threading.Thread | None = None
+        self._task: asyncio.Task[Any] | None = None
         self._executor: Callable[[str, str], str] | None = None
         self._load_jobs()
 
@@ -165,105 +163,102 @@ class CronScheduler:
             metadata=metadata or {},
         )
         job.next_run = self._compute_next_run(job)
-
-        with self._lock:
-            self._jobs[job.job_id] = job
-            self._save_jobs()
-            if self._running:
-                self._schedule_job(job)
-
-        logger.info("Job created: %s (%s, mode=%s)", job.job_id, name, spec.mode.value)
+        self._jobs[job.job_id] = job
+        self._save_jobs()
+        logger.info("Job created: %s (%s)", job.job_id, job.name)
         return job
 
     def get_job(self, job_id: str) -> ScheduledJob | None:
-        with self._lock:
-            return self._jobs.get(job_id)
+        return self._jobs.get(job_id)
 
     def list_jobs(self, status: str | None = None) -> list[ScheduledJob]:
-        with self._lock:
-            jobs = list(self._jobs.values())
-            if status:
-                jobs = [j for j in jobs if j.status.value == status]
-            return sorted(jobs, key=lambda j: j.created_at)
-
-    def delete_job(self, job_id: str) -> bool:
-        with self._lock:
-            if job_id not in self._jobs:
-                return False
-            del self._jobs[job_id]
-            self._save_jobs()
-            return True
+        jobs = list(self._jobs.values())
+        if status:
+            jobs = [j for j in jobs if j.status.value == status]
+        return jobs
 
     def pause_job(self, job_id: str) -> bool:
-        with self._lock:
-            job = self._jobs.get(job_id)
-            if not job or job.status != JobStatus.PENDING:
-                return False
+        job = self._jobs.get(job_id)
+        if not job:
+            return False
+        if job.status == JobStatus.PENDING:
             job.status = JobStatus.PAUSED
             self._save_jobs()
             return True
+        return False
 
     def resume_job(self, job_id: str) -> bool:
-        with self._lock:
-            job = self._jobs.get(job_id)
-            if not job or job.status != JobStatus.PAUSED:
-                return False
+        job = self._jobs.get(job_id)
+        if not job:
+            return False
+        if job.status == JobStatus.PAUSED:
             job.status = JobStatus.PENDING
             job.next_run = self._compute_next_run(job)
             self._save_jobs()
-            if self._running:
-                self._schedule_job(job)
             return True
+        return False
 
-    def start(self) -> None:
+    def delete_job(self, job_id: str) -> bool:
+        if job_id in self._jobs:
+            del self._jobs[job_id]
+            self._save_jobs()
+            return True
+        return False
+
+    async def start(self) -> None:
+        """启动调度器（异步）"""
         if self._running:
             return
         self._running = True
 
-        with self._lock:
+        # 为所有 PENDING 任务计算下次运行时间
+        async with self._lock:
             for job in self._jobs.values():
                 if job.status == JobStatus.PENDING:
                     job.next_run = self._compute_next_run(job)
-                    self._schedule_job(job)
+                elif job.status == JobStatus.PAUSED:
+                    job.next_run = float("inf")
 
-        def _run_loop():
-            while self._running:
-                try:
-                    delay = self._scheduler.run(blocking=False)
-                    if delay is None or delay > 1:
-                        time.sleep(1)
-                    elif delay > 0:
-                        time.sleep(delay)
-                except Exception as e:
-                    logger.error("Scheduler loop error: %s", e)
-                    time.sleep(5)
-
-        self._thread = threading.Thread(target=_run_loop, daemon=True)
-        self._thread.start()
+        self._task = asyncio.create_task(self._run_loop())
         logger.info("CronScheduler started (%d jobs)", len(self._jobs))
 
-    def stop(self) -> None:
+    async def _run_loop(self) -> None:
+        """主调度循环 — 动态计算 sleep 时长，基于最近到期时间"""
+        while self._running:
+            now = time.time()
+            async with self._lock:
+                ready = [
+                    j for j in self._jobs.values()
+                    if j.status == JobStatus.PENDING and j.next_run <= now
+                ]
+                pending_times = [
+                    j.next_run for j in self._jobs.values()
+                    if j.status == JobStatus.PENDING and j.next_run < float("inf")
+                ]
+                if pending_times:
+                    next_at = min(pending_times)
+                    sleep_for = max(0.5, min(5.0, next_at - now))
+                else:
+                    sleep_for = 5.0
+
+            for job in ready:
+                await self._execute_job(job.job_id)
+
+            await asyncio.sleep(sleep_for)
+
+    async def stop(self) -> None:
         self._running = False
-        if self._thread:
-            self._thread.join(timeout=5)
-            self._thread = None
+        if self._task:
+            self._task.cancel()
+            try:
+                await self._task
+            except asyncio.CancelledError:
+                pass
+            self._task = None
         logger.info("CronScheduler stopped")
 
-    def _schedule_job(self, job: ScheduledJob) -> None:
-        if job.next_run <= time.time():
-            delay: float = 0.0
-        else:
-            delay = job.next_run - time.time()
-
-        self._scheduler.enter(
-            delay=delay,
-            priority=0,
-            action=self._execute_job,
-            argument=(job.job_id,),
-        )
-
-    def _execute_job(self, job_id: str) -> None:
-        with self._lock:
+    async def _execute_job(self, job_id: str) -> None:
+        async with self._lock:
             job = self._jobs.get(job_id)
             if not job or job.status in (JobStatus.PAUSED, JobStatus.CANCELLED):
                 return
@@ -277,7 +272,7 @@ class CronScheduler:
             else:
                 logger.warning("No executor set for job %s", job_id)
 
-            with self._lock:
+            async with self._lock:
                 job = self._jobs.get(job_id)
                 if job:
                     job.status = JobStatus.PENDING if job.spec.mode != ScheduleMode.ONESHOT else JobStatus.COMPLETED
@@ -286,7 +281,7 @@ class CronScheduler:
 
         except Exception as e:
             logger.error("Job %s failed: %s", job_id, e)
-            with self._lock:
+            async with self._lock:
                 job = self._jobs.get(job_id)
                 if job:
                     job.status = JobStatus.FAILED
@@ -295,13 +290,9 @@ class CronScheduler:
                     if job.spec.mode != ScheduleMode.ONESHOT and job.error_count < 3:
                         job.status = JobStatus.PENDING
 
-        if job and job.spec.mode != ScheduleMode.ONESHOT:
-            with self._lock:
+        async with self._lock:
+            if job and job.spec.mode != ScheduleMode.ONESHOT:
                 job.next_run = self._compute_next_run(job)
-                if job.status == JobStatus.PENDING:
-                    self._schedule_job(job)
-            self._save_jobs()
-        else:
             self._save_jobs()
 
     def _compute_next_run(self, job: ScheduledJob) -> float:
@@ -346,15 +337,16 @@ class CronScheduler:
             return
         try:
             data = json.loads(self._db_path.read_text(encoding="utf-8"))
-            with self._lock:
-                for item in data:
-                    job = ScheduledJob.from_dict(item)
-                    if job.status in (JobStatus.PENDING, JobStatus.PAUSED):
-                        job.status = JobStatus.PENDING if job.status != JobStatus.PAUSED else JobStatus.PAUSED
-                    if job.status == JobStatus.RUNNING:
-                        job.status = JobStatus.FAILED
-                        job.last_error = "Interrupted by restart"
-                    self._jobs[job.job_id] = job
+            for item in data:
+                if not isinstance(item, dict):
+                    continue
+                job = ScheduledJob.from_dict(item)
+                if job.status in (JobStatus.PENDING, JobStatus.PAUSED):
+                    job.status = JobStatus.PENDING if job.status != JobStatus.PAUSED else JobStatus.PAUSED
+                if job.status == JobStatus.RUNNING:
+                    job.status = JobStatus.FAILED
+                    job.last_error = "Interrupted by restart"
+                self._jobs[job.job_id] = job
             logger.info("Loaded %d jobs from %s", len(self._jobs), self._db_path)
         except Exception as e:
             logger.error("Failed to load jobs: %s", e)
@@ -371,5 +363,4 @@ class CronScheduler:
 
     @property
     def job_count(self) -> int:
-        with self._lock:
-            return len(self._jobs)
+        return len(self._jobs)
