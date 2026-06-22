@@ -2,7 +2,7 @@
 
 > 版本：v3.0
 > 日期：2026-06-17
-> 状态：Phase 1 ✅ | Phase 2 ✅ | Phase 3 🔄
+> 状态：Phase 1 ✅ | Phase 2 ✅ | Phase 3 ✅ (v0.14.0) | Phase 3 续 🔄 (v0.15.0+)
 
 > **v0.10.0 重要决策**：ClawHermes 移除全部消息渠道代码（飞书、微信、QQ、Telegram），回归纯 AI Agent 框架定位。
 > ClawHermes 专注 Agent 核心能力，消息渠道由部署者自行集成。
@@ -65,7 +65,7 @@
 | F10 | 上下文压缩 | P2 | 两者共有 | ✅ |
 | F11 | 多凭证池与故障转移 | P2 | Hermes | ✅ |
 | F12 | 子 Agent 委派 | P2 | Hermes | ✅ |
-| F13 | MCP 集成（MCP 客户端，动态工具发现） | P1 | Hermes | 📋 |
+| F13 | MCP 集成（MCP 客户端，动态工具发现） | P1 | Hermes | ✅ v0.14.0 |
 | F14 | Progressive Disclosure 技能加载（3 级加载模式） | P2 | Hermes | 📋 |
 | F15 | 条件激活技能（fallback_for_toolsets/requires_toolsets） | P2 | Hermes | 📋 |
 | F16 | 消息队列模式（steer/followup/collect/interrupt） | P1 | OpenClaw | 📋 |
@@ -76,7 +76,7 @@
 | F21 | Canvas 可视化工作区（A2UI） | P3 | OpenClaw | 📋 |
 | F22 | 轨迹生成（ShareGPT 格式训练数据） | P3 | Hermes | 📋 |
 
-> **F5 重构说明**：v0.10.0 移除旧实现（架构混乱、代码质量不达标），v0.13.0 重构重新引入。v0.12.0 新增了 Channel Adapter SDK（ABC + CLI/REST/WebSocket），但 Gateway（app.py）并未集成 Channel SDK，/chat 端点直接调用 Agent.chat()，绕过了 ChannelAdapter。重构版将彻底解决这一问题。
+> **F5 重构说明**：v0.10.0 移除旧实现（架构混乱、代码质量不达标），v0.13.0 重构重新引入。v0.12.0~v0.13.0 新增了 Channel Adapter SDK + Channel Router（ABC + CLI/REST/WebSocket），但 Gateway（app.py）并未集成 Channel SDK，/chat 端点直接调用 Agent.chat()，绕过了 ChannelAdapter。重构版将彻底解决这一问题。
 
 **F5: 消息渠道系统（重构版）**
 - 优先级：P0
@@ -292,10 +292,10 @@ Agent 提供 REST API，上层应用（飞书/微信/网页等）通过 Channel 
 
 ---
 
-## 8. Phase 3 进行中（v0.12.0+）
+## 8. Phase 3 进行中（v0.12.0~v0.14.0 ✅ | v0.15.0+ 🔄）
 
-> 状态：🔄 进行中
-> 目标：生态建设 — 联邦技能中心、多模态记忆、用户建模
+> 状态：v0.14.0 已交付 ✅
+> 目标：生态建设 — 联邦技能中心、MCP 集成、全链路异步化、工具扩展
 
 | 里程碑 | 功能 | 优先级 | 说明 | 状态 |
 |--------|------|--------|------|:----:|
