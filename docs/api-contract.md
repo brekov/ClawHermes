@@ -266,6 +266,11 @@ GET  /cron/jobs/{id}    获取定时任务详情 → { job: {...} }
 DELETE /cron/jobs/{id}  删除定时任务 → { status }
 POST /cron/jobs/{id}/pause   暂停定时任务 → { status }
 POST /cron/jobs/{id}/resume  恢复定时任务 → { status }
+
+POST /mcp/servers      添加 MCP Server { name, transport, command?, args?, url? }
+                       → { status, server, tools, count }
+GET  /mcp/servers      列出所有 MCP Server → { servers, count }
+DELETE /mcp/servers/{name}  移除 MCP Server → { status }
 ```
 
 ### 数据模型

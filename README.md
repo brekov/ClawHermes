@@ -4,10 +4,10 @@
 
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![Tests: 165 passed](https://img.shields.io/badge/tests-165%20passed-brightgreen)](tests/)
-[![Coverage: 65%](https://img.shields.io/badge/coverage-65%25-yellow)](tests/)
+[![Tests: 310 passed](https://img.shields.io/badge/tests-171%20passed-brightgreen)](tests/)
+[![Coverage: 71%](https://img.shields.io/badge/coverage-71%25-yellow)](tests/)
 [![Ruff](https://img.shields.io/badge/ruff-0%20errors-brightgreen)](pyproject.toml)
-[![v0.12.2](https://img.shields.io/badge/version-0.12.2-blue)](CHANGELOG.md)
+[![v0.14.0](https://img.shields.io/badge/version-0.12.2-blue)](CHANGELOG.md)
 
 ---
 
@@ -85,7 +85,7 @@ curl http://127.0.0.1:18789/sessions
 │                                                               │
 │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────────┐    │
 │  │ 工具系统  │ │ 记忆系统  │ │ 技能系统  │ │ 子Agent委派  │    │
-│  │ 26工具   │ │ JSON+    │ │ Manager+ │ │ 并行执行     │    │
+│  │ 35工具   │ │ JSON+    │ │ Manager+ │ │ 并行执行     │    │
 │  │ 3级Profile│ │ ChromaDB │ │ Review+  │ │ 防死锁(F12)  │    │
 │  │ 钩子+策略 │ │ 向量搜索  │ │ Curator  │ │              │    │
 │  └──────────┘ └──────────┘ └──────────┘ └──────────────┘    │
@@ -106,7 +106,7 @@ curl http://127.0.0.1:18789/sessions
 |:---:|:---|:---|
 | F1 | **多 LLM 接入** | litellm 驱动，132 个 provider，`provider/model` 格式切换 |
 | F2 | **对话主循环** | 思考-行动循环，50 次迭代上限，自动中断保护 |
-| F3 | **工具系统** | 26 个内置工具，3 级 Profile，JSON Schema 生成 |
+| F3 | **工具系统** | 35 个内置工具，3 级 Profile，JSON Schema 生成 |
 | F4 | **持久化记忆** | JSON 文件 + ChromaDB 双存储，语义搜索 |
 | F5 | **会话持久化** | SQLite WAL 模式，重启不丢失，过期自动清理 |
 | F6 | **技能系统** | SkillManager，元数据持久化，上下文注入 |
@@ -226,11 +226,15 @@ src/clawhermes/
 │   └── adapter.py          # 渠道适配器 ABC + CLI/REST/WebSocket 适配器
 │
 ├── tools/
-│   └── builtin.py          # 26 个内置工具 + 3 级 Profile
+│   └── builtin.py          # 35 个内置工具 + 3 级 Profile
 │
 ├── skills/
 │   ├── manager.py          # 技能系统 + Background Review + Curator
 │   └── hub.py              # 联邦技能中心（发布/安装/验证）
+│
+├── mcp/
+│   ├── __init__.py           # MCP 集成
+│   └── client.py             # MCP 客户端 (stdio + HTTP)
 │
 ├── storage/
 │   └── chroma_memory.py    # ChromaDB 向量记忆
@@ -306,8 +310,9 @@ mypy src/
 | Phase | 版本 | 目标 | 状态 |
 |:------|:-----|:-----|:----:|
 | Phase 1 | v0.11.0 | 代码质量与稳定性 | ✅ |
-| Phase 2 | v0.12.0~v0.13.0 | 功能增强（Channel SDK / Cron / Docker Sandbox / ACE） | ✅ |
-| Phase 3 | v0.14.0~v0.15.0 | 生态建设（Skill Hub / Multi-Modal Memory） | 🔄 |
+| Phase 2 | v0.12.0~v0.13.0 | 功能增强 | ✅（Channel SDK / Cron / Docker Sandbox / ACE） | ✅ |
+| Phase 3 | v0.14.0 | 生态建设 + 异步化 | ✅（Skill Hub / Multi-Modal Memory） | 🔄 |
+| Phase 3 续 | v0.15.0~v0.16.0 | 渠道 + Streaming + 多模态 | 🔄
 | Phase 4 | v1.0.0 | 体验与差异化（Dashboard / Workflow Builder） | 📋 |
 
 详见 [开发计划](docs/development-plan.md)
