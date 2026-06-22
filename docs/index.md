@@ -1,7 +1,7 @@
 # ClawHermes
 
 > 融合 **Hermes** 自进化能力与 **OpenClaw** Gateway 体系的 Python AI Agent 框架
-> v0.14.0 · 28 个源文件 · 310 个测试通过 · 35 个内置工具
+> v0.14.0 · 27 个源文件 · 310 个测试通过 · 35 个内置工具
 
 ---
 

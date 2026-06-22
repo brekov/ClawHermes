@@ -49,7 +49,7 @@
 │  └──────────┘                                                       │
 │                                                                      │
 │  ┌──────────┐ ┌──────────────────────────────────────────────────┐  │
-│  │ ACE 自适 │ │ 消息队列层（规划中）                              │  │
+│  │ ACE 自适 │ │ 消息队列层（✅ v0.14.0）                          │  │
 │  │ 应上下文 │ │ steer / followup / collect / interrupt 四模式     │  │
 │  │ 压缩引擎 │ │ Profile 隔离 · 设备安全（规划中）                  │  │
 │  └──────────┘ └──────────────────────────────────────────────────┘  │
@@ -59,7 +59,7 @@
 │                         基础服务层                                    │
 │  ┌────────────┐ ┌──────────────┐ ┌──────────────┐ ┌──────────────┐  │
 │  │ LLM        │ │ 持久化       │ │ 凭证管理     │ │ MCP 客户端   │  │
-│  │ Provider   │ │ (SQLite WAL │ │ Credential   │ │ (规划中)     │  │
+│  │ Provider   │ │ (SQLite WAL │ │ Credential   │ │ (✅v0.14.0)  │  │
 │  │ litellm    │ │  + JSONL    │ │ Pool 4策略   │ │ 动态工具发现 │  │
 │  │ 132+模型   │ │  + ChromaDB)│ │              │ │              │  │
 │  └────────────┘ └──────────────┘ └──────────────┘ └──────────────┘  │
@@ -198,7 +198,7 @@ Background Review（异步线程）
 返回用户
 ```
 
-### 3.2 消息队列流程（规划中，借鉴 OpenClaw）
+### 3.2 消息队列流程（✅ v0.14.0，借鉴 OpenClaw）
 
 ```
 消息到达 → 当前 Agent 状态？
@@ -451,8 +451,8 @@ media:
 | 包管理 | uv | 比 pip 快 10-100 倍 |
 | 测试 | pytest + pytest-asyncio | 行业标准 |
 | 代码质量 | ruff + mypy | 零配置 lint + 类型检查 |
-| MCP 集成方式 | **客户端模式**（规划中） | 作为 MCP Client 动态发现外部工具，无需自建 MCP Server；与服务端模式相比，客户端模式更灵活，可接入任意 MCP 兼容工具源 |
-| 消息队列模式 | **steer 优先**（规划中） | steer 模式实时性最佳，适合交互式场景；followup 作为备选，适合批量任务；可通过 `CH_QUEUE_MODE` 配置切换 |
+| MCP 集成方式 | **客户端模式**（✅ v0.14.0） | 作为 MCP Client 动态发现外部工具，支持 stdio + HTTP 双传输，JSON-RPC 2.0 协议，无需自建 MCP Server |
+| 消息队列模式 | **steer 优先**（✅ v0.14.0） | steer/followup/collect/interrupt 四模式已实现，通过 `QueueMode` 枚举 + `CH_QUEUE_MODE` 配置切换 |
 | Profile 隔离 | **目录隔离**（规划中） | 每个 Profile 独立数据目录（skills/、memory/、sessions.db），零进程开销；进程隔离方案留作 v2.0+ 选项 |
 | 技能加载策略 | **Progressive Disclosure**（规划中） | 按 Profile 级别渐进暴露工具，minimal→standard→full，减少认知负荷和 token 消耗；全量加载仅用于调试场景 |
 | 流式输出 | **Block Streaming**（规划中） | 按 SSE 块流式输出（工具调用块、文本块分别推送），兼顾实时性和完整性；完整响应模式作为降级方案 |
@@ -536,11 +536,9 @@ gateway/app.py
 
 | 模块 | 职责 | 阶段 |
 |------|------|------|
-| `mcp/client.py` | MCP 客户端（动态工具发现和注册） | Phase 3 |
-| `agent/queue.py` | 消息队列（steer/followup/collect/interrupt） | Phase 3 |
+| `agent/queue.py` | 消息队列独立模块（当前内联于 loop.py / types.py） | Phase 4 |
 | `agent/profile.py` | Profile 隔离（多 Profile 并发运行） | Phase 3 |
 | `agent/security.py` | 设备安全（DM 配对 + 签名挑战） | Phase 3 |
-| `channel/router.py` | 消息路由 + 队列 + 配对 | Phase 3 |
 | `channel/config.py` | 渠道配置管理 + 热加载 | Phase 3 |
 | `channel/streaming.py` | Block Streaming | Phase 3 |
 | `channel/adapters/telegram.py` | Telegram 适配器 | Phase 3 |

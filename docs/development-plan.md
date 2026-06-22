@@ -91,7 +91,7 @@ v1.0.0 时 ClawHermes 应成为：
 | F2 | 思考-行动循环（50 次上限 + 7 钩子点） | `agent/loop.py` | ✅ |
 | F3 | 35 内置工具 + 3 级 Profile（minimal/standard/full） | `tools/builtin.py` | ✅ |
 | F4 | 双存储记忆（JSON + ChromaDB 向量语义搜索） | `agent/memory.py` | ✅ |
-| F5 | 会话持久化（SQLite + aiosqlite WAL 异步安全） | `agent/session.py` | ✅ |
+| F5 | 会话持久化（SQLite WAL + threading.Lock 线程安全） | `agent/session.py` | ✅ |
 | F6 | 技能管理（SkillManager + CRUD + 元数据） | `skills/manager.py` | ✅ |
 | F7 | 自进化闭环（Background Review + Curator 定期维护） | `skills/manager.py` | ✅ |
 | F8 | 工具钩子（before/after 7 钩子点 + 异步超时保护） | `agent/loop.py` | ✅ |

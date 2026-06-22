@@ -1,6 +1,6 @@
 # ClawHermes · 完整功能介绍
 
-> 版本：v0.14.0 | 源文件：28 个 | 测试：310/310 ✅
+> 版本：v0.14.0 | 源文件：27 个 | 测试：310/310 ✅
 > GitHub：https://github.com/brekov/ClawHermes
 
 ---
