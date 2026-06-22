@@ -57,7 +57,7 @@
 | F2 | 对话主循环（思考-行动） | P0 | 两者共有 | ✅ |
 | F3 | 工具系统（注册/调度/执行） | P0 | 两者共有 | ✅ |
 | F4 | 持久化记忆（跨会话） | P0 | Hermes | ✅ |
-| F5 | 消息渠道系统（重构版） | P0 | OpenClaw + Hermes 融合设计 | 🔄 v0.10.0 移除旧实现，v0.13.0 重构重新引入 |
+| F5 | 消息渠道系统（重构版） | P0 | OpenClaw + Hermes 融合设计 | 🔄 v0.10.0 移除旧实现，v0.13.0~v0.14.0 重构重新引入 |
 | F6 | 技能系统（Skills） | P1 | Hermes | ✅ |
 | F7 | 自进化机制（Background Review） | P1 | Hermes | ✅ |
 | F8 | 工具钩子系统（before/after tool call） | P1 | OpenClaw | ✅ |
@@ -76,7 +76,7 @@
 | F21 | Canvas 可视化工作区（A2UI） | P3 | OpenClaw | 📋 |
 | F22 | 轨迹生成（ShareGPT 格式训练数据） | P3 | Hermes | 📋 |
 
-> **F5 重构说明**：v0.10.0 移除旧实现（架构混乱、代码质量不达标），v0.13.0 重构重新引入。v0.12.0~v0.13.0 新增了 Channel Adapter SDK + Channel Router（ABC + CLI/REST/WebSocket），但 Gateway（app.py）并未集成 Channel SDK，/chat 端点直接调用 Agent.chat()，绕过了 ChannelAdapter。重构版将彻底解决这一问题。
+> **F5 重构说明**：v0.10.0 移除旧实现（架构混乱、代码质量不达标），v0.13.0 重构重新引入。v0.12.0~v0.14.0 新增了 Channel Adapter SDK + Channel Router（ABC + CLI/REST/WebSocket），但 Gateway（app.py）并未集成 Channel SDK，/chat 端点直接调用 Agent.chat()，绕过了 ChannelAdapter。重构版将彻底解决这一问题。
 
 **F5: 消息渠道系统（重构版）**
 - 优先级：P0
@@ -102,11 +102,12 @@
 | CLI | P0 | 内置 | 已实现，命令行交互 |
 | REST | P0 | 内置 | 已实现，HTTP API |
 | WebSocket | P0 | 内置 | 已实现，实时双向 |
-| Telegram | P1 | 内置 | python-telegram-bot，Bot API，最易上手 |
-| Discord | P1 | 内置 | discord.py，Bot API + Gateway |
-| Slack | P1 | 内置 | slack-bolt，Bolt SDK |
-| 飞书 | P2 | 内置 | lark-oapi，WebSocket 事件订阅 |
-| 微信 | P2 | 外部插件 | wechatpy/iLink，QR 扫码登录 |
+| 飞书 | P0 | 内置 | lark-oapi，WebSocket 事件订阅，国内办公首选 |
+| 微信 | P0 | 内置 | 公众号/企业微信，覆盖最广用户群 |
+| QQ | P1 | 内置 | QQ Bot API，年轻用户主力 |
+| Telegram | P1 | 内置 | python-telegram-bot，Bot API |
+| Discord | P2 | 内置 | discord.py，Bot API + Gateway |
+| Slack | P2 | 内置 | slack-bolt，Bolt SDK |
 | WebChat | P2 | 内置 | 基于 WebSocket 的 Web 聊天界面 |
 
 ### 2.2 已实现的扩展能力（Phase 1-2）
@@ -117,7 +118,7 @@
 | E2 | Cron 调度器 | cron/interval/oneshot，JSON 持久化 | ✅ |
 | E3 | Docker Sandbox | 安全执行，资源限制，SandboxPool | ✅ |
 | E4 | ACE 自适应上下文引擎 | 4 种对话类型检测 + 自动压缩策略 | ✅ |
-| E5 | 内置工具集 26 个 | minimal(5)/standard(9)/full(26) 三级 profile | ✅ |
+| E5 | 内置工具集 35 个 | minimal(5)/standard(9)/full(35) 三级 profile | ✅ |
 | E6 | 异步钩子 | async handler + 超时保护 | ✅ |
 | E7 | Federated Skill Hub | SkillManifest + SkillHub，基于 Git 的联邦技能中心 | ✅ |
 | E8 | 会话持久化 | SessionManager (SQLite WAL)，重启不丢失 | ✅ |
@@ -158,7 +159,7 @@
 ### 场景二：代码助手 ✅
 程序员在终端通过 CLI 与 Agent 交互，Agent 能够读写文件、执行命令、安装依赖、提交代码。Docker Sandbox 提供安全执行环境，工具策略引擎控制权限边界。
 
-**已实现**：26 个内置工具（含 git_status/git_diff/git_log/code_eval）、Docker Sandbox、工具策略引擎（allow/deny）、ACE 上下文压缩。
+**已实现**：35 个内置工具（含 sqlite_query/csv_parse/hash_file/base64_codec/pdf_extract 等）、MCP 动态工具、Docker Sandbox、工具策略引擎（allow/deny）、ACE 上下文压缩。
 
 ### 场景三：团队机器人 ✅
 Agent 提供 REST API，上层应用（飞书/微信/网页等）通过 Channel Adapter SDK 接入 Agent 能力，成员可以通过任意前端与 Agent 交互。Cron 调度器支持定时任务。
@@ -176,7 +177,7 @@ Agent 提供 REST API，上层应用（飞书/微信/网页等）通过 Channel 
 **待实现**：F16 消息队列模式、F15 条件激活技能、F22 轨迹生成。
 
 ### 场景六：多渠道个人助理 📋
-用户通过 Telegram 与 Agent 日常对话，工作时切换到 Slack，回家后用 WebChat。所有渠道共享同一 Agent 实例和记忆，跨渠道会话连续。消息队列模式确保 Agent 忙碌时新消息不会丢失。
+用户通过飞书与 Agent 日常对话，工作时切换到 Slack，回家后用 WebChat。所有渠道共享同一 Agent 实例和记忆，跨渠道会话连续。消息队列模式确保 Agent 忙碌时新消息不会丢失。
 
 **待实现**：F5 消息渠道系统、F16 消息队列模式、F17 Block Streaming。
 
@@ -292,7 +293,7 @@ Agent 提供 REST API，上层应用（飞书/微信/网页等）通过 Channel 
 
 ---
 
-## 8. Phase 3 进行中（v0.12.0~v0.14.0 ✅ | v0.15.0+ 🔄）
+## 8. Phase 3 进行中（v0.13.0~v0.14.0 ✅ | v0.15.0+ 🔄）
 
 > 状态：v0.14.0 已交付 ✅
 > 目标：生态建设 — 联邦技能中心、MCP 集成、全链路异步化、工具扩展
@@ -308,13 +309,15 @@ Agent 提供 REST API，上层应用（飞书/微信/网页等）通过 Channel 
 | M3.6b | 消息队列模式 | P0 | steer/followup/collect/interrupt | 📋 |
 | M3.6c | Block Streaming | P1 | 完成即发送模式 | 📋 |
 | M3.6d | DM 配对安全 | P1 | 配对码 + 管理员审批 | 📋 |
-| M3.6e | Telegram 适配器 | P1 | Bot API，最易上手的渠道 | 📋 |
-| M3.6f | Discord 适配器 | P1 | Bot API + Gateway | 📋 |
-| M3.6g | Slack 适配器 | P1 | Bolt SDK | 📋 |
-| M3.6h | 飞书适配器 | P2 | WebSocket 事件订阅 | 📋 |
-| M3.6i | WebChat 适配器 | P2 | 基于 WebSocket 的 Web 聊天 | 📋 |
-| M3.6j | 渠道配置热加载 | P2 | YAML 配置变更无需重启 | 📋 |
-| M3.6k | 媒体处理 | P2 | 图片/文件/语音消息 | 📋 |
+| M3.6e | 飞书适配器 | P0 | WebSocket 事件订阅，国内办公首选 | 📋 |
+| M3.6f | 微信适配器 | P0 | 公众号/企业微信，覆盖最广用户群 | 📋 |
+| M3.6g | QQ 适配器 | P1 | QQ Bot API，年轻用户主力 | 📋 |
+| M3.6h | Telegram 适配器 | P1 | Bot API | 📋 |
+| M3.6i | Discord 适配器 | P2 | Bot API + Gateway | 📋 |
+| M3.6j | Slack 适配器 | P2 | Bolt SDK | 📋 |
+| M3.6k | WebChat 适配器 | P2 | 基于 WebSocket 的 Web 聊天 | 📋 |
+| M3.6l | 渠道配置热加载 | P2 | YAML 配置变更无需重启 | 📋 |
+| M3.6m | 媒体处理 | P2 | 图片/文件/语音消息 | 📋 |
 | M3.7 | MCP 集成 | P1 | F13: MCP 客户端，动态工具发现与注册 | 📋 |
 | M3.8 | Profile 隔离 | P1 | F19: 多 Profile 并发运行，配置/工具/记忆隔离 | 📋 |
 | M3.9 | Block Streaming | P1 | F17: 完成即发送模式，降低首字延迟 | 📋 |

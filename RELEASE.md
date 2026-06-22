@@ -1,14 +1,14 @@
-# ClawHermes v0.12.0 — Release Notes
+# ClawHermes v0.14.0 — Release Notes
 
 > 发布日期：2026-06-17
-> Tag: v0.12.0
+> Tag: v0.14.0
 > Phase 2: 功能增强与扩展
 
 ---
 
 ## 概览
 
-v0.12.0 完成 Phase 2 全部 7 个里程碑，并启动了 Phase 3 的 M3.1 Skill Hub。
+v0.14.0 完成 Phase 3 核心里程碑：全链路异步化、MCP 集成、测试覆盖率提升、工具扩展至 35。
 新增 Channel SDK、Cron 调度、Docker 沙箱、ACE 自适应引擎、11 个新工具、异步钩子、
 mypy selective strict、SkillHub（技能发布/安装/验证）。
 
@@ -32,12 +32,12 @@ mypy selective strict、SkillHub（技能发布/安装/验证）。
 
 ## 质量指标
 
-| 指标 | v0.11.0 | v0.12.0 | 变化 |
+| 指标 | v0.13.0 | v0.14.0 | 变化 |
 |------|:---:|:---:|:---:|
 | 测试用例 | 73 | 152 | +108% |
 | 覆盖率 | 57% | 67% | +10pp |
 | 源文件 | 18 | 24 | +33% |
-| 内置工具 | 15 | 26 | +73% |
+| 内置工具 | 26 | 35 | +35% |
 | API 端点 | 13 | 18 | +38% |
 | 渠道适配器 | 0 | 3 | — |
 | ruff | 0 | 0 | ✅ |
@@ -59,13 +59,13 @@ mypy selective strict、SkillHub（技能发布/安装/验证）。
 
 ## 破坏性变更
 
-无。v0.11.0 → v0.12.0 完全向后兼容。
+无。v0.13.0 → v0.14.0 基本兼容（CronScheduler.start/stop 改为 async）。
 
 ## 升级指南
 
 ```bash
 git pull origin main --tags
-git checkout v0.12.0
+git checkout v0.14.0
 pip install -e .
 ```
 

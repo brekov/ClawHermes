@@ -4,10 +4,10 @@
 
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![Tests: 310 passed](https://img.shields.io/badge/tests-171%20passed-brightgreen)](tests/)
+[![Tests: 310 passed](https://img.shields.io/badge/tests-310%20passed-brightgreen)](tests/)
 [![Coverage: 71%](https://img.shields.io/badge/coverage-71%25-yellow)](tests/)
 [![Ruff](https://img.shields.io/badge/ruff-0%20errors-brightgreen)](pyproject.toml)
-[![v0.14.0](https://img.shields.io/badge/version-0.12.2-blue)](CHANGELOG.md)
+[![v0.14.0](https://img.shields.io/badge/version-0.14.0-blue)](CHANGELOG.md)
 
 ---
 
@@ -67,7 +67,7 @@ curl http://127.0.0.1:18789/sessions
 ```
 ┌──────────────────────────────────────────────────────────────┐
 │                      Gateway 层（REST API）                   │
-│  CLI / HTTP（FastAPI · 18 个 REST 端点 · Cron调度 · Docker沙箱） │
+│  CLI / HTTP（FastAPI · 23 个 REST 端点 · Cron调度 · Docker沙箱 · MCP） │
 └────────────────────────┬─────────────────────────────────────┘
                          │
 ┌────────────────────────▼─────────────────────────────────────┐
@@ -126,7 +126,7 @@ curl http://127.0.0.1:18789/sessions
 
 ---
 
-## 内置工具（26个）
+## 内置工具（35个）
 
 ### minimal（5个）— 轻量场景
 
@@ -149,7 +149,7 @@ curl http://127.0.0.1:18789/sessions
 | `memory_save` | 保存记忆 | ❌ |
 | `delegate_task` | 委派子任务给子 Agent 并行执行 | ❌ |
 
-### full（26个）— 完整能力
+### full（35个）— 完整能力
 
 在 standard 基础上增加：
 
@@ -171,7 +171,15 @@ curl http://127.0.0.1:18789/sessions
 | `timer` | 定时器/秒表 | ❌ |
 | `url_encode` | URL 编码 | ✅ |
 | `url_decode` | URL 解码 | ✅ |
-| `calc` | 安全数学表达式计算 | ✅ |
+| `sqlite_query` | 查询 SQLite 数据库 | ❌ |
+| `csv_parse` | 解析 CSV 文件 | ✅ |
+| `hash_file` | 文件哈希 (md5/sha1/sha256) | ✅ |
+| `disk_usage` | 磁盘使用情况 | ✅ |
+| `base64_codec` | Base64 编解码 | ✅ |
+| `process_list` | 系统进程列表 | ✅ |
+| `image_info` | 图片信息 (需 Pillow) | ✅ |
+| `pdf_extract` | PDF 文本提取 (需 pypdf) | ❌ |
+| `markdown_render` | Markdown → HTML | ✅ |
 
 配置方式：
 ```bash
@@ -240,7 +248,7 @@ src/clawhermes/
 │   └── chroma_memory.py    # ChromaDB 向量记忆
 │
 └── gateway/
-    ├── app.py              # FastAPI Gateway（18 个 REST 端点）
+    ├── app.py              # FastAPI Gateway（23 个 REST 端点）
     └── setup.py            # Provider 配置管理
 ```
 
@@ -273,7 +281,7 @@ src/clawhermes/
 ## 测试
 
 ```bash
-# 单元测试 + 集成测试（165 个测试，全部通过 ✅）
+# 单元测试 + 集成测试（310 个测试，全部通过 ✅）
 pytest tests/ -v
 
 # 带覆盖率
@@ -311,7 +319,7 @@ mypy src/
 |:------|:-----|:-----|:----:|
 | Phase 1 | v0.11.0 | 代码质量与稳定性 | ✅ |
 | Phase 2 | v0.12.0~v0.13.0 | 功能增强 | ✅（Channel SDK / Cron / Docker Sandbox / ACE） | ✅ |
-| Phase 3 | v0.14.0 | 生态建设 + 异步化 | ✅（Skill Hub / Multi-Modal Memory） | 🔄 |
+| Phase 3 | v0.14.0 | 生态建设 + 异步化 | ✅（MCP / 异步化 / 工具35 / 测试310） | 🔄 |
 | Phase 3 续 | v0.15.0~v0.16.0 | 渠道 + Streaming + 多模态 | 🔄
 | Phase 4 | v1.0.0 | 体验与差异化（Dashboard / Workflow Builder） | 📋 |
 

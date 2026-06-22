@@ -1,792 +1,769 @@
-# ClawHermes · 项目开发计划
+# ClawHermes · 项目推进计划
 
 > 版本：v2.0
-> 日期：2026-06-17
-> 状态：Phase 1 ✅ | Phase 2 ✅ | Phase 3 🔄 M3.1 done
+> 日期：2026-06-22
+> 基线版本：v0.14.0（310 测试通过）
+> 状态：Phase 1 ✅ | Phase 2 ✅ | Phase 3 ✅ v0.14.0 | Phase 3 续 🔄 v0.15.0+
+> 方法论：软件工程全流程 — 现状评估 → 竞品研究 → 差距分析 → SMART 目标 → 架构演进 → 分阶段路线图 → 质量保障 → 风险管理
 
 ---
 
-## 一、竞争分析
+## 目录
 
-### 1.1 Hermes Agent 深度研究
-
-**技术架构：**
-- 语言：Python，~3万行代码，80+模块
-- 核心循环：conversation_loop.py（run_agent.py）约3900行（单文件过大）
-- 构造函数：60+参数（配置复杂）
-- LLM接入：自实现统一接口，200+ Provider
-- 工具系统：70+注册工具，28个toolsets
-- API模式：3种 — chat_completions / codex_responses / anthropic_messages
-- 终端后端：6种 — local / Docker / SSH / Modal / Daytona / Singularity
-- 插件系统：3种发现源（用户 ~/.hermes/plugins/、项目 .hermes/plugins/、pip entry_points），内存 Provider 和 ContextEngine 为单选插件
-- ACP集成：VS Code / Zed / JetBrains IDE集成
-- Profile隔离：每个profile独立 HERMES_HOME / config / memory / sessions / gateway PID
-- 技能加载：Progressive Disclosure 3级（skills_list → skill_view → skill_view with path）
-- 条件激活技能：fallback_for_toolsets / requires_toolsets / fallback_for_tools / requires_tools
-- 轨迹生成：ShareGPT格式训练数据生成
-- 自进化：Background Review + Curator 闭环
-- 技能系统：SKILL.md 标准，agentskills.io Hub
-- 调度：Cron 定时任务
-- 用户建模：Honcho 个性化
-- 迁移：OpenClaw 迁移工具
-- 测试规模：25,000测试，~1,250个测试文件
-
-**设计原则：**
-1. Prompt稳定性 — 三层架构保证核心指令不被意外覆盖
-2. 可观察执行 — 每步操作可追踪、可审计
-3. 可中断 — 任何长操作均可安全中断
-4. 平台无关核心 — 核心逻辑不依赖特定OS/平台
-5. 松耦合 — 模块间通过接口交互，可独立替换
-6. Profile隔离 — 多配置互不干扰
-
-**市场定位：** 自进化 Agent 研究框架，面向研究者和高级开发者
-
-**核心优势：**
-1. 三层 System Prompt（Stable/Context/Volatile）— prefix cache 友好，省 token
-2. Background Review + Curator 自进化闭环 — 越用越聪明
-3. ContextEngine 可插拔设计 — 压缩策略可替换
-4. CredentialPool 多凭证池 — 高可用，错误码感知冷却（401/429）
-5. 200+ LLM Provider — 覆盖面最广
-6. 70+ 注册工具 + 28个toolsets — 功能最丰富
-7. 3种API模式 — 灵活适配不同LLM协议
-8. 6种终端后端 — 覆盖本地/云端/容器化场景
-9. 插件系统 — 3种发现源，单选/多选插件类型
-10. ACP集成 — VS Code/Zed/JetBrains IDE无缝接入
-11. Profile隔离 — 多环境独立运行互不干扰
-12. Progressive Disclosure技能加载 — 按需加载，减少token浪费
-13. 条件激活技能 — fallback_for/requires 智能技能选择
-14. 轨迹生成 — ShareGPT格式训练数据，支持模型微调
-15. agentskills.io 技能市场 — 社区生态
-16. Cron 调度 — 定时任务能力
-17. Honcho 用户建模 — 个性化体验
-
-**主要劣势：**
-1. 单文件过大 — run_agent.py 3900行、cli.py、setup.py 均为巨型文件，维护困难
-2. 60+ 构造参数 — 使用门槛高
-3. 同步架构GIL瓶颈 — 全局解释器锁限制并发性能
-4. 无WebSocket实时推送 — 缺少服务端主动推送能力
-5. 无钩子拦截层 — 工具调用无审批机制
-6. 无工具策略引擎 — 缺少权限控制
-7. 配置无 fail-fast — 错误配置运行时才暴露
-8. 无健康检查 — 运维困难
-
-### 1.2 OpenClaw 深度研究
-
-**技术架构：**
-- 语言：TypeScript (Node.js 24)，~50+子目录，编译链复杂
-- 架构：Gateway 中心化 + 插件体系
-- WebSocket协议：请求/响应/事件三帧类型，共享密钥认证，幂等键
-- 设备配对：设备身份 + 签名挑战v3（绑定 platform + deviceFamily）
-- Node系统：macOS / iOS / Android / headless 节点，暴露 canvas / camera / screen / location 命令
-- Canvas/A2UI：Agent可编辑 HTML/CSS/JS 可视化工作区
-- 消息队列4模式：steer / followup / collect / interrupt
-- Block Streaming：完成即发送，可配置 chunk（800-1200chars）/ coalesce
-- 消息渠道：22+ 渠道支持
-- 工具系统：40+ 内置工具，tool profiles (minimal/coding/full)
-- 技能加载：6级优先级 — workspace > project > personal > managed > bundled > extra
-- 钩子：before/after tool_call
-- 技能市场：ClawHub
-- 安全模型：DM配对策略（pairing/open），沙箱模式（non-main），工具 allow/deny 列表
-- 沙箱：Docker sandbox 执行
-- Web UI：Dashboard 管理面板
-- Schema系统：TypeBox schema → JSON Schema → Swift模型代码生成
-
-**市场定位：** 生产级个人/团队 AI 助手，面向终端用户和团队
-
-**核心优势：**
-1. 22+ 消息渠道 — 覆盖所有主流平台
-2. 40+ 内置工具 — 功能完整
-3. tool profiles (minimal/coding/full) — 场景化工具集
-4. before/after tool_call 钩子 — 工具级拦截/审批/改写
-5. WebSocket协议 — 请求/响应/事件三帧，共享密钥认证，幂等键保证
-6. 设备配对安全模型 — 签名挑战v3，绑定平台+设备族
-7. Node系统 — 跨平台节点（macOS/iOS/Android/headless），暴露丰富设备能力
-8. Canvas/A2UI — Agent可编辑可视化工作区
-9. 消息队列4模式 — steer/followup/collect/interrupt 灵活消息路由
-10. Block Streaming — 完成即发送，可配置chunk/coalesce
-11. 6级技能加载优先级 — 精细控制技能来源
-12. 安全模型 — DM配对策略 + 沙箱模式 + allow/deny列表
-13. TypeBox schema → 代码生成 — 端到端类型安全
-14. ClawHub 技能市场 — 社区生态
-15. Docker sandbox — 安全执行环境
-16. Web Dashboard — 可视化管理
-17. 配置 fail-fast — 不带病运行
-18. 双层持久化 — 树形 transcript
-
-**主要劣势：**
-1. WebSocket协议复杂度高 — 三帧类型+认证+幂等键+重连，实现和维护成本大
-2. 设备配对流程复杂 — 签名挑战v3多步骤，用户体验门槛高
-3. TypeScript运行时依赖Node 24 — 版本要求苛刻，部署受限
-4. TS编译链 — 开发环境复杂
-5. 钩子同步阻塞 — 影响性能
-6. 配置爆炸 — 配置项过多
-7. 无三层 Prompt — 每次重建，浪费 token
-8. 无向量记忆 — 缺少语义搜索
-9. 无自进化机制 — 不会越用越聪明
-10. 无多凭证池 — 单凭证故障无转移
-
-### 1.3 ClawHermes 现状评估（v0.12.2）
-
-**已实现优势：**
-- 纯 Python 零编译
-- 三层 System Prompt（借鉴 Hermes）
-- 双存储记忆（JSON + ChromaDB）
-- 多凭证池（借鉴 Hermes）
-- 自进化机制（Background Review + Curator）
-- 钩子系统（借鉴 OpenClaw）
-- Pydantic Settings 类型安全配置
-- Docker + 一键安装
-- 26个内置工具 + 3级Profile
-- Channel Adapter SDK（CLI/REST/WebSocket）
-- Cron调度（APScheduler）
-- Docker Sandbox
-- ACE自适应压缩
-- Federated Skill Hub（M3.1 已完成）
-
-**关键差距：**
-| 项目 | ClawHermes | OpenClaw | Hermes | 优先级 |
-|------|-----------|----------|--------|--------|
-| 内置工具数 | 26 | 40+ | 70+ | 🔴 高 |
-| 工具 profiles | ✅ 3级 | ✅ 3级 | ❌ | ✅ 已追平 |
-| 技能 Hub | ✅ 联邦Hub | ClawHub | agentskills.io | 🟡 持续迭代 |
-| Web UI | ❌ | Dashboard | ❌ | 🟢 低 |
-| 消息渠道 | 3 | 22+ | 6 | 🟢 低 |
-| 技能审核流 | ❌ | ✅ | ❌ | 🟡 中 |
-| MCP集成 | ❌ | ❌ | ✅ | 🟡 中 |
-| IDE集成 | ❌ | ❌ | ✅ ACP | 🟡 中 |
-| Profile隔离 | ✅ 3级 | ❌ | ✅ 完整 | 🟡 增强 |
-| 条件激活技能 | ❌ | ❌ | ✅ | 🟡 中 |
-| Block Streaming | ❌ | ✅ | ❌ | 🟡 中 |
-| 设备配对 | ❌ | ✅ | ❌ | 🟢 低 |
-| 消息队列模式 | ❌ | ✅ 4种 | ❌ | 🟡 中 |
-
-**已知代码质量问题（v0.12.2）：**
-1. 并行工具执行仍为串行 — parallel_safe 分组后未真正并行执行
-2. web_search 使用 curl+grep 解析 Google HTML — 脆弱不可靠
-3. Gateway 全局状态 — 模块级变量，不利于多实例部署
-4. SessionManager 线程安全 — SQLite check_same_thread=False 但无连接池/锁
-5. 异步一致性 — chat_async 中工具执行仍为同步，BackgroundReview 用 threading.Thread 而非 asyncio
-6. 测试覆盖率偏低 — 整体65%，gateway/app.py 和 tools/builtin.py 覆盖率偏低
+1. [项目定位与核心目标](#1-项目定位与核心目标)
+2. [当前进度评估（v0.14.0）](#2-当前进度评估v0140)
+3. [竞品深度研究](#3-竞品深度研究)
+4. [差距分析与差异化方向](#4-差距分析与差异化方向)
+5. [SMART 目标设定](#5-smart-目标设定)
+6. [架构演进设计](#6-架构演进设计)
+7. [分阶段实施路线图](#7-分阶段实施路线图)
+8. [质量保障体系](#8-质量保障体系)
+9. [风险管理与应对](#9-风险管理与应对)
+10. [成功标准与验收门禁](#10-成功标准与验收门禁)
+11. [核心指标追踪表](#11-核心指标追踪表)
 
 ---
 
-## 二、优势融合方案
-
-### 2.1 取 Hermes 之长（12项）
-
-| # | Hermes 优势 | 融合方案 | 当前状态 |
-|---|------------|---------|---------|
-| H1 | 三层 System Prompt | 已实现 StableLayer/ContextLayer/VolatileLayer | ✅ 已完成 |
-| H2 | Background Review | 已实现 SkillManager + BackgroundReview | ✅ 已完成 |
-| H3 | Curator 自动维护 | 已实现 7天/30天/90天 自动归档 | ✅ 已完成 |
-| H4 | ContextEngine 可插拔 | 已实现 ABC + LLMCompressor + NoopCompressor | ✅ 已完成 |
-| H5 | CredentialPool 多凭证 | 已实现 4种调度策略 + 错误码冷却 | ✅ 已完成 |
-| H6 | 200+ LLM Provider | 通过 litellm 支持 132+ Provider | ✅ 已完成 |
-| H7 | Cron 调度 | APScheduler 集成 | ✅ 已完成 |
-| H8 | Honcho 用户建模 | 用户画像持久化 | 📋 Phase 3 |
-| H9 | MCP集成 | MCP客户端协议实现 | 📋 Phase 3 |
-| H10 | Progressive Disclosure技能加载 | 3级按需加载（list→view→view with path） | 📋 Phase 3 |
-| H11 | 条件激活技能 | fallback_for_toolsets/requires_toolsets 机制 | 📋 Phase 3 |
-| H12 | ACP/IDE集成 | VS Code/Zed/JetBrains IDE插件 | 📋 Phase 4 |
-| H13 | Profile隔离增强 | 每个Profile独立HERMES_HOME/config/memory/sessions | 📋 Phase 3 |
-| H14 | 轨迹生成 | ShareGPT格式训练数据导出 | 📋 Phase 4 |
-
-### 2.2 取 OpenClaw 之长（13项）
-
-| # | OpenClaw 优势 | 融合方案 | 当前状态 |
-|---|-------------|---------|---------|
-| O1 | before/after tool_call 钩子 | 已实现 HookManager 7个钩子点 | ✅ 已完成 |
-| O2 | 工具策略引擎 | 已实现 allow/deny + 并行/串行调度 | ✅ 已完成 |
-| O3 | tool profiles | 已实现 minimal/standard/full 三级工具集 | ✅ 已完成 |
-| O4 | 40+ 内置工具 | 已扩展至 26个，持续迭代 | 🔄 进行中 |
-| O5 | 配置 fail-fast | 已实现 Pydantic field_validator | ✅ 已完成 |
-| O6 | 双层持久化 | 已实现 SQLite + JSONL | ✅ 已完成 |
-| O7 | Docker sandbox | 容器化工具执行环境 | ✅ 已完成 |
-| O8 | Block Streaming | 完成即发送，可配置chunk/coalesce | 📋 Phase 3 |
-| O9 | 消息队列模式 | steer/followup/collect/interrupt 4种模式 | 📋 Phase 3 |
-| O10 | 设备配对安全模型 | 签名挑战 + allow/deny列表 | 📋 Phase 4 |
-| O11 | 6级技能加载优先级 | workspace>project>personal>managed>bundled>extra | 📋 Phase 3 |
-| O12 | Web Dashboard | Observability Dashboard | 📋 Phase 4 |
-| O13 | 技能审核流 | 提案→审批→发布流程 | 📋 Phase 3 |
-
----
-
-## 三、劣势规避策略
-
-### 3.1 规避 Hermes 短板（8项）
-
-| # | Hermes 短板 | 规避方案 | 状态 |
-|---|------------|---------|------|
-| 1 | 单文件过大（run_agent.py 3900行, cli.py, setup.py） | 拆分为小模块，单文件不超 500 行 | ✅ |
-| 2 | 60+ 构造参数 | Pydantic Settings 类型化配置 | ✅ |
-| 3 | 同步架构GIL瓶颈 | asyncio 异步架构 | ✅ |
-| 4 | 无WebSocket实时推送 | Channel Adapter SDK + WebSocket适配器 | ✅ |
-| 5 | 无钩子拦截 | HookManager 7个钩子点 | ✅ |
-| 6 | 无工具策略 | allow/deny + 并行/串行调度 | ✅ |
-| 7 | 配置无 fail-fast | field_validator fail-fast | ✅ |
-| 8 | 无健康检查 | /health 端点 | ✅ |
-
-### 3.2 规避 OpenClaw 短板（10项）
-
-| # | OpenClaw 短板 | 规避方案 | 状态 |
-|---|-------------|---------|------|
-| 1 | WebSocket协议复杂度高 | 简化协议设计：复用HTTP升级+JSON帧，避免三帧类型 | 📋 Phase 3 |
-| 2 | 设备配对流程复杂 | 渐进式安全：默认开放，可选配对，不强制签名挑战 | 📋 Phase 4 |
-| 3 | Node 24运行时依赖 | 纯 Python，零编译，Python 3.11+ | ✅ |
-| 4 | TS编译链 | 纯 Python，零编译 | ✅ |
-| 5 | 钩子同步阻塞 | 异步钩子执行 | ⚠️ 基础版 |
-| 6 | 配置爆炸 | 分组配置 + preset | ✅ |
-| 7 | 无三层 Prompt | 三层架构 + stable 缓存 | ✅ |
-| 8 | 无向量记忆 | ChromaDB 语义搜索 | ✅ |
-| 9 | 无自进化 | Background Review + Curator | ✅ |
-| 10 | 无多凭证池 | CredentialPool 4种策略 | ✅ |
-
-### 3.3 规避 ClawHermes 自身短板（6项）
-
-| # | 短板 | 规避方案 | 阶段 |
-|---|------|---------|------|
-| 1 | 并行工具执行仍为串行 | 实现 asyncio.gather 真正并行执行 parallel_safe 工具组 | Phase 3 |
-| 2 | web_search 脆弱不可靠 | 接入 SearXNG / SerpAPI / Tavily 等搜索API | Phase 3 |
-| 3 | Gateway 全局状态 | 重构为类实例状态，支持多实例部署 | Phase 3 |
-| 4 | SessionManager 线程安全 | 引入连接池 + threading.Lock / asyncio.Lock | Phase 3 |
-| 5 | 异步一致性 | 工具执行全异步化，BackgroundReview 迁移至 asyncio.create_task | Phase 3 |
-| 6 | 测试覆盖率偏低（65%） | 重点补充 gateway/app.py 和 tools/builtin.py 测试 | Phase 3 |
-
-### 3.4 规避旧渠道架构短板（8项）
-
-| # | 旧渠道短板 | 规避方案 | 说明 |
-|---|-----------|---------|------|
-| 1 | bridge.py + bridge.mjs 混合架构 | 纯 Python 实现，零 Node.js 依赖 | 旧版用 Node.js bridge 调用微信/飞书 SDK，架构混乱 |
-| 2 | 渠道代码与 Agent 核心耦合 | Channel Router 中间层解耦 | Gateway 不直接调用 Agent，通过 Router 路由 |
-| 3 | 配置类爆炸（4个渠道配置类） | 统一 ChannelConfig + YAML 配置 | 旧版每个渠道一个 Pydantic 配置类，新版统一 |
-| 4 | 渠道依赖硬编码在 pyproject.toml | 可选依赖 (extras) | pip install clawhermes[telegram] 按需安装 |
-| 5 | 无消息队列 | steer/followup/collect/interrupt | 旧版消息直接处理，Agent 忙碌时丢失 |
-| 6 | 无 DM 安全模型 | pairing 配对码 + allowlist | 旧版任何人都能与 Bot 对话 |
-| 7 | 无流式输出 | Block Streaming 编辑模式 | 旧版等待完整响应后一次性发送 |
-| 8 | 无渠道健康检查 | health() 抽象方法 + Gateway 统一监控 | 旧版渠道崩溃无感知 |
-
----
-
-## 四、创新功能设计
-
-### 4.1 Adaptive Context Engine (ACE) — 自适应上下文引擎
-
-**核心理念：** 根据对话类型自动选择最优压缩策略
-
-- 代码对话 → 保留代码块，压缩闲聊
-- 知识问答 → 保留引用，压缩推理过程
-- 创意写作 → 保留风格描述，压缩技术细节
-- 实现：ContextEngine ABC 新增 `detect_conversation_type()` 方法
-- ✅ 已完成基础版，Phase 3 增强对话类型检测精度
-
-### 4.2 Skill Evolution Graph — 技能进化图谱
-
-**核心理念：** 可视化技能的诞生、合并、归档全生命周期
-
-- DAG 结构记录技能间演化关系
-- 支持技能溯源：从哪次对话诞生、被哪些技能合并
-- 技能健康度评分：使用频率 + 成功率 + 关联度
-- Phase 3 实现
-
-### 4.3 Multi-Modal Memory — 多模态记忆
-
-**核心理念：** 记忆不止文本，支持图片/代码/结构化数据
-
-- 图片记忆：截图 + OCR 文本 + 向量嵌入
-- 代码记忆：AST 解析 + 语义索引
-- 结构化记忆：表格/JSON Schema 索引
-- Phase 3 实现
-
-### 4.4 Agent Workflow Builder — Agent 工作流构建器
-
-**核心理念：** 可视化编排多 Agent 协作流程
-
-- 拖拽式工作流设计器
-- 条件分支、循环、并行网关
-- 工作流模板市场
-- Phase 4 实现
-
-### 4.5 Federated Skill Hub — 联邦技能中心
-
-**核心理念：** 去中心化技能共享，兼容 ClawHub 和 agentskills.io
-
-- Git-based 技能仓库（skill = git repo）
-- 技能签名验证（GPG/SSH）
-- 技能兼容性矩阵（版本/依赖/平台）
-- ✅ M3.1 已完成基础版
-
-### 4.6 Observability Dashboard — 可观测性仪表盘
-
-**核心理念：** Agent 运行状态实时可视化
-
-- Token 用量追踪
-- 工具调用热力图
-- 记忆增长曲线
-- 技能使用排行
-- LLM 响应延迟分布
-- Phase 4 实现
-
-### 4.7 Channel Adapter SDK — 渠道适配器 SDK
-
-**核心理念：** 标准化接口，让任何人都能为 ClawHermes 写渠道适配器
-
-- ABC 定义：`receive_message()` / `send_response()` / `get_user_info()`
-- 内置适配器：CLI / REST API / WebSocket
-- 示例适配器：Slack / Discord / 飞书
-- ✅ 已完成基础版（CLI/REST/WebSocket）
-
-### 4.8 Prompt Playground — 提示词实验场
-
-**核心理念：** A/B 测试 System Prompt 效果
-
-- 多版本 Prompt 并行测试
-- 自动评估：响应质量 / 工具调用准确率 / token 效率
-- Prompt 模板变量注入
-- Phase 4 实现
-
-### 4.9 MCP集成 — Model Context Protocol 客户端（💡 借鉴 Hermes）
-
-**核心理念：** 通过MCP协议接入外部工具和数据源，无需自建
-
-- MCP客户端协议实现，连接MCP Server
-- 工具发现：自动注册MCP工具为ClawHermes工具
-- 资源访问：MCP资源映射为ClawHermes上下文
-- 与现有工具系统无缝集成
-- Phase 3 实现
-
-### 4.10 Progressive Disclosure 技能加载（💡 借鉴 Hermes）
-
-**核心理念：** 按需加载技能信息，减少token浪费
-
-- 3级加载：skills_list（名称+描述）→ skill_view（完整Prompt）→ skill_view with path（含代码路径）
-- LLM首次只看到技能列表，按需请求完整内容
-- 预估节省30-50%的技能相关token
-- Phase 3 实现
-
-### 4.11 条件激活技能（💡 借鉴 Hermes）
-
-**核心理念：** 技能可根据工具集/工具可用性自动激活或降级
-
-- fallback_for_toolsets：当指定toolset不可用时自动激活
-- requires_toolsets：仅在指定toolset可用时才激活
-- fallback_for_tools / requires_tools：工具级别的条件激活
-- 场景示例：无Docker时自动降级到本地执行技能
-- Phase 3 实现
-
-### 4.12 消息队列模式（💡 借鉴 OpenClaw）
-
-**核心理念：** 灵活的消息路由，支持多种交互模式
-
-- steer：引导Agent调整方向（不中断当前执行）
-- followup：追加指令（当前执行完成后处理）
-- collect：收集Agent输出（批量返回）
-- interrupt：强制中断当前执行
-- 基于现有WebSocket适配器扩展
-- → 详见 §4.17 Channel Router 渠道集成方案
-- Phase 3 实现
-
-### 4.13 Block Streaming（💡 借鉴 OpenClaw）
-
-**核心理念：** 完成即发送，流式输出更自然
-
-- 工具调用结果完成一个block即发送
-- 可配置chunk大小（800-1200字符）
-- coalesce策略：短block合并发送，长block分片发送
-- 与现有WebSocket适配器集成
-- → 详见 §4.18 Block Streaming 渠道流式输出方案
-- Phase 3 实现
-
-### 4.14 设备配对安全模型（💡 借鉴 OpenClaw）
-
-**核心理念：** 渐进式安全，从开放到配对可选
-
-- 开放模式：默认，无需认证（本地/可信网络）
-- 配对模式：签名挑战，绑定设备标识
-- 工具级安全：allow/deny列表控制工具权限
-- 沙箱模式：非主线程工具在沙箱中执行
-- Phase 4 实现
-
-### 4.15 ACP/IDE集成（💡 借鉴 Hermes）
-
-**核心理念：** Agent Communication Protocol，IDE内无缝使用
-
-- VS Code扩展：侧边栏对话 + 内联代码建议
-- Zed集成：通过LSP协议
-- JetBrains插件：通过IntelliJ Platform SDK
-- ACP协议：标准化的Agent-IDE通信
-- Phase 4 实现
-
-### 4.16 Profile隔离增强（💡 借鉴 Hermes）
-
-**核心理念：** 每个Profile完全独立运行
-
-- 独立HERMES_HOME目录
-- 独立配置文件
-- 独立记忆存储
-- 独立会话管理
-- 独立Gateway进程（PID隔离）
-- Phase 3 实现
-
-### 4.17 Channel Router — 渠道消息路由器
-
-**核心理念：** 统一消息路由层，解耦 Gateway 与渠道适配器
-
-- 消息路由：(channel_type, chat_id) → session_id 自动映射
-- 消息队列：4 种模式（steer/followup/collect/interrupt）
-- DM 配对：配对码生成 + 管理员审批 + allowlist
-- 渠道健康检查：统一 health() 接口
-- 配置热加载：YAML 变更自动检测 + 适配器重载
-- 媒体处理：图片/文件/语音消息的统一处理接口
-- Phase 3 实现
-
-### 4.18 Block Streaming — 渠道流式输出
-
-**核心理念：** 借鉴 OpenClaw 的完成即发送模式
-
-- 编辑模式：通过编辑原消息实现流式更新（Telegram/Discord）
-- 新消息模式：发送新消息追加内容（Slack/飞书）
-- 分块策略：优先段落断行 → 换行 → 句子
-- 空闲合并：减少单行消息刷屏
-- Phase 3 实现
-
----
-
-## 五、分阶段开发路线图
-
-### Phase 1: 代码质量与稳定性（v0.11.0） ✅ 已完成
-
-**目标：** 修复已知问题，补齐核心功能，建立工程基础设施
-
-**里程碑：**
-| 里程碑 | 交付物 | 验收标准 | 状态 |
-|--------|--------|---------|------|
-| M1.1 | 存根工具接入 | memory_search/memory_save/delegate_task 接入实际管理器 | ✅ |
-| M1.2 | 异常类层次 | ClawHermesError → LLMError/ToolError/MemoryError/ConfigError | ✅ |
-| M1.3 | Gateway 去重 | _auto_init() 与 initialize() 合并为单一方法 | ✅ |
-| M1.4 | 依赖清理 | 移除未用依赖 | ✅ |
-| M1.5 | chat_async 实现 | 异步对话接口完整可用 | ✅ |
-| M1.6 | 会话持久化 | SQLite 持久化，重启不丢失 | ✅ |
-| M1.7 | CI 流水线 | GitHub Actions: lint + typecheck + test | ✅ |
-| M1.8 | 工具 profiles | minimal(5)/standard(9)/full(15+) 三级工具集 | ✅ |
-| M1.9 | 内置工具扩展 | 新增 6+ 实用工具 | ✅ |
-| M1.10 | 测试增强 | 测试用例从 56 增至 100+，覆盖率 > 80% | ✅ |
-
-### Phase 2: 功能增强与扩展（v0.12.0 - v0.13.0） ✅ 已完成
-
-**目标：** 扩展工具生态，增强 Agent 能力
-
-**里程碑：**
-| 里程碑 | 交付物 | 验收标准 | 状态 |
-|--------|--------|---------|------|
-| M2.1 | Channel Adapter SDK | ABC + 3个内置适配器(CLI/REST/WebSocket) | ✅ |
-| M2.2 | Cron 调度 | APScheduler 集成，支持定时/周期任务 | ✅ |
-| M2.3 | Docker Sandbox | 容器化工具执行环境 | ✅ |
-| M2.4 | ACE 自适应压缩 | 对话类型检测 + 策略自动切换 | ✅ |
-| M2.5 | 内置工具扩展至 25+ | 新增代码分析/数据处理/系统管理工具 | ✅ |
-| M2.6 | 异步钩子完善 | 全钩子点异步执行，超时保护 | ✅ |
-| M2.7 | mypy strict | 逐步收紧至 strict=true | ✅ |
-
-### Phase 3: 生态建设与架构强化（v0.13.0 - v0.16.0） 🔄 进行中
-
-**目标：** 建立技能生态，增强记忆与用户建模，修复架构短板
-
-**里程碑：**
-| 里程碑 | 交付物 | 验收标准 | 状态 |
-|--------|--------|---------|------|
-| M3.1 | Federated Skill Hub | Git-based 技能仓库 + 签名验证 | ✅ |
-| M3.2 | 并行工具执行 | asyncio.gather 真正并行执行 parallel_safe 组 | ✅ |
-| M3.3 | web_search重构 | 多搜索引擎支持(DuckDuckGo/SearXNG/SerpAPI/Tavily) | ✅ |
-| M3.4 | Gateway状态重构 | GatewayState 类实例，消除 global 语句 | ✅ |
-| M3.5 | SessionManager线程安全 | threading.Lock 保护所有 SQLite 操作 | ✅ |
-| M3.6a | Channel Router | ChannelRouter + SessionRouter + Gateway 集成，/chat 通过 Router 路由 | ✅ P0 |
-| M3.6b | 消息队列模式 | steer/followup/collect/interrupt 4 种模式完整可用 | ✅ P0 |
-| M3.6c | DM 配对安全 | 配对码生成 + 管理员审批 + allowlist + 速率限制 | 📋 P1 |
-| M3.6d | Block Streaming | 编辑模式 + 新消息模式 + 分块策略 + 空闲合并 | 📋 P1 |
-| M3.6e | Telegram 适配器 | Bot API 集成，DM + 群聊，媒体收发，流式编辑 | 📋 P1 |
-| M3.6f | Discord 适配器 | Bot API + Gateway，DM + 服务器，线程回复，流式编辑 | 📋 P1 |
-| M3.6g | Slack 适配器 | Bolt SDK，DM + 频道，线程回复，Block Kit | 📋 P1 |
-| M3.6h | 飞书适配器 | WebSocket 事件订阅，DM + 群聊，卡片消息 | 📋 P2 |
-| M3.6i | WebChat 适配器 | WebSocket 聊天界面，Markdown 渲染，代码高亮 | 📋 P2 |
-| M3.6j | 渠道配置热加载 | YAML 变更自动检测 + 适配器热重载 | 📋 P2 |
-| M3.6k | 媒体处理 | 图片/文件/语音消息统一处理接口 | 📋 P2 |
-| M3.7 | MCP客户端集成 | MCP协议客户端，自动注册MCP工具 | 📋 |
-| M3.8 | Progressive Disclosure | 3级技能按需加载 | 📋 |
-| M3.9 | 条件激活技能 | fallback_for/requires 机制 | 📋 |
-| M3.12 | Profile隔离增强 | 独立HERMES_HOME/config/memory/sessions/PID | 📋 |
-| M3.13 | 6级技能加载优先级 | workspace>project>personal>managed>bundled>extra | 📋 |
-| M3.14 | Skill Evolution Graph | DAG 技能演化图谱 | 📋 |
-| M3.15 | Multi-Modal Memory | 图片/代码/结构化记忆 | 📋 |
-| M3.16 | 用户画像持久化 | Honcho 式用户建模 | 📋 |
-| M3.17 | 技能审核流 | 提案→审批→发布流程 | 📋 |
-| M3.18 | 测试覆盖率提升 | 65%→85%，重点补充gateway/app.py和tools/builtin.py | 📋 |
-
-**渠道重构依赖关系：**
+## 1. 项目定位与核心目标
+
+### 1.1 一句话定位
+
+> **ClawHermes = Hermes 的自进化深度 × OpenClaw 的工程品质 × Python 原生零编译**
+>
+> 一个开箱即用、越用越聪明、可通过 REST API 嵌入任何系统的 Python AI Agent 框架。
+
+### 1.2 三大价值支柱
+
+| 支柱 | 内涵 | 竞品对标 |
+|:---|:---|:---|
+| **越用越聪明** | Background Review + Curator 自进化闭环 + 向量记忆语义搜索 | 借鉴 Hermes，OpenClaw 无此能力 |
+| **工程可靠** | Pydantic 类型化配置 / asyncio 异步 / fail-fast 校验 / 7 钩子点 / 工具策略引擎 | 借鉴 OpenClaw 工程实践 |
+| **即插即用** | `pip install` / REST API 23 端点 / Channel Adapter SDK / Docker 一键 | 规避 Hermes 60+ 参数与 OpenClaw TS 编译链 |
+
+### 1.3 差异化定位矩阵
+
+| 维度 | Hermes | OpenClaw | **ClawHermes** |
+|:---|:---|:---|:---|
+| 语言 | Python | TypeScript | **Python** |
+| 定位 | 研究探索型 Agent | 消息网关 + 个人助手 | **生产可用型 Agent 框架** |
+| 核心循环 | 3900 行单文件 | 单进程嵌入 | **~300 行模块化** |
+| 构造参数 | 60+ | 适中 | **~10（Pydantic）** |
+| 异步模型 | 同步为主 (GIL) | 事件循环 | **asyncio 原生** |
+| 安装方式 | 源码 clone | npm + 编译 | **pip install** |
+| 向量记忆 | ❌ | ❌ | **✅ ChromaDB（三者唯一）** |
+| 自适应压缩 | ❌ | ❌ | **✅ ACE（独创）** |
+| 自进化闭环 | ✅ | ❌ | **✅** |
+| 钩子体系 | ❌ | ✅ 同步 | **✅ 异步** |
+| 消息渠道 | ❌ | 22+ | **SDK 抽象（三者唯一）** |
+| MCP 协议 | ✅ | ❌ | ✅ |
+
+### 1.4 北极星目标（v1.0.0）
 
 ```
-M3.6a (Channel Router) ← M3.6b (消息队列) ← M3.6c (DM配对)
-                    ← M3.6d (Block Streaming)
-                    ← M3.6e-g (Telegram/Discord/Slack 适配器)
-                                              ← M3.6h (飞书适配器)
-                                              ← M3.6i (WebChat)
-                    ← M3.6j (配置热加载)
-                    ← M3.6k (媒体处理)
-```
-
-### Phase 4: 体验与差异化（v0.17.0 - v0.19.0）
-
-**目标：** 打造差异化竞争优势，完善开发者体验
-
-**里程碑：**
-| 里程碑 | 交付物 | 验收标准 |
-|--------|--------|---------|
-| M4.1 | Observability Dashboard | Web UI 实时监控 |
-| M4.2 | Agent Workflow Builder | 可视化工作流编排 |
-| M4.3 | Prompt Playground | A/B 测试 + 自动评估 |
-| M4.4 | ACP/IDE集成 | VS Code扩展 + Zed/JetBrains插件 |
-| M4.5 | 设备配对安全模型 | 渐进式安全：开放→配对可选 |
-| M4.6 | 轨迹生成 | ShareGPT格式训练数据导出 |
-| M4.7 | 示例渠道适配器 | Slack/Discord/飞书适配器 |
-| M4.8 | 性能优化 | 响应延迟 < 2s，内存 < 512MB |
-| M4.9 | 文档完善 | API 文档 + 教程 + 示例 |
-
-### Phase 5: 生态成熟期（v1.0.0+）
-
-**目标：** 生态成熟，社区运营，v1.0正式发布
-
-**里程碑：**
-| 里程碑 | 交付物 | 验收标准 |
-|--------|--------|---------|
-| M5.1 | 社区技能市场 | 用户可发布/安装技能，评分/评论系统 |
-| M5.2 | 多语言SDK | Python/TypeScript/Go 客户端SDK |
-| M5.3 | 企业级特性 | SSO/审计日志/多租户/SLA |
-| M5.4 | 性能基准认证 | 公开benchmark报告，对比Hermes/OpenClaw |
-| M5.5 | 插件生态 | 第三方插件开发者文档 + 插件模板 |
-| M5.6 | v1.0.0 发布 | 全部功能验收通过，文档完整，性能达标 |
-
----
-
-## 六、质量标准与测试流程
-
-### 6.1 代码质量标准
-
-| 指标 | 当前值 (v0.12.2) | Phase 3 目标 | v1.0 目标 |
-|------|-----------------|-------------|----------|
-| ruff lint 错误 | 0 | 0 | 0 |
-| mypy 错误 | 0 | 0 | 0 |
-| 测试用例数 | 165 | 250+ | 400+ |
-| 测试覆盖率 | 65% | > 85% | > 90% |
-| 单文件行数上限 | 500 | 500 | 500 |
-| 文档覆盖率 | ~70% | > 85% | > 95% |
-
-### 6.2 测试分层
-
-```
-┌─────────────────────────────┐
-│     E2E 测试（5%）           │  完整用户场景验证
-├─────────────────────────────┤
-│     集成测试（20%）          │  模块间交互验证
-├─────────────────────────────┤
-│     单元测试（75%）          │  函数/类级别验证
-└─────────────────────────────┘
-```
-
-**单元测试：** 每个公开函数/类必须有测试
-**集成测试：** Agent Loop + LLM + Tools + Memory 联合验证
-**E2E 测试：** 完整对话场景（含工具调用、记忆沉淀、技能进化）
-
-**覆盖率重点区域（Phase 3）：**
-- gateway/app.py — 当前覆盖率偏低，需补充API端点测试
-- tools/builtin.py — 当前覆盖率偏低，需补充工具执行测试
-- agent/loop.py — 并行执行路径需覆盖
-- skills/hub.py — 联邦技能中心各场景需覆盖
-
-### 6.3 CI/CD 流水线
-
-```yaml
-# .github/workflows/ci.yml
-on: [push, pull_request]
-jobs:
-  lint:     ruff check src/
-  typecheck: mypy src/
-  test:     pytest --cov=src/clawhermes --cov-fail-under=85
-  build:    docker build -t clawhermes .
-```
-
-### 6.4 性能基准
-
-| 指标 | 当前值 (v0.12.2) | Phase 3 目标 | v1.0 目标 |
-|------|-----------------|-------------|----------|
-| 首次响应延迟 | 未测 | < 3s | < 2s |
-| 工具调用延迟 | 未测 | < 1s | < 500ms |
-| 记忆搜索延迟 | 未测 | < 200ms | < 100ms |
-| 内存占用 | 未测 | < 512MB | < 512MB |
-| 并发会话数 | 1 | 5+ | 10+ |
-| 并行工具执行 | 串行 | 真正并行 | 真正并行 |
-
-### 6.5 发布门禁
-
-每个版本发布前必须通过：
-- [ ] 全部测试通过（0 失败）
-- [ ] 覆盖率达标（Phase 3: 85%, v1.0: 90%）
-- [ ] ruff lint 0 错误
-- [ ] mypy 0 错误
-- [ ] CHANGELOG.md 已更新
-- [ ] 版本号已更新
-
----
-
-## 七、资源分配与职责分工
-
-### 7.1 角色定义
-
-| 角色 | 职责 | 人数 |
-|------|------|------|
-| 项目负责人 | 架构决策、代码审查、里程碑验收 | 1 |
-| 后端开发 | Agent 核心、工具系统、记忆系统 | 1-2 |
-| 基础设施 | CI/CD、Docker、部署、监控 | 1 |
-| 测试 | 测试用例编写、覆盖率保障 | 1 |
-| 文档 | API 文档、教程、示例 | 兼任 |
-
-### 7.2 Phase 3 任务分配
-
-| 任务 | 负责人 | 优先级 | 依赖 |
-|------|--------|--------|------|
-| M3.2 并行工具执行 | 后端 | P0 | 无 |
-| M3.3 web_search重构 | 后端 | P0 | 无 |
-| M3.4 Gateway状态重构 | 后端 | P1 | M3.2 |
-| M3.5 SessionManager线程安全 | 后端 | P1 | M3.4 |
-| M3.6a Channel Router | 后端 | P0 | M3.4 |
-| M3.6b 消息队列模式 | 后端 | P0 | M3.6a |
-| M3.6c DM 配对安全 | 后端 | P1 | M3.6b |
-| M3.6d Block Streaming | 后端 | P1 | M3.6a |
-| M3.6e Telegram 适配器 | 后端 | P1 | M3.6a |
-| M3.6f Discord 适配器 | 后端 | P1 | M3.6a |
-| M3.6g Slack 适配器 | 后端 | P1 | M3.6a |
-| M3.6h 飞书适配器 | 后端 | P2 | M3.6e-g |
-| M3.6i WebChat 适配器 | 后端 | P2 | M3.6e-g |
-| M3.6j 渠道配置热加载 | 后端 | P2 | M3.6a |
-| M3.6k 媒体处理 | 后端 | P2 | M3.6a |
-| M3.7 MCP客户端集成 | 后端 | P1 | 无 |
-| M3.8 Progressive Disclosure | 后端 | P2 | M3.1 |
-| M3.9 条件激活技能 | 后端 | P2 | M3.8 |
-| M3.12 Profile隔离增强 | 后端 | P2 | M3.4 |
-| M3.13 6级技能加载优先级 | 后端 | P2 | M3.8 |
-| M3.14 Skill Evolution Graph | 后端 | P3 | M3.1 |
-| M3.15 Multi-Modal Memory | 后端 | P3 | 无 |
-| M3.16 用户画像持久化 | 后端 | P3 | 无 |
-| M3.17 技能审核流 | 后端 | P3 | M3.1 |
-| M3.18 测试覆盖率提升 | 测试 | P0 | M3.2-M3.5, M3.6a |
-
----
-
-## 八、v1.0 目标架构
-
-```
-┌──────────────────────────────────────────────────────────────┐
-│                    Observability Dashboard                    │
-│              (Token追踪 / 工具热力图 / 记忆曲线)               │
-├──────────────────────────────────────────────────────────────┤
-│                    Channel Adapter SDK                        │
-│       (CLI / REST / WebSocket / Slack / Discord / 飞书)       │
-├──────────────────────────────────────────────────────────────┤
-│                    ACP / IDE 集成层                           │
-│          (VS Code / Zed / JetBrains)                          │
-├──────────────────────────────────────────────────────────────┤
-│                      Gateway 层                               │
-│     FastAPI REST + WebSocket + Block Streaming + 消息队列      │
-├──────────────────────────────────────────────────────────────┤
-│                      Agent 核心层                             │
-│  ┌────────────┐ ┌────────────┐ ┌────────────┐ ┌───────────┐ │
-│  │ 三层Prompt  │ │ Agent Loop │ │ Workflow   │ │ Cron调度  │ │
-│  │ (缓存友好)  │ │(Think-Act) │ │ Builder   │ │(APScheduler)│
-│  └────────────┘ └────────────┘ └────────────┘ └───────────┘ │
-│  ┌────────────┐ ┌────────────┐ ┌────────────┐ ┌───────────┐ │
-│  │ 工具系统    │ │ 记忆系统    │ │ 技能系统    │ │ 上下文引擎 │ │
-│  │ 50+工具    │ │ 多模态记忆  │ │ 进化图谱    │ │ ACE自适应 │ │
-│  │ profiles   │ │ 向量+关系   │ │ 联邦Hub    │ │ 智能压缩  │ │
-│  │ 钩子+策略  │ │ 用户画像    │ │ 审核流     │ │           │ │
-│  │ MCP集成    │ │            │ │ 条件激活   │ │           │ │
-│  └────────────┘ └────────────┘ └────────────┘ └───────────┘ │
-├──────────────────────────────────────────────────────────────┤
-│                      基础服务层                               │
-│  ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐ ┌───────────┐ │
-│  │ LLM    │ │ 持久化  │ │ 凭证池 │ │ 沙箱   │ │ 会话管理  │ │
-│  │132+Pro │ │SQLite+ │ │4策略   │ │Docker  │ │ 线程安全  │ │
-│  │viders  │ │ChromaDB│ │故障转移│ │Sandbox │ │ 连接池    │ │
-│  └────────┘ └────────┘ └────────┘ └────────┘ └───────────┘ │
-│  ┌────────┐ ┌────────┐ ┌────────┐                           │
-│  │Profile │ │ 安全   │ │ 轨迹   │                           │
-│  │ 隔离   │ │配对模型│ │ 生成   │                           │
-│  └────────┘ └────────┘ └────────┘                           │
-└──────────────────────────────────────────────────────────────┘
+v1.0.0 时 ClawHermes 应成为：
+  1. Python 生态中最易嵌入的 Agent 框架（pip install + REST + Docker + SDK）
+  2. 具备完整自进化能力的生产级框架（记忆 + 技能 + 用户建模闭环）
+  3. 工程质量对标 OpenClaw（类型安全 + fail-fast + Dashboard + 钩子）
+  4. 能力深度对齐 Hermes（MCP + Progressive Disclosure + 条件激活技能）
+  5. 差异化创新壁垒（ACE 自适应 / 向量记忆 / 联邦 Hub / Channel SDK）
 ```
 
 ---
 
-## 九、关键指标对比
+## 2. 当前进度评估（v0.14.0）
 
-| 指标 | 当前 (v0.12.2) | Phase 3 目标 | Phase 4 目标 | v1.0 目标 |
-|------|---------------|-------------|-------------|----------|
-| 内置工具数 | 26 | 35+ | 45+ | 50+ |
-| MCP工具 | 0 | ✅ | ✅ | ✅ |
-| 工具 profiles | 3 | 3+ | 3+ | 3+ |
-| 测试用例 | 165 | 250+ | 350+ | 400+ |
-| 测试覆盖率 | 65% | > 85% | > 88% | > 90% |
-| CI 流水线 | GitHub Actions | GitHub Actions | 完整 CI/CD | 完整 CI/CD |
-| 会话持久化 | SQLite | SQLite + 连接池 | SQLite + 连接池 | SQLite + Redis |
-| 异步一致性 | 部分 | 完整 | 完整 | 完整 |
-| 并行工具执行 | 串行 | ✅ asyncio.gather | ✅ | ✅ |
-| 技能 Hub | 联邦 Hub | 联邦 Hub + 审核流 | 联邦 Hub + 审核 | 社区市场 |
-| Block Streaming | ❌ | ✅ | ✅ | ✅ |
-| 消息队列模式 | ❌ | ✅ 4种 | ✅ 4种 | ✅ 4种 |
-| MCP集成 | ❌ | ✅ | ✅ | ✅ |
-| IDE集成 | ❌ | ❌ | ✅ | ✅ |
-| Profile隔离 | 3级 | 完整隔离 | 完整隔离 | 完整隔离 |
-| 条件激活技能 | ❌ | ✅ | ✅ | ✅ |
-| Web UI | ❌ | ❌ | Dashboard | Dashboard |
-| 文档覆盖率 | ~70% | > 85% | > 90% | > 95% |
-| 渠道适配器数 | 3 (CLI/REST/WS) | 6+ (+Telegram/Discord/Slack) | 7+ (+飞书/WebChat) | 8+ |
-| Gateway-Channel 集成 | ❌ 未集成 | ✅ Channel Router | ✅ 完整集成 | ✅ 完整集成 |
-| DM 安全模型 | ❌ | ✅ pairing | ✅ pairing + open | ✅ pairing + open |
-| 媒体处理 | ❌ | ✅ 图片/文件 | ✅ +语音 | ✅ 完整 |
-| 渠道健康检查 | ❌ | ✅ health() | ✅ +Dashboard | ✅ +Dashboard |
+### 2.1 版本交付历史
+
+| 版本 | 日期 | 核心交付 | 测试 |
+|:---|:---|:---|:---:|
+| v0.1.0 | 2026-06-16 | Agent 循环、三层 Prompt、钩子、8 工具、记忆、多凭证池 | 56 |
+| v0.11.0 | 2026-06-17 | 异常层次、会话持久化、CI、工具 profiles、chat_async | 73 |
+| v0.12.0 | 2026-06-17 | Channel SDK、Cron、Docker Sandbox、ACE、异步钩子、26 工具 | 165 |
+| v0.12.2 | 2026-06-17 | P0-P3 评审修复、版本动态化、README 与架构文档同步 | 165 |
+| **v0.13.0** | **2026-06-17** | **并行执行、web_search 重构、Gateway 状态重构、线程安全、Channel Router、消息队列 4 模式** | **203** |
+| **v0.14.0** | **2026-06-22** | **全链路异步化、MCP 集成、工具扩展至 35、测试覆盖率 71%（310 测试）** | **310** |
+
+### 2.2 已交付功能清单（19 项）
+
+| # | 功能 | 代码位置 | 状态 |
+|:---|:---|:---|:---:|
+| F1 | 多 LLM 接入（litellm 132+ provider） | `llm/provider.py` | ✅ |
+| F2 | 思考-行动循环（50 次上限 + 7 钩子点） | `agent/loop.py` | ✅ |
+| F3 | 35 内置工具 + 3 级 Profile（minimal/standard/full） | `tools/builtin.py` | ✅ |
+| F4 | 双存储记忆（JSON + ChromaDB 向量语义搜索） | `agent/memory.py` | ✅ |
+| F5 | 会话持久化（SQLite + aiosqlite WAL 异步安全） | `agent/session.py` | ✅ |
+| F6 | 技能管理（SkillManager + CRUD + 元数据） | `skills/manager.py` | ✅ |
+| F7 | 自进化闭环（Background Review + Curator 定期维护） | `skills/manager.py` | ✅ |
+| F8 | 工具钩子（before/after 7 钩子点 + 异步超时保护） | `agent/loop.py` | ✅ |
+| F9 | 工具策略引擎（Profile + allow/deny + 并行安全标记） | `tools/builtin.py` | ✅ |
+| F10 | 上下文压缩（LLMCompressor 可插拔） | `agent/context.py` | ✅ |
+| F11 | 多凭证池（CredentialPool 4 策略 + 故障冷却） | `llm/provider.py` | ✅ |
+| F12 | 子 Agent 委派（并行执行 + 深度限制 MAX_DEPTH=2） | `agent/delegate.py` | ✅ |
+| F13 | 异步接口（Agent.chat_async + LLMProvider.chat_async） | `agent/loop.py` | ✅ |
+| F14 | 异常层次（5 大类 10 子类 + 2 扩展异常） | `agent/exceptions.py` | ✅ |
+| F15 | Cron 调度器（cron/interval/oneshot + JSON 持久化） | `agent/scheduler.py` | ✅ |
+| F16 | Docker 沙箱（SandboxPool 预热 + 资源限制） | `tools/sandbox.py` | ✅ |
+| F17 | ACE 自适应上下文（4 种对话类型自动检测） | `agent/ace.py` | ✅ |
+| F18 | Channel Adapter SDK（ABC + CLI/REST/WebSocket） | `channel/adapter.py` | ✅ |
+| F19 | Federated Skill Hub（Git 联邦 + SHA-256 校验） | `skills/hub.py` | ✅ |
+
+### 2.3 v0.13.0~v0.14.0 新增能力
+
+| 里程碑 | 能力 | 关键实现 |
+|:---|:---|:---|
+| M3.1 | Federated Skill Hub | SkillHub 发布/安装/搜索 + SkillManifest 元数据 |
+| M3.2 | 并行工具执行 | asyncio.gather 真正并行 + parallel_safe 标记 |
+| M3.3 | web_search 重构 | DuckDuckGo/SearXNG/SerpAPI/Tavily + 优雅降级 |
+| M3.4 | Gateway 状态重构 | 模块变量 → GatewayState 类 + 消除 global |
+| M3.5 | SessionManager 线程安全 | threading.Lock 保护全部 SQLite 操作 |
+| M3.6a | Channel Router | 统一消息路由层 + SessionRouter 映射管理 |
+| M3.6b | 消息队列 4 模式 | steer / followup / collect / interrupt 完整实现 |
+| M3.7 | MCP 客户端集成 | MCPClient (stdio + HTTP) + MCPRegistry + 3 Gateway 端点 |
+| M3.10 | 内置工具扩展至 35 | +9 工具（sqlite_query / csv_parse / hash_file / disk_usage / base64_codec / process_list / image_info / pdf_extract / markdown_render） |
+| M3.11 | 全链路异步化 | 消除全部 threading.Thread，100% asyncio 原生 |
+| M3.12 | 测试覆盖率提升 | 66% → 71%（203 → 310 测试），Gateway + 组件全覆盖 |
+
+### 2.4 当前技术栈
+
+```
+语言:       Python 3.12+
+LLM 编排:   litellm（132+ provider）
+Web 框架:   FastAPI + uvicorn
+向量存储:   ChromaDB 0.6+
+关系存储:   SQLite（aiosqlite + WAL）
+配置管理:   Pydantic Settings + YAML
+类型检查:   mypy（6 strict checks）
+代码检查:   ruff（0 errors）
+测试框架:   pytest + pytest-asyncio + pytest-cov
+CI/CD:      GitHub Actions（lint + typecheck + test + build）
+```
+
+### 2.5 Gateway 端点现状（23 个）
+
+| 分类 | 端点 | 方法 |
+|:---|:---|:---:|
+| 核心 | `/init` `/chat` `/health` `/tools` | POST/GET |
+| 记忆 | `/memory/save` `/memory/search` | POST/GET |
+| 技能 | `/skills` `/skills/create` `/curator/run` | GET/POST |
+| 会话 | `/sessions` `/sessions/{id}` | GET/DELETE |
+| 调度 | `/cron/jobs` `/cron/jobs/{id}` `/cron/jobs/{id}/pause` `/cron/jobs/{id}/resume` | CRUD |
+| 渠道 | `/channels` `/channels/sessions` | GET |
+| MCP | `/mcp/servers` `/mcp/servers/{name}` | POST/GET/DELETE |
 
 ---
 
-## 十、总结与行动建议
+## 3. 竞品深度研究
 
-### 立即行动（Phase 3 当前优先）
+### 3.1 Hermes Agent（NousResearch/hermes-agent）
 
-1. **并行工具执行** — asyncio.gather 真正并行执行 parallel_safe 工具组
-2. **web_search 重构** — 接入 SearXNG/SerpAPI/Tavily，替换脆弱的 curl+grep
-3. **Gateway 状态重构** — 模块级变量→类实例，支持多实例部署
-4. **SessionManager 线程安全** — 连接池 + asyncio.Lock
-5. **异步一致性** — 工具执行全异步化，BackgroundReview 迁移至 asyncio
-6. **MCP客户端集成** — 接入MCP协议，扩展工具生态
-7. **测试覆盖率提升** — 65%→85%，重点补充 gateway/app.py 和 tools/builtin.py
+**定位**：自进化 Agent 研究框架 | Python | ~3 万行 | 80+ 模块 | GitHub 106k+ Stars
 
-### 中期规划（Phase 3 后半 + Phase 4）
+**核心优势（可借鉴）**：
 
-- Channel Router + 消息队列 + DM 配对
-- Block Streaming + Telegram/Discord/Slack 适配器
-- 渠道配置热加载 + 媒体处理
-- Progressive Disclosure + 条件激活技能 + 6级技能加载优先级
-- Profile隔离增强 + 设备配对安全模型
-- Skill Evolution Graph + Multi-Modal Memory + 用户画像
-- Observability Dashboard + Agent Workflow Builder
-- ACP/IDE集成 + Prompt Playground
+| 能力 | 实现细节 | ClawHermes 状态 |
+|:---|:---|:---|
+| 三层 System Prompt | Stable / Context / Volatile，prefix cache 友好 | ✅ 已实现 |
+| Background Review + Curator | 对话后自动沉淀记忆/技能，定期维护 | ✅ 已实现 |
+| CredentialPool 多凭证池 | 轮询/最少使用/随机 + 401/429 故障冷却 | ✅ 已实现 |
+| 200+ LLM Provider | 统一接口覆盖几乎所有 LLM | ✅ 基于 litellm 132+ |
+| MCP 客户端 | 动态工具发现，扩展工具边界 | ❌ **Phase 3 优先级 P0** |
+| Progressive Disclosure | 3 级技能加载（list→view→path），省 token | ❌ **Phase 4** |
+| 条件激活技能 | fallback_for_toolsets / requires_toolsets 智能选择 | ❌ **Phase 4** |
+| Profile 隔离 | 每 Profile 独立 HOME/config/memory/sessions | ❌ **Phase 3** |
+| ACP/IDE 集成 | VS Code / Zed / JetBrains | ❌ **Phase 4** |
+| 轨迹生成 | ShareGPT 格式训练数据导出 | ❌ **Phase 4** |
+| 插件系统 | 3 种发现源 + pip entry_points | ❌ **远期** |
+| 70+ 内置工具 + 28 toolsets | 最丰富的工具生态 | ⚠️ 35 工具，差距缩小中 |
 
-### 远期愿景（Phase 5）
+**关键劣势（应规避）**：
+- 核心循环 3900 行单文件 — ClawHermes 已解决（~300 行模块化）
+- 60+ 构造参数 — ClawHermes 已解决（Pydantic ~10 参数）
+- 同步架构受 GIL 限制 — ClawHermes 已解决（asyncio 原生）
+- 无钩子拦截层 — ClawHermes 已解决
+- 无工具策略引擎 — ClawHermes 已解决
+- 无 WebSocket 实时推送 — ClawHermes 已规划
 
-- 社区技能市场 + 多语言SDK
-- 企业级特性（SSO/审计/多租户）
-- 性能基准认证
-- v1.0.0 正式发布
+### 3.2 OpenClaw（openclaw/openclaw）
 
-### 核心差异化定位
+**定位**：生产级个人/团队 AI 助手 | TypeScript (Node.js) | ~50+ 子目录 | 编译链复杂
 
-ClawHermes 的差异化竞争力在于 **"Hermes 的深度 + OpenClaw 的工程品质"**：
+**核心优势（可借鉴）**：
 
-1. **vs Hermes** — 更好的代码组织（无巨型文件）、真正的异步架构（非GIL受限）、WebSocket实时推送、工具策略引擎
-2. **vs OpenClaw** — 零编译纯Python、三层Prompt省token、向量记忆语义搜索、自进化闭环、多凭证池高可用
-3. **独特优势** — MCP集成扩展工具边界、条件激活技能智能降级、Block Streaming+消息队列灵活交互、Profile完整隔离多环境运行
+| 能力 | 实现细节 | ClawHermes 状态 |
+|:---|:---|:---|
+| 钩子体系 | before/after tool_call 工具级拦截 | ✅ 已实现并增强（异步+超时） |
+| 工具策略引擎 | Profile + allow/deny 精细权限 | ✅ 已实现 |
+| Block Streaming | 完成即发送，chunk/coalesce 可配 | ❌ **Phase 3 优先级 P1** |
+| 消息队列 4 模式 | steer/followup/collect/interrupt | ✅ v0.14.0 已实现 |
+| 22+ 消息渠道 | 覆盖所有主流平台 | ⚠️ SDK 就绪，适配器待实现 |
+| Dashboard | 实时监控 Agent 状态 | ❌ **Phase 4 优先级 P0** |
+| Canvas/A2UI | 可编辑 HTML/CSS/JS 可视化工作区 | ❌ **远期** |
+| 设备配对安全 | DM 配对 + 签名挑战 v3 | ❌ **Phase 3** |
+| 6 级技能加载优先级 | workspace > project > personal > managed > bundled > extra | ❌ **Phase 4** |
+| 配置校验 fail-fast | 不带病运行 | ✅ 已实现 |
+
+**关键劣势（应规避）**：
+- TypeScript 编译链，部署门槛高 — ClawHermes 纯 Python 零编译
+- 无三层 System Prompt — ClawHermes 已实现
+- 无向量记忆语义搜索 — ClawHermes 已实现（三者唯一）
+- 无自进化闭环 — ClawHermes 已实现
+- 无自适应上下文压缩 — ClawHermes 已实现（ACE 独创）
+- 无 Channel Adapter SDK 抽象 — ClawHermes 已实现（三者唯一）
+
+### 3.3 竞争策略矩阵
+
+| 策略 | 对标对象 | 具体措施 | 状态 |
+|:---|:---|:---|:---:|
+| **优势融合** | Hermes 三层 Prompt | 已实现 + 缓存优化 | ✅ |
+| **优势融合** | OpenClaw 钩子系统 | 已实现 + 异步非阻塞 + 超时保护 | ✅ |
+| **优势融合** | Hermes 自进化 | Background Review + Curator 闭环 | ✅ |
+| **优势融合** | OpenClaw 工具 Profile | 3 级 Profile + allow/deny | ✅ |
+| **优势融合** | Hermes 多凭证池 | CredentialPool 4 策略 + 故障冷却 | ✅ |
+| **劣势规避** | Hermes 3900 行循环 | 核心循环 ~300 行（缩小 13 倍） | ✅ |
+| **劣势规避** | Hermes 60+ 参数 | Pydantic Settings ~10 参数 | ✅ |
+| **劣势规避** | OpenClaw TS 编译 | 纯 Python 零编译 `pip install` | ✅ |
+| **劣势规避** | OpenClaw 同步钩子 | 异步钩子 + 超时保护 | ✅ |
+| **创新突破** | 三者均无 | ChromaDB 向量记忆语义搜索 | ✅ |
+| **创新突破** | 三者均无 | ACE 自适应上下文压缩 | ✅ |
+| **创新突破** | vs 中心化 Hub | Federated Skill Hub 去中心化 | ✅ |
+| **创新突破** | 三者均无 | Channel Adapter SDK 标准化抽象 | ✅ |
+| **追赶补齐** | Hermes MCP | MCP 客户端集成 | ✅ 已达成 |
+| **追赶补齐** | Hermes 70+ 工具 | 工具扩展至 45+ | 📋 P1 |
+| **追赶补齐** | OpenClaw 渠道 | 6+ 渠道适配器 | 📋 P1 |
+| **追赶补齐** | OpenClaw Dashboard | Observability Dashboard | 📋 P1 |
+
+---
+
+## 4. 差距分析与差异化方向
+
+### 4.1 关键差距（v0.14.0 → v1.0.0）
+
+| 差距领域 | 当前 | 目标 | 严重程度 |
+|:---|:---|:---|:---:|
+| MCP 协议 | ❌ 不支持 | ✅ MCP 客户端 | 🔴 高 |
+| 内置工具数 | 35 | 45+ | 🟡 中 |
+| 渠道适配器 | 3（CLI/REST/WS） | 6+ | 🟡 中 |
+| Block Streaming | ❌ 不支持 | ✅ | 🟡 中 |
+| 测试覆盖率 | 71% | >90% | 🟡 中 |
+| 多模态记忆 | ❌ 仅文本 | ✅ 图片/文件 | 🟡 中 |
+| Profile 隔离 | 3 级工具 Profile | 完整隔离（config/memory/sessions） | 🟡 中 |
+| 条件激活技能 | ❌ | ✅ | 🟢 低 |
+| Progressive Disclosure | ❌ | ✅ 3 级加载 | 🟢 低 |
+| IDE 集成 | ❌ | ✅ LSP/ACP | 🟢 低 |
+| Dashboard | ❌ | ✅ | 🟢 低 |
+| DM 安全模型 | ❌ | ✅ pairing | 🟢 低 |
+
+### 4.2 差异化创新护城河
+
+| 创新点 | 说明 | 竞品对比 | 壁垒 |
+|:---|:---|:---|:---|
+| **ACE 自适应压缩** | 对话类型自动检测 + 4 种压缩策略切换 | 三者唯一 | 高（需上下文理解） |
+| **ChromaDB 向量记忆** | 语义搜索记忆，非关键词匹配 | 三者唯一 | 中（技术选型） |
+| **Federated Skill Hub** | Git 去中心化技能共享 + SHA-256 校验 | vs 中心化 Hub | 中（协议设计） |
+| **Channel Adapter SDK** | 标准化渠道抽象，4 方法实现新渠道 | 三者唯一 | 中（接口设计） |
+| **纯 Python 零编译** | `pip install` 一键安装 | vs TS 编译链 | 低（语言选择） |
+
+---
+
+## 5. SMART 目标设定
+
+### 5.1 v0.14.0（Phase 3 中期 ✅ 已达成）
+
+| 目标 | 衡量标准 | 时限 |
+|:---|:---|:---|
+| MCP 客户端集成（F13） | 支持 3+ MCP Server 动态工具发现 | 2 周 |
+| 内置工具扩展至 35+ | +9 工具（浏览器/数据库/图片/代码等） | 2 周 |
+| 全链路异步化 | 消除全部 threading.Thread 调用，100% asyncio | 1 周 |
+| 测试覆盖率 > 80% | 65% → 80%，重点补充 gateway + tools | 1 周 |
+
+### 5.2 v0.15.0（Phase 3 后期）
+
+| 目标 | 衡量标准 | 时限 |
+|:---|:---|:---|
+| Block Streaming | SSE 完成即发送，首字延迟降低 50%+ | 2 周 |
+| DM 配对安全模型 | pairing 码 + 管理员审批 + 签名挑战 | 2 周 |
+| 3 平台渠道适配器 | 飞书 + 微信 + QQ 可用 | 2 周 |
+| Profile 隔离 | 独立 config/memory/sessions per profile | 1 周 |
+
+### 5.3 v0.16.0（Phase 3 收尾）
+
+| 目标 | 衡量标准 | 时限 |
+|:---|:---|:---|
+| 多模态记忆 | 支持图片/文件/代码片段存储与检索 | 2 周 |
+| 用户画像持久化 | 长期偏好建模，跨会话用户理解 | 1 周 |
+| 工具扩展至 45+ | +10 工具（语音/视频/地图/邮件等） | 2 周 |
+| 测试覆盖率 > 85% | 80% → 85%，全模块覆盖 | 1 周 |
+
+### 5.4 v1.0.0（Phase 4）
+
+| 目标 | 衡量标准 | 时限 |
+|:---|:---|:---|
+| Observability Dashboard | 实时监控 Agent 状态/工具调用/记忆使用 | 3 周 |
+| 结构化日志 + OpenTelemetry | JSON 日志 + Trace/Span 全链路追踪 | 1 周 |
+| Progressive Disclosure | 3 级技能加载（core/standard/extended） | 2 周 |
+| 条件激活技能 | fallback_for / requires 智能技能选择 | 1 周 |
+| 6 级技能加载优先级 | workspace > project > personal > managed > bundled > extra | 1 周 |
+| ACP/IDE 集成 | VS Code 插件基础版 | 2 周 |
+| 性能基准认证 | 建立 8 项性能基准并持续监控 | 1 周 |
+| 测试覆盖率 > 90% | 85% → 90%，补充集成测试 | 1 周 |
+
+---
+
+## 6. 架构演进设计
+
+### 6.1 v1.0.0 目标架构
+
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│                         接入层（Access Layer）                        │
+│                                                                      │
+│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐  │
+│  │ REST API │ │ WebSocket│ │ Telegram │ │ Discord  │ │ Slack    │  │
+│  │ (23端点) │ │ (实时推送)│ │ Bot API  │ │ Bot API  │ │ Bolt SDK │  │
+│  └────┬─────┘ └────┬─────┘ └────┬─────┘ └────┬─────┘ └────┬─────┘  │
+│       └────────────┴────────────┴────────────┴────────────┘         │
+│                                │                                     │
+│                    ┌───────────▼───────────┐                         │
+│                    │   Channel Router      │                         │
+│                    │  · SessionRouter      │                         │
+│                    │  · 消息队列 4 模式     │                         │
+│                    │  · DM 配对安全        │                         │
+│                    │  · Block Streaming    │                         │
+│                    │  · 渠道配置热加载      │                         │
+│                    └───────────┬───────────┘                         │
+└────────────────────────────────┼────────────────────────────────────┘
+                                  │
+┌────────────────────────────────▼────────────────────────────────────┐
+│                       Gateway 层（v0.14.0 ✅）                       │
+│                                                                      │
+│  FastAPI · GatewayState 类 · 23 REST 端点 · Cron 调度 · Docker 沙箱 │
+└────────────────────────────────┬────────────────────────────────────┘
+                                   │
+┌─────────────────────────────────▼───────────────────────────────────┐
+│                         Agent 核心层                                 │
+│                                                                      │
+│  ┌──────────────────────────────────────────────────────────────┐   │
+│  │         三层 System Prompt + 6 级技能加载优先级               │   │
+│  └──────────────────────────────────────────────────────────────┘   │
+│                                                                      │
+│  ┌──────────────────────────────────────────────────────────────┐   │
+│  │  Agent Loop（asyncio 全链路异步）                             │   │
+│  │  LLM → 工具（asyncio.gather 并行）→ ACE 自适应压缩 → 迭代    │   │
+│  │  Block Streaming → SSE 完成即发送                             │   │
+│  └──────────────────────────────────────────────────────────────┘   │
+│                                                                      │
+│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ │
+│  │ 工具系统  │ │ 记忆系统  │ │ 技能系统  │ │ MCP 集成 │ │ 子Agent  │ │
+│  │ ·45+工具 │ │ ·多模态  │ │ ·P.Discl │ │ ·客户端  │ │ ·委派    │ │
+│  │ ·3级Prof │ │ ·向量搜索│ │ ·条件激活│ │ ·工具发现│ │ ·并发    │ │
+│  │ ·钩子    │ │ ·画像    │ │ ·6级加载│ │ ·注册    │ │          │ │
+│  │ ·策略    │ │ ·ChromaDB│ │ ·审核流 │ │          │ │          │ │
+│  │ ·沙箱    │ │          │ │ ·演化图 │ │          │ │          │ │
+│  └──────────┘ └──────────┘ └──────────┘ └──────────┘ └──────────┘ │
+│                                                                      │
+│  ┌──────────┐ ┌──────────────────────────────────────────────────┐  │
+│  │ Profile  │ │ 消息队列层（v0.14.0 ✅）                         │  │
+│  │ 完整隔离 │ │ steer / followup / collect / interrupt           │  │
+│  └──────────┘ └──────────────────────────────────────────────────┘  │
+└────────────────────────────────┬────────────────────────────────────┘
+                                   │
+┌─────────────────────────────────▼───────────────────────────────────┐
+│                       基础设施层                                     │
+│                                                                      │
+│  ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐ ┌──────────────────┐ │
+│  │ LLM    │ │ 持久化  │ │ 凭证池 │ │ 沙箱   │ │ 可观测性         │ │
+│  │132+   │ │SQLite+ │ │4策略   │ │Docker  │ │ Dashboard +      │ │
+│  │Provider│ │ChromaDB│ │故障转移│ │Sandbox │ │ 结构化日志 +     │ │
+│  │        │ │        │ │        │ │Pool    │ │ OpenTelemetry    │ │
+│  └────────┘ └────────┘ └────────┘ └────────┘ └──────────────────┘ │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### 6.2 关键架构演进
+
+| 演进项 | 当前（v0.14.0） | 目标（v1.0.0） |
+|:---|:---|:---|
+| 异步模型 | 全链路 asyncio，零 threading.Thread | 连接池 + 多实例部署就绪 |
+| Gateway 状态 | GatewayState 类（单实例） | 连接池 + 多实例部署就绪 |
+| 渠道集成 | Channel Router 就绪，适配器待实现 | 6+ 渠道适配器 + 配置热加载 |
+| 技能加载 | 全量加载（浪费 token） | Progressive Disclosure 3 级 + 6 级优先级 + 条件激活 |
+| 工具系统 | 35 内置 + MCP 动态工具 | 45+ 内置 + MCP 动态工具 |
+| 记忆系统 | 文本向量 | 多模态（图片/文件/代码）+ 用户画像 |
+| 可观测性 | 日志 | Dashboard + 结构化日志 + OpenTelemetry |
+| 流式输出 | 同步返回 | Block Streaming（SSE） |
+
+---
+
+## 7. 分阶段实施路线图
+
+### 7.1 Phase 1 & 2（✅ 已完成）
+
+| Phase | 版本 | 核心交付 |
+|:---|:---|:---|
+| Phase 1 | v0.1.0 → v0.11.0 | 核心框架、异常层次、会话持久化、CI、工具 profiles |
+| Phase 2 | v0.12.0 → v0.12.2 | Channel SDK、Cron、Docker Sandbox、ACE、异步钩子、26 工具 |
+
+### 7.2 Phase 3（🔄 进行中 — 生态建设）
+
+#### 7.2.1 已完成（v0.13.0~v0.14.0）
+
+| 里程碑 | 交付 | 测试 |
+|:---|:---|:---:|
+| M3.1 | Federated Skill Hub（Git 联邦 + 校验） | ✅ |
+| M3.2 | 并行工具执行（asyncio.gather） | 5 |
+| M3.3 | web_search 重构（4 引擎 + 降级） | 7 |
+| M3.4 | Gateway 状态重构（类实例） | 3 |
+| M3.5 | SessionManager 线程安全（Lock） | 2 |
+| M3.6a | Channel Router（统一路由层） | 8 |
+| M3.6b | 消息队列 4 模式 | 6 |
+
+#### 7.2.2 下一优先级（v0.14.0 ✅ 已达成）
+
+| 里程碑 | 功能 | 优先级 | 工作量 | 依赖 |
+|:---|:---|:---:|:---:|:---|
+| **M3.7 ✅** | **MCP 客户端集成（F13）** — MCP 协议客户端，动态工具发现与注册，支持 3+ MCP Server | 🔴 P0 | 3d | litellm |
+| **M3.10 ✅** | **内置工具扩展至 35+** — 浏览器工具(playwright)、数据库工具(sqlite)、图片处理(Pillow)、代码分析(AST) | 🔴 P0 | 4d | — |
+| **M3.11 ✅** | **全链路异步化** — BackgroundReview → asyncio，消除全部 threading.Thread，零阻塞调用 | 🔴 P0 | 2d | M3.2 |
+| **M3.12 ✅** | **测试覆盖率 > 80%** — 重点补充 gateway/app.py (62%→85%) 和 tools/builtin.py (58%→80%) | 🟡 P1 | 2d | — |
+
+#### 7.2.3 Phase 3 中期（v0.15.0）
+
+| 里程碑 | 功能 | 优先级 | 工作量 |
+|:---|:---|:---:|:---:|
+| **M3.6c** | **Block Streaming（F17）** — SSE 完成即发送，chunk 800-1200 chars，首字延迟降低 50%+ | 🟡 P1 | 3d |
+| **M3.6d** | **DM 配对安全（F18）** — 配对码生成 + 管理员审批 + 签名挑战 | 🟡 P1 | 3d |
+| **M3.6e** | **飞书适配器** — WebSocket 事件订阅，国内办公首选 | 🔴 P0 | 2d | M3.6a |
+| **M3.6f** | **微信适配器** — 公众号/企业微信，覆盖最广用户群 | 🔴 P0 | 3d | M3.6a |
+| **M3.6g** | **QQ 适配器** — QQ Bot API，年轻用户主力 | 🟡 P1 | 2d | M3.6a |
+| **M3.6h** | **Telegram 适配器** — Bot API | 🟢 P2 | 2d | M3.6a |
+| **M3.6i** | **Discord 适配器** — Bot API + Gateway 集成 | 🟢 P2 | 2d | M3.6a |
+| **M3.6j** | **Slack 适配器** — Bolt SDK | 🟢 P2 | 2d | M3.6a |
+
+| 里程碑 | 功能 | 优先级 | 工作量 |
+|:---|:---|:---:|:---:|
+| **M3.3** | **多模态记忆（F21）** — 图片/文件/代码片段向量化存储与检索 | 🟡 P1 | 3d |
+| **M3.4** | **用户画像持久化（F22）** — 长期偏好建模，跨会话用户理解 | 🟡 P1 | 2d |
+| **M3.10b** | **内置工具扩展至 45+** — 语音识别、地图服务、邮件、日历、PDF 解析等 | 🟢 P2 | 4d |
+| **M3.5** | **技能审核流** — 发布前安全审核 + 依赖检查 + 兼容性验证 | 🟢 P2 | 2d |
+| **M3.2b** | **Skill Evolution Graph** — 技能演化 DAG 图谱可视化 | 🟢 P2 | 2d |
+| **M3.6k** | **WebChat 适配器** — 基于 WebSocket 的 Web 聊天 UI | 🟢 P2 | 2d | M3.6a |
+| **M3.6l** | **渠道配置热加载** — YAML 变更自动检测，无需重启 | 🟢 P2 | 1d | M3.6a |
+| **M3.6m** | **媒体处理** — 图片/文件/语音消息处理 | 🟢 P2 | 2d |
+| **M3.13** | **测试覆盖率 > 85%** — 全模块覆盖，补充集成测试 | 🟡 P1 | 2d |
+
+### 7.3 Phase 4（📋 v1.0.0 — 体验与差异化）
+
+| 里程碑 | 功能 | 优先级 | 工作量 |
+|:---|:---|:---:|:---:|
+| **M4.1** | **Observability Dashboard** — 实时监控 Agent 状态、工具调用、记忆使用、渠道状态 | 🔴 P0 | 5d |
+| **M4.2** | **结构化日志 + OpenTelemetry** — JSON 格式日志，Trace/Span 全链路追踪 | 🔴 P0 | 2d |
+| **M4.4** | **Progressive Disclosure（F14）** — 3 级技能加载（core/standard/extended） | 🟡 P1 | 3d |
+| **M4.5** | **条件激活技能（F15）** — fallback_for_toolsets / requires_toolsets 智能选择 | 🟡 P1 | 2d |
+| **M4.5b** | **6 级技能加载优先级** — workspace > project > personal > managed > bundled > extra | 🟡 P1 | 1d |
+| **M4.3** | **ACP/IDE 集成（F20）** — VS Code 插件（基础版） | 🟢 P2 | 4d |
+| **M4.6** | **设备配对安全增强** — 签名挑战 v3，绑定 platform + deviceFamily | 🟢 P2 | 2d |
+| **M4.7** | **工具权限审计** — 工具调用日志 + 权限变更审计 | 🟢 P2 | 1d |
+| **M4.8** | **性能基准测试** — 8 项性能基准，CI 自动检测回归 | 🟡 P1 | 2d |
+| **M4.9** | **Canvas 可视化（F21）** — A2UI 可编辑 HTML/CSS/JS 工作区 | 🟢 P3 | 5d |
+| **M4.10** | **轨迹生成（F22）** — ShareGPT 格式训练数据导出 | 🟢 P3 | 2d |
+
+### 7.4 Phase 5（📋 v1.1.0+ — 平台化）
+
+| 方向 | 关键特性 |
+|:---|:---|
+| 多租户 | 租户隔离 + 配额管理 + 计费 |
+| 技能市场 | 基于 Federated Skill Hub 的社区市场（发布/发现/安装/评分） |
+| Agent 编排 | DAG 工作流 + 条件分支 + 并行执行 |
+| 企业安全 | SSO/OIDC 集成 + 数据加密 + 合规审计 |
+| 边缘部署 | 轻量运行时 + 本地模型 + 离线模式 |
+| 多语言 SDK | TypeScript/Go/Rust 客户端库 |
+
+---
+
+## 8. 质量保障体系
+
+### 8.1 代码质量门禁
+
+| 检查项 | 工具 | 当前标准 | v1.0 目标 |
+|:---|:---|:---|:---|
+| 代码风格 | ruff | 0 errors | 0 errors |
+| 类型检查 | mypy | 6 strict checks, 0 errors | 全量 strict, 0 errors |
+| 单元测试 | pytest | 203 passed | 500+ passed |
+| 覆盖率 | pytest-cov | ~65% | >90% |
+| 集成测试 | pytest | 基础 | 完整覆盖 REST API + 渠道 |
+| CI 流水线 | GitHub Actions | lint + typecheck + test + build | + security scan + perf bench |
+| 性能回归 | 自建 | 无 | CI 自动检测 |
+
+### 8.2 测试分层策略
+
+```
+┌──────────────────────────────────────────┐
+│           E2E 测试（渠道接入 / 用户故事）   │
+│         ┌────────────────────────────┐    │
+│         │  集成测试（REST API / DB / ChromaDB）│
+│         │  ┌──────────────────────┐  │    │
+│         │  │  单元测试（每个模块）  │  │    │
+│         │  │  · 纯函数测试        │  │    │
+│         │  │  · Mock LLM 调用     │  │    │
+│         │  │  · Mock 外部服务     │  │    │
+│         │  └──────────────────────┘  │    │
+│         └────────────────────────────┘    │
+└──────────────────────────────────────────┘
+```
+
+### 8.3 代码审查清单
+
+- [ ] 类型注解完整（无 `Any` 导入）
+- [ ] 异常处理覆盖（使用项目异常类层次）
+- [ ] 异步一致性（无同步阻塞调用）
+- [ ] 测试覆盖新代码（目标 > 85%）
+- [ ] 文档同步更新（PRD / architecture / CHANGELOG）
+- [ ] 性能无回归（如有基准，自动检测）
+
+---
+
+## 9. 风险管理与应对
+
+| 风险 | 概率 | 影响 | 应对策略 |
+|:---|:---:|:---:|:---|
+| MCP 协议生态不成熟，集成困难 | 中 | 高 | 先支持主流 MCP Server（filesystem/git/sqlite），渐进扩展 |
+| 多渠道适配器维护成本高 | 高 | 中 | Channel Adapter SDK 标准化，每个适配器 <200 行；社区贡献模板 |
+| asyncio 全链路迁移引入并发 bug | 中 | 高 | 渐进式迁移，每步加测试；保留同步回退接口 |
+| ChromaDB 依赖升级不兼容 | 低 | 中 | 锁定版本范围；提供 JSON 回退存储 |
+| litellm 上游 Breaking Change | 低 | 高 | 锁定主版本；CI 周度兼容性测试 |
+| 测试覆盖率提升缓慢 | 中 | 低 | 新代码强制 >85% 覆盖率门禁；渐进补充旧代码 |
+| 社区贡献质量参差 | 高 | 低 | CONTRIBUTING.md + CI 自动校验 + PR 模板 |
+
+---
+
+## 10. 成功标准与验收门禁
+
+### 10.1 v1.0.0 发布门禁
+
+| 门禁 | 标准 |
+|:---|:---|
+| 测试 | 500+ 用例全部通过，覆盖率 > 90% |
+| 类型 | mypy 全量 strict，0 errors |
+| 代码风格 | ruff 0 errors |
+| 文档 | PRD / architecture / api-contract / data-model / deployment 完整且与代码一致 |
+| 性能 | 8 项基准全部达标，无回归 |
+| 安全 | DM 配对 + 工具权限审计 + 无高危依赖 |
+| 渠道 | 6+ 渠道适配器可用 + Block Streaming |
+| MCP | MCP 客户端支持 3+ MCP Server |
+| Dashboard | Observability Dashboard 可部署 |
+| 安装 | `pip install clawhermes` 一键安装，Docker 一键部署 |
+
+### 10.2 各版本验收标准
+
+| 版本 | 测试 | 覆盖率 | 新功能 | 文档 |
+|:---|:---:|:---:|:---|:---:|
+| v0.14.0 | 260+ | >80% | MCP + 35 工具 + 全链路异步 | CHANGELOG + MCP 文档 |
+| v0.15.0 | 320+ | >83% | Streaming + DM + 3 渠道 + Profile 隔离 | 渠道适配器指南 |
+| v0.16.0 | 380+ | >85% | 多模态记忆 + 45 工具 + 飞书/WebChat | 多模态记忆文档 |
+| v1.0.0 | 500+ | >90% | 全部 Phase 4 功能 | 完整文档集 |
+
+---
+
+## 11. 核心指标追踪表
+
+### 11.1 能力指标
+
+| 指标 | v0.14.0 | v0.15.0 目标 | v0.15.0 目标 | v0.16.0 目标 | v1.0.0 目标 |
+|:---|:---:|:---:|:---:|:---:|:---:|
+| 内置工具数 | 26 | 35 | 35 | 45 | 50+ |
+| MCP 工具 | 0 | ✅ | ✅ | ✅ | ✅ |
+| 渠道适配器 | 3 | 3 | 6 | 8 | 8+ |
+| 测试用例 | 203 | 260 | 320 | 380 | 500+ |
+| 测试覆盖率 | 65% | 80% | 83% | 85% | 90%+ |
+| Block Streaming | ❌ | ❌ | ✅ | ✅ | ✅ |
+| MCP 集成 | ❌ | ✅ | ✅ | ✅ | ✅ |
+| Profile 隔离 | 3 级工具 | 3 级工具 | ✅ 完整 | ✅ 完整 | ✅ 完整 |
+| Progressive Disclosure | ❌ | ❌ | ❌ | ❌ | ✅ |
+| 条件激活技能 | ❌ | ❌ | ❌ | ❌ | ✅ |
+| 多模态记忆 | ❌ | ❌ | ❌ | ✅ | ✅ |
+| Dashboard | ❌ | ❌ | ❌ | ❌ | ✅ |
+| IDE 集成 | ❌ | ❌ | ❌ | ❌ | ✅ |
+| DM 安全模型 | ❌ | ❌ | ✅ | ✅ | ✅ |
+| 结构化日志 | ❌ | ❌ | ❌ | ❌ | ✅ |
+
+### 11.2 差异化优势追踪
+
+| 差异化点 | v0.14.0 | Phase 3 目标 | v1.0.0 目标 |
+|:---|:---|:---|:---|
+| ACE 自适应压缩 | ✅ 基础版（4 种类型 + 规则分类） | LLM 辅助分类 | 迭代再压缩 |
+| ChromaDB 向量记忆 | ✅ 文本向量（三者唯一） | — | 多模态向量 |
+| Federated Skill Hub | ✅ Git 联邦 + SHA-256（去中心化） | + 审核流 | 社区市场 |
+| Channel Adapter SDK | ✅ 标准化 ABC（三者唯一） | +6 适配器 | +8 适配器 |
+| 纯 Python 零编译 | ✅ 核心优势 | 保持 | 保持 |
+| asyncio 原生异步 | 🔄 部分（chat_async ✅, 并行 ✅） | 全链路 | 全链路 |
+
+---
+
+> **本计划将随项目进展持续迭代。每个里程碑完成后回顾并修订下一阶段计划。**
+>
+> **当前焦点：Phase 3 v0.14.0 — MCP 集成 + 工具扩展至 35 + 全链路异步化。**
+
+---
+
+## 附录 A：消息网关专项路线图
+
+> ClawHermes 的消息网关定位：**SDK 驱动的可嵌入消息路由层**，而非 OpenClaw 式的全渠道平台。
+> 核心策略：Channel Adapter SDK 标准化 → 少量高质量适配器 → 社区贡献长尾渠道。
+
+### A.1 当前状态（v0.14.0）
+
+```
+                    ┌──────────────────────────┐
+                    │     Channel Router ✅     │
+                    │  · SessionRouter         │
+                    │  · 4 队列模式             │
+                    │  · allowlist 过滤        │
+                    └───────────┬──────────────┘
+                                │
+        ┌───────────────────────┼───────────────────────┐
+        │                       │                       │
+  ┌─────▼─────┐          ┌─────▼─────┐          ┌─────▼─────┐
+  │ CLI ✅    │          │ REST ✅   │          │ WS ✅     │
+  │ (print)   │          │ (Future)  │          │ (conn reg)│
+  └───────────┘          └───────────┘          └───────────┘
+```
+
+### A.2 与 OpenClaw 消息网关的架构对比
+
+| 维度 | OpenClaw | ClawHermes（当前） | ClawHermes（v1.0 目标） |
+|:---|:---|:---|:---|
+| 渠道数 | 22+ 生产可用 | 3（CLI/REST/WS） | 8+ |
+| 协议 | 自研 WebSocket（3 帧类型） | REST + WebSocket | REST + WebSocket + SSE |
+| 消息队列 | steer/followup/collect/interrupt | ✅ 4 模式完整 | ✅ |
+| Block Streaming | ✅ 完成即发送 | ❌ | ✅ v0.15.0 |
+| DM 配对安全 | ✅ 签名挑战 v3 | ❌ | ✅ v0.15.0 |
+| 渠道热加载 | ✅ | ❌ | ✅ v0.16.0 |
+| 媒体处理 | ✅ | ❌ | ✅ v0.16.0 |
+| Dashboard | ✅ 渠道状态监控 | ❌ | ✅ Phase 4 |
+| SDK 抽象 | ❌ 无标准化接口 | ✅ ChannelAdapter ABC | ✅ |
+| Gateway 中心化 | ✅ 单一 Gateway 实例 | ✅ GatewayState 类 | ✅ + 连接池 |
+
+### A.3 消息网关分阶段计划
+
+#### Phase 3 中期（v0.14.0）— 夯实基础
+
+| 任务 | 说明 | 优先级 |
+|:---|:---|:---:|
+| Channel Router 异步全链路 | `_on_message` 同步回调 → 完整 async/await 链路 | P0 |
+| 消息可靠性 | 消息持久化到 SQLite（防丢失）+ 重试机制 | P0 |
+| Gateway WebSocket 端点 | `/ws` 端点，真正双向实时推送 | P1 |
+
+#### Phase 3 后期（v0.15.0）— 渠道接入
+
+| 任务 | 说明 | 优先级 |
+|:---|:---|:---:|
+| **Block Streaming（SSE）** | `/chat/stream` SSE 端点，完成即发送，首字延迟 < 500ms | P1 |
+| **DM 配对安全模型** | 配对码 6 位数字 + TTL 5min + 管理员审批 | P1 |
+| **飞书适配器** | lark-oapi，WebSocket 事件订阅，国内办公首选 | P0 |
+| **微信适配器** | 公众号/企业微信，覆盖最广用户群 | P0 |
+| **QQ 适配器** | QQ Bot API，年轻用户主力 | P1 |
+| **Telegram 适配器** | python-telegram-bot | P2 |
+| **Discord 适配器** | discord.py，Gateway 集成 | P2 |
+| **Slack 适配器** | slack-bolt，Socket Mode | P2 |
+| 渠道连接健康检查 | `health()` 方法，断线自动重连 | P2 |
+
+#### Phase 3 收尾（v0.16.0）— 完善体验
+
+| 任务 | 说明 | 优先级 |
+|:---|:---|:---:|
+| WebChat 适配器 | 基于 WebSocket 的 Web 聊天 UI | P2 |
+| 渠道配置热加载 | YAML 变更自动检测 + 新渠道即插即用 | P2 |
+| 媒体处理 | 图片/文件/语音消息的接收与响应 | P2 |
+| 渠道消息统计 | 消息量/延迟/错误率埋点 | P2 |
+
+#### Phase 4（v1.0.0）— 可观测 + 安全
+
+| 任务 | 说明 | 优先级 |
+|:---|:---|:---:|
+| Dashboard 渠道面板 | 实时展示各渠道连接状态、消息吞吐、错误率 | P0 |
+| 渠道权限审计 | 工具调用来源追踪 + 权限变更记录 | P1 |
+| 签名挑战 v2 | 绑定 platform + deviceFamily + nonce | P2 |
+| 多渠道消息广播 | 一条消息 → 多平台同步 | P3 |
+
+### A.4 消息流完整路径（v1.0.0 目标）
+
+```
+外部平台                    ClawHermes Gateway                    Agent
+─────────                  ──────────────────                    ─────
+
+飞书 ────┐                ┌──────────────────┐
+           │   WebSocket   │                  │
+微信 ────┼──────────────►│  Channel Router  │
+           │   Webhook     │                  │
+QQ ──────┘                │  ┌────────────┐  │
+                           │  │ DM 配对    │  │
+                           │  │ 安全验证   │──┼──► allowlist 过滤
+                           │  └────────────┘  │
+                           │  ┌────────────┐  │
+                           │  │ 消息队列    │  │
+                           │  │ steer/     │  │
+                           │  │ followup/  │──┼──► _process_queue()
+                           │  │ collect/   │  │         │
+                           │  │ interrupt  │  │         ▼
+                           │  └────────────┘  │    Agent.chat()
+                           │  ┌────────────┐  │         │
+                           │  │Session     │  │         │
+                           │  │ Router     │  │◄────────┘
+                           │  │(channel+   │  │
+                           │  │ chat_id →  │  │
+                           │  │ session_id)│  │
+                           │  └────────────┘  │
+                           │                  │
+                           │  ┌────────────┐  │
+                           │  │Block       │  │
+飞书 ◄───────────────────┼──│Streaming   │  │
+微信 ◄───────────────────┼──│(SSE/chunk) │  │
+QQ   ◄───────────────────┼──│            │  │
+                           │  └────────────┘  │
+                           └──────────────────┘
+```
+
+### A.5 渠道适配器实现模板
+
+每个外部平台适配器只需实现 4 个方法（< 200 行）：
+
+```python
+from clawhermes.channel import ChannelAdapter, ChannelType, ChannelUser, ChannelMessage, ChannelResponse
+
+class MyPlatformAdapter(ChannelAdapter):
+    def __init__(self, config):
+        super().__init__(ChannelType.CUSTOM, config)
+        self._client = None  # 平台 SDK 客户端
+
+    async def start(self) -> None:
+        """启动：连接平台、注册 webhook / 开始 poll"""
+        self._client = PlatformSDK(token=self.config["token"])
+        self._client.on_message(self._on_platform_message)
+        self._running = True
+
+    async def stop(self) -> None:
+        """停止：断开连接、清理资源"""
+        await self._client.close()
+        self._running = False
+
+    async def send_response(self, response: ChannelResponse, original: ChannelMessage) -> None:
+        """发送：将 Agent 回复推回平台"""
+        chat_id = original.metadata.get("chat_id", original.user.user_id)
+        await self._client.send_message(chat_id, response.content)
+
+    async def get_user_info(self, user_id: str) -> ChannelUser | None:
+        """用户信息：查询平台用户"""
+        user = await self._client.get_user(user_id)
+        return ChannelUser(user_id=user.id, display_name=user.name) if user else None
+
+    def _on_platform_message(self, raw_msg) -> None:
+        """内部：平台消息 → ChannelMessage → dispatch"""
+        msg = ChannelMessage(
+            message_id=raw_msg.id,
+            channel_type=self.channel_type,
+            user=ChannelUser(user_id=raw_msg.sender_id, display_name=raw_msg.sender_name),
+            content=raw_msg.text,
+            metadata={"chat_id": raw_msg.chat_id},
+        )
+        self._dispatch_message(msg)   # → ChannelRouter._on_message → 消息队列 → Agent
+```

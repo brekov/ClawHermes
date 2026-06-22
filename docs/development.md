@@ -37,13 +37,13 @@ src/clawhermes/
 ├── channel/            # F18: Channel Adapter SDK
 ├── llm/                # F1: LLM Provider + CredentialPool
 ├── tools/
-│   ├── builtin.py      # F3: 26 个内置工具 + 3 级 Profile
+│   ├── builtin.py      # F3: 35 个内置工具 + 3 级 Profile
 │   └── sandbox.py      # F16: Docker 沙箱
 ├── skills/
 │   ├── manager.py      # F6/F7: 技能系统 + Background Review + Curator
 │   └── hub.py          # F19: Federated Skill Hub
 ├── storage/            # ChromaDB 向量记忆
-├── gateway/            # FastAPI Gateway（18 个端点）
+├── gateway/            # FastAPI Gateway（23 个端点）
 ├── cli.py              # CLI 入口
 ├── config.py           # 配置管理
 └── types.py            # 核心类型

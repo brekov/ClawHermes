@@ -18,7 +18,7 @@
                                │
 ┌──────────────────────────────▼───────────────────────────────────────┐
 │                          Gateway 层                                  │
-│        FastAPI REST 服务（18 个端点 · Cron调度 · Docker沙箱）         │
+│        FastAPI REST 服务（23 个端点 · Cron调度 · Docker沙箱）         │
 │              CLI 接口 / HTTP API / WebSocket                         │
 └──────────────────────────────┬───────────────────────────────────────┘
                                │
@@ -85,7 +85,7 @@
 
 | 模块 | 职责 | 关键类/函数 |
 |------|------|-------------|
-| `gateway/app.py` | FastAPI REST 服务（18 个端点） | `app` (FastAPI instance) |
+| `gateway/app.py` | FastAPI REST 服务（23 个端点） | `app` (FastAPI instance) |
 | `gateway/app.py` | Agent 初始化与组件装配 | `_create_agent_components()` / `_auto_init()` |
 | `gateway/app.py` | Cron 调度端点（6个） | `create_cron_job` / `list_cron_jobs` / `get_cron_job` / `delete_cron_job` / `pause_cron_job` / `resume_cron_job` |
 | `gateway/app.py` | 会话管理端点（3个） | `list_sessions` / `get_session` / `delete_session` |
@@ -495,7 +495,7 @@ gateway/app.py
 
 ## 6. v1.0 目标架构
 
-> 以下为 v1.0 完整目标架构，与当前实现（v0.12.2）对比
+> 以下为 v1.0 完整目标架构，与当前实现（v0.14.0）对比
 
 ### 6.1 已实现模块（v0.11.0）
 
@@ -514,7 +514,7 @@ gateway/app.py
 | `gateway/app.py` | FastAPI REST 服务（13个端点） | ✅ |
 | `.github/workflows/ci.yml` | CI 流水线 | ✅ |
 
-### 6.2 已实现模块（v0.12.0）
+### 6.2 已实现模块（v0.14.0）
 
 | 模块 | 职责 | 阶段 |
 |------|------|------|
@@ -524,7 +524,7 @@ gateway/app.py
 | `tools/sandbox.py` | Docker 沙箱执行环境 | Phase 2 ✅ |
 | `skills/hub.py` | 联邦技能中心（SkillHub） | Phase 3 ✅ |
 
-### 6.3 已实现模块（v0.12.2）
+### 6.3 新增模块（v0.14.0）
 
 | 模块 | 职责 | 阶段 |
 |------|------|------|

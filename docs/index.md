@@ -1,16 +1,16 @@
 # ClawHermes
 
 > 融合 **Hermes** 自进化能力与 **OpenClaw** Gateway 体系的 Python AI Agent 框架
-> v0.12.2 · 24 个源文件 · 165 个测试通过 · 26 个内置工具
+> v0.14.0 · 28 个源文件 · 310 个测试通过 · 35 个内置工具
 
 ---
 
 <div>
   <a href="https://github.com/brekov/ClawHermes"><img src="https://img.shields.io/badge/python-3.12%2B-blue" alt="Python 3.12+"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="MIT"></a>
-  <img src="https://img.shields.io/badge/tests-165%2F165-brightgreen" alt="tests 165/165">
-  <img src="https://img.shields.io/badge/coverage-67%25-yellow" alt="coverage 67%">
-  <a href="https://github.com/brekov/ClawHermes/releases"><img src="https://img.shields.io/github/v/release/brekov/ClawHermes" alt="release v0.12.2"></a>
+  <img src="https://img.shields.io/badge/tests-310%2F310-brightgreen" alt="tests 310/310">
+  <img src="https://img.shields.io/badge/coverage-71%25-yellow" alt="coverage 71%">
+  <a href="https://github.com/brekov/ClawHermes/releases"><img src="https://img.shields.io/github/v/release/brekov/ClawHermes" alt="release v0.14.0"></a>
 </div>
 
 ---
@@ -28,7 +28,7 @@ clawhermes chat
 | 模块 | 能力 |
 |:---|:---|
 | **Agent 核心** | 多 LLM 接入(132)、三层 Prompt、ACE 自适应压缩、子 Agent 委派、多 Agent |
-| **工具系统** | 26 个内置工具、3 级 Profile、钩子系统(async + 超时)、并行/串行调度 |
+| **工具系统** | 35 个内置工具、3 级 Profile、MCP 动态工具发现、MCP 动态工具、钩子系统(async + 超时)、并行/串行调度 |
 | **记忆系统** | JSON + ChromaDB 双存储、语义搜索、跨会话持久化 |
 | **技能系统** | SkillManager + Background Review(自进化) + Curator(维护) + SkillHub(发布) |
 | **基础设施** | Cron 调度器、Docker 沙箱、Channel SDK、mypy 严格类型 |
@@ -75,4 +75,4 @@ bash <(curl -fsSL https://raw.githubusercontent.com/brekov/ClawHermes/main/scrip
 
 ---
 
-*ClawHermes · 融合 Hermes 与 OpenClaw 的 AI Agent 框架 · v0.12.2 · MIT License*
+*ClawHermes · 融合 Hermes 与 OpenClaw 的 AI Agent 框架 · v0.14.0 · MIT License*
