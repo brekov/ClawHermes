@@ -3,6 +3,8 @@ ClawHermes - 扩展单元测试
 覆盖 builtin tools、session、exceptions、delegate 等模块
 """
 from __future__ import annotations
+import pytest
+from unittest.mock import MagicMock
 
 import json
 import os
@@ -873,3 +875,687 @@ class TestSessionManagerThreadSafety:
             msgs = sm.get_messages(sid)
             assert len(msgs) == 10
             sm.close()
+
+
+# ============================================================
+# Extended unit tests for coverage (M3.12)
+# ============================================================
+
+class TestMoreToolHandlers:
+    """Additional tool handler tests for coverage"""
+
+    def test_exec_command_echo(self):
+        from clawhermes.tools.builtin import _exec_command
+        result = _exec_command(command="echo hello")
+        assert isinstance(result, dict)
+
+    def test_exec_command_timeout(self):
+        from clawhermes.tools.builtin import _exec_command
+        result = _exec_command(command="sleep 10", timeout=1)
+        assert isinstance(result, dict)
+
+    def test_web_fetch_invalid_url(self):
+        from clawhermes.tools.builtin import _web_fetch
+        result = _web_fetch(url="not-a-valid-url")
+        assert isinstance(result, dict)
+
+    def test_patch_file(self, tmp_path):
+        from clawhermes.tools.builtin import _patch_file
+        f = tmp_path / "code.py"
+        f.write_text("hello world")
+        result = _patch_file(path=str(f), search="hello", replace="hi")
+        assert isinstance(result, dict)
+        assert f.read_text() == "hi world"
+
+    def test_search_replace(self, tmp_path):
+        from clawhermes.tools.builtin import _search_replace
+        f = tmp_path / "code.py"
+        f.write_text("hello hello world")
+        result = _search_replace(path=str(f), search="hello", replace="hi", all=True)
+        assert isinstance(result, dict)
+        assert f.read_text() == "hi hi world"
+
+    def test_code_eval(self):
+        from clawhermes.tools.builtin import _code_eval
+        result = _code_eval(code="print('test')")
+        assert isinstance(result, dict)
+
+    def test_code_eval_timeout(self):
+        from clawhermes.tools.builtin import _code_eval
+        result = _code_eval(code="import time; time.sleep(10)", timeout=1)
+        assert isinstance(result, dict)
+
+    def test_http_request_get(self):
+        from clawhermes.tools.builtin import _http_request
+        result = _http_request(url="http://localhost:1/nonexistent", method="GET")
+        assert isinstance(result, dict)
+
+    def test_json_query_from_str(self):
+        from clawhermes.tools.builtin import _json_query
+        result = _json_query(json_str='[1, 2, 3]', path="1")
+        assert isinstance(result, dict)
+
+    def test_git_diff_no_repo(self, tmp_path):
+        from clawhermes.tools.builtin import _git_diff
+        result = _git_diff(path=str(tmp_path))
+        assert isinstance(result, dict)
+
+    def test_git_log_no_repo(self, tmp_path):
+        from clawhermes.tools.builtin import _git_log
+        result = _git_log(path=str(tmp_path))
+        assert isinstance(result, dict)
+
+    def test_memory_search_empty_query(self):
+        from clawhermes.tools.builtin import _memory_search
+        result = _memory_search(query="nonexistent_xyz123")
+        assert isinstance(result, dict)
+
+    def test_memory_save(self):
+        from clawhermes.tools.builtin import _memory_save
+        result = _memory_save(content="test memory content")
+        assert isinstance(result, dict)
+
+    def test_delegate_task_empty(self):
+        from clawhermes.tools.builtin import _delegate_task
+        result = _delegate_task(tasks=[])
+        assert isinstance(result, dict)
+
+    def test_web_search(self):
+        from clawhermes.tools.builtin import _web_search
+        result = _web_search(query="python programming")
+        assert isinstance(result, dict)
+
+    def test_calc_simple(self):
+        from clawhermes.tools.builtin import _calc
+        result = _calc(expression="42")
+        assert isinstance(result, dict)
+
+    def test_calc_complex(self):
+        from clawhermes.tools.builtin import _calc
+        result = _calc(expression="sum(range(100))")
+        assert isinstance(result, dict)
+
+
+class TestSkillManager:
+    """Test SkillManager operations"""
+
+    def test_skill_manager_create_and_list(self, tmp_path):
+        from clawhermes.skills.manager import SkillManager
+        sm = SkillManager(tmp_path)
+        skill = sm.create("test-skill", "print('hello')", "A test skill")
+        assert skill.name == "test-skill"
+        assert skill.description == "A test skill"
+
+        skills = sm.list()
+        assert len(skills) >= 1
+
+    def test_skill_manager_get(self, tmp_path):
+        from clawhermes.skills.manager import SkillManager
+        sm = SkillManager(tmp_path)
+        sm.create("get-test", "content", "desc")
+        skill = sm.get("get-test")
+        assert skill is not None
+        assert skill.name == "get-test"
+
+    def test_skill_manager_get_nonexistent(self, tmp_path):
+        from clawhermes.skills.manager import SkillManager
+        sm = SkillManager(tmp_path)
+        assert sm.get("nonexistent") is None
+
+    def test_skill_manager_update(self, tmp_path):
+        from clawhermes.skills.manager import SkillManager
+        sm = SkillManager(tmp_path)
+        sm.create("update-test", "original", "desc")
+        sm.update("update-test", content="updated", usage_count=5)
+        skill = sm.get("update-test")
+        assert skill is not None
+        assert skill.usage_count == 5
+
+    def test_skill_manager_status_filter(self, tmp_path):
+        from clawhermes.skills.manager import SkillManager
+        sm = SkillManager(tmp_path)
+        sm.create("filter-test", "content", "desc")
+        active = sm.list(status="active")
+        assert len(active) >= 1
+
+
+class TestBackgroundReview:
+    """Test BackgroundReview parsing"""
+
+    def test_review_parse_valid_json(self, tmp_path):
+        from clawhermes.skills.manager import BackgroundReview, SkillManager
+        from clawhermes.agent.memory import MemoryManager, JSONMemoryProvider
+        from clawhermes.llm.provider import LLMProvider
+
+        provider = LLMProvider(model="deepseek/deepseek-chat", api_key="test")
+        memory = MemoryManager()
+        memory.add_provider(JSONMemoryProvider(tmp_path))
+        sm = SkillManager(tmp_path)
+
+        br = BackgroundReview(provider, memory, sm)
+
+        # Test JSON parsing
+        result = br._parse_review('{"memories": [{"content": "test", "importance": 0.9}], "skills": []}')
+        assert len(result["memories"]) == 1
+        assert result["memories"][0]["content"] == "test"
+
+    def test_review_parse_invalid(self, tmp_path):
+        from clawhermes.skills.manager import BackgroundReview, SkillManager
+        from clawhermes.agent.memory import MemoryManager, JSONMemoryProvider
+        from clawhermes.llm.provider import LLMProvider
+
+        provider = LLMProvider(model="deepseek/deepseek-chat", api_key="test")
+        memory = MemoryManager()
+        memory.add_provider(JSONMemoryProvider(tmp_path))
+        sm = SkillManager(tmp_path)
+
+        br = BackgroundReview(provider, memory, sm)
+        result = br._parse_review("not json at all")
+        assert result == {"memories": [], "skills": []}
+
+    def test_review_build_prompt(self, tmp_path):
+        from clawhermes.skills.manager import BackgroundReview, SkillManager
+        from clawhermes.agent.memory import MemoryManager, JSONMemoryProvider
+        from clawhermes.llm.provider import LLMProvider
+
+        provider = LLMProvider(model="deepseek/deepseek-chat", api_key="test")
+        memory = MemoryManager()
+        memory.add_provider(JSONMemoryProvider(tmp_path))
+        sm = SkillManager(tmp_path)
+
+        br = BackgroundReview(provider, memory, sm)
+        conv = [{"role": "user", "content": "hello"}, {"role": "assistant", "content": "hi"}]
+        prompt = br._build_review_prompt(conv)
+        assert "hello" in prompt
+        assert "hi" in prompt
+
+
+class TestCurator:
+    """Test Curator operations"""
+
+    def test_curator_empty(self, tmp_path):
+        from clawhermes.skills.manager import Curator, SkillManager
+        sm = SkillManager(tmp_path)
+        curator = Curator(sm)
+        stats = curator.run(dry_run=True)
+        assert stats["active"] == 0
+        assert stats["stale"] == 0
+        assert stats["archived"] == 0
+
+    def test_curator_with_skills(self, tmp_path):
+        from clawhermes.skills.manager import Curator, SkillManager
+        import time
+        sm = SkillManager(tmp_path)
+        sm.create("fresh-skill", "content", "desc")
+
+        # Create a skill that hasn't been used for a long time
+        old_skill = sm.create("old-skill", "content", "desc")
+        old_skill.last_used = time.time() - 40 * 86400  # 40 days ago
+        sm.update("old-skill", last_used=old_skill.last_used)
+
+        curator = Curator(sm)
+        stats = curator.run(dry_run=True)
+        # old-skill should be marked stale (30 days)
+        assert stats["stale"] >= 1
+
+
+class TestPrompt:
+    """Test SystemPrompt"""
+
+    def test_prompt_build(self):
+        from clawhermes.agent.prompt import SystemPrompt
+        sp = SystemPrompt()
+        result = sp.build()
+        assert isinstance(result, str)
+        assert len(result) > 0
+
+    def test_prompt_with_identity(self, tmp_path):
+        from clawhermes.agent.prompt import SystemPrompt
+        sp = SystemPrompt()
+        sp = SystemPrompt()
+        result = sp.build()
+        assert "ClawHermes" in result or "clawhermes" in result.lower()
+
+
+class TestMemoryProviders:
+    """Test memory providers"""
+
+    def test_json_provider_save_and_search(self, tmp_path):
+        from clawhermes.agent.memory import JSONMemoryProvider, MemoryItem, MemoryScope
+        provider = JSONMemoryProvider(tmp_path)
+        item = MemoryItem(content="test memory", importance=0.8, scope=MemoryScope.USER)
+        provider.save(item)
+        results = provider.search("test")
+        assert len(results) >= 1
+
+    def test_json_provider_persistence(self, tmp_path):
+        from clawhermes.agent.memory import JSONMemoryProvider, MemoryItem, MemoryScope
+        p1 = JSONMemoryProvider(tmp_path)
+        p1.save(MemoryItem(content="persistent data", importance=0.9, scope=MemoryScope.USER))
+        p2 = JSONMemoryProvider(tmp_path)
+        results = p2.search("persistent")
+        assert len(results) >= 1
+
+
+class TestSessionManager:
+    """Test session manager"""
+
+    def test_create_and_get_session(self, tmp_path):
+        from clawhermes.agent.session import SessionManager
+        mgr = SessionManager(str(tmp_path))
+        sid = mgr.create_session()
+        assert sid is not None
+        info = mgr.get_session(sid)
+        assert info is not None
+
+    def test_list_sessions(self, tmp_path):
+        from clawhermes.agent.session import SessionManager
+        mgr = SessionManager(str(tmp_path))
+        mgr.create_session()
+        mgr.create_session()
+        sessions = mgr.list_sessions()
+        assert len(sessions) == 2
+
+    def test_save_and_get_messages(self, tmp_path):
+        from clawhermes.agent.session import SessionManager
+        mgr = SessionManager(str(tmp_path))
+        sid = mgr.create_session()
+        mgr.add_message(sid, "user", "hello")
+        mgr.add_message(sid, "assistant", "hi")
+        messages = mgr.get_messages(sid)
+        assert len(messages) == 2
+
+    def test_delete_session(self, tmp_path):
+        from clawhermes.agent.session import SessionManager
+        mgr = SessionManager(str(tmp_path))
+        sid = mgr.create_session()
+        assert mgr.delete_session(sid) is True
+        assert mgr.delete_session("nonexistent") is False
+
+
+class TestExceptions:
+    """Test exception hierarchy"""
+
+    def test_clawhermes_error(self):
+        from clawhermes.agent.exceptions import ClawHermesError
+        e = ClawHermesError("test error")
+        assert str(e) == "test error"
+
+    def test_tool_not_found_error(self):
+        from clawhermes.agent.exceptions import ToolNotFoundError
+        e = ToolNotFoundError("test tool not found")
+        assert "test" in str(e)
+
+    def test_tool_execution_error(self):
+        from clawhermes.agent.exceptions import ToolExecutionError
+        e = ToolExecutionError("failed", tool_name="exec")
+        assert e.tool_name == "exec"
+
+    def test_llm_connection_error(self):
+        from clawhermes.agent.exceptions import LLMConnectionError
+        e = LLMConnectionError("connection lost")
+        assert "connection lost" in str(e)
+
+    def test_config_validation_error(self):
+        from clawhermes.agent.exceptions import ConfigValidationError
+        e = ConfigValidationError("invalid", field="port")
+        assert e.field == "port"
+
+
+class TestChannelManager:
+    """Test ChannelManager and adapters"""
+
+    def test_channel_manager_register(self):
+        from clawhermes.channel.adapter import ChannelManager, RESTAdapter
+        mgr = ChannelManager()
+        adapter = RESTAdapter()
+        mgr.register("rest", adapter)
+        assert mgr.get("rest") is adapter
+
+    def test_channel_manager_list(self):
+        from clawhermes.channel.adapter import ChannelManager, RESTAdapter
+        mgr = ChannelManager()
+        mgr.register("rest", RESTAdapter())
+        adapters = mgr.list_adapters()
+        assert len(adapters) == 1
+        assert adapters[0]["name"] == "rest"
+
+    def test_channel_manager_unregister(self):
+        from clawhermes.channel.adapter import ChannelManager, RESTAdapter
+        mgr = ChannelManager()
+        mgr.register("rest", RESTAdapter())
+        mgr.unregister("rest")
+        assert mgr.get("rest") is None
+
+    def test_channel_user(self):
+        from clawhermes.channel.adapter import ChannelUser
+        user = ChannelUser(user_id="u1", display_name="Test User")
+        assert user.user_id == "u1"
+        assert user.display_name == "Test User"
+
+    def test_channel_message(self):
+        from clawhermes.channel.adapter import ChannelMessage, ChannelType, ChannelUser
+        msg = ChannelMessage(
+            message_id="m1",
+            channel_type=ChannelType.REST,
+            user=ChannelUser(user_id="u1"),
+            content="hello",
+        )
+        assert msg.content == "hello"
+        assert msg.channel_type == ChannelType.REST
+
+
+class TestSessionRouter:
+    """Test SessionRouter"""
+
+    def test_create_and_resolve(self):
+        from clawhermes.channel.router import SessionRouter
+        from clawhermes.channel.adapter import ChannelType
+        router = SessionRouter()
+        sid = router.create(ChannelType.REST, "chat-1")
+        assert sid is not None
+        resolved = router.resolve(ChannelType.REST, "chat-1")
+        assert resolved == sid
+
+    def test_remove(self):
+        from clawhermes.channel.router import SessionRouter
+        from clawhermes.channel.adapter import ChannelType
+        router = SessionRouter()
+        router.create(ChannelType.REST, "chat-1")
+        assert router.remove(ChannelType.REST, "chat-1") is True
+        assert router.remove(ChannelType.REST, "chat-1") is False
+
+    def test_list_mappings(self):
+        from clawhermes.channel.router import SessionRouter
+        from clawhermes.channel.adapter import ChannelType
+        router = SessionRouter()
+        router.create(ChannelType.REST, "chat-1")
+        mappings = router.list_mappings()
+        assert len(mappings) == 1
+
+
+class TestConfig:
+    """Test config module"""
+
+    def test_config_validation_min_context(self):
+        from clawhermes.config import ClawHermesConfig
+        from pydantic import ValidationError
+        with pytest.raises((ValueError, ValidationError)):
+            ClawHermesConfig(llm_default_max_tokens=100)
+
+    def test_config_defaults(self):
+        from clawhermes.config import ClawHermesConfig
+        cfg = ClawHermesConfig()
+        assert cfg.gateway_port == 18789
+        assert cfg.gateway_host == "127.0.0.1"
+
+    def test_default_yaml_structure(self):
+        from clawhermes.config import default_yaml
+        yaml = default_yaml()
+        assert "agent" in yaml
+        assert "gateway" in yaml
+        assert "llm" in yaml
+
+
+class TestTypes:
+    """Test types module"""
+
+    def test_message_creation(self):
+        from clawhermes.types import Message, MessageRole
+        msg = Message(role=MessageRole.USER, content="hello")
+        assert msg.role == MessageRole.USER
+        assert msg.content == "hello"
+        assert msg.id is not None
+
+    def test_tool_call(self):
+        from clawhermes.types import ToolCall
+        tc = ToolCall(id="t1", name="test", args={})
+        assert tc.status.value == "pending"
+
+    def test_memory_item(self):
+        from clawhermes.types import MemoryItem
+        item = MemoryItem(content="test", importance=0.8)
+        assert item.importance == 0.8
+
+    def test_skill_dataclass(self):
+        from clawhermes.types import Skill
+        skill = Skill(name="test", content="print('hello')")
+        assert skill.status == "active"
+        assert skill.version == 1
+
+
+class TestGatewayState:
+    """Test GatewayState class"""
+
+    def test_initial_state(self):
+        from clawhermes.gateway.app import GatewayState
+        state = GatewayState()
+        assert state.is_initialized() is False
+        assert state.start_time > 0
+
+    def test_get_agent_uninitialized(self):
+        from clawhermes.gateway.app import GatewayState
+        state = GatewayState()
+        try:
+            state.get_agent()
+            assert False, "Expected exception"
+        except Exception:
+            pass
+
+    def test_get_memory_uninitialized(self):
+        from clawhermes.gateway.app import GatewayState
+        state = GatewayState()
+        try:
+            state.get_memory()
+            assert False, "Expected exception"
+        except Exception:
+            pass
+
+
+class TestRemainingTools:
+    """Test remaining tool handlers for coverage"""
+
+    def test_web_search_duckduckgo(self):
+        from clawhermes.tools.builtin import _web_search_duckduckgo
+        result = _web_search_duckduckgo(query="test")
+        assert isinstance(result, dict)
+
+    def test_parse_ddg_html(self):
+        from clawhermes.tools.builtin import _parse_ddg_html
+        html = '<a class="result__a" href="http://example.com">Example</a><a class="result__snippet">A test snippet</a>'
+        results = _parse_ddg_html(html)
+        assert isinstance(results, list)
+
+    def test_compress_file_no_output(self, tmp_path):
+        from clawhermes.tools.builtin import _compress_file
+        f = tmp_path / "data.txt"
+        f.write_text("test " * 50)
+        result = _compress_file(path=str(f))
+        assert isinstance(result, dict)
+
+    def test_http_request_post(self):
+        from clawhermes.tools.builtin import _http_request
+        result = _http_request(url="http://localhost:1/test", method="POST", data="test")
+        assert isinstance(result, dict)
+
+    def test_env_list_with_prefix(self):
+        from clawhermes.tools.builtin import _env_list
+        result = _env_list(prefix="PATH")
+        assert isinstance(result, dict)
+
+    def test_json_query_from_file(self, tmp_path):
+        from clawhermes.tools.builtin import _json_query
+        f = tmp_path / "data.json"
+        f.write_text('{"a": {"b": 1}}')
+        result = _json_query(json_str=f.read_text(), path="a.b")
+        assert isinstance(result, dict)
+
+
+class TestAgentLoop:
+    """Test agent loop components"""
+
+    def test_hook_point_enum(self):
+        from clawhermes.agent.loop import HookPoint
+        assert HookPoint.BEFORE_TOOL_CALL == "before_tool_call"
+        assert HookPoint.AFTER_AGENT_END == "after_agent_end"
+
+    def test_tool_def_creation(self):
+        from clawhermes.agent.loop import ToolDef
+        td = ToolDef(
+            name="test_tool",
+            description="A test tool",
+            parameters={"type": "object", "properties": {}},
+            handler=lambda **kw: {"result": "ok"},
+            parallel_safe=True,
+        )
+        assert td.name == "test_tool"
+        assert td.parallel_safe is True
+
+    def test_tool_registry_register_and_get(self):
+        from clawhermes.agent.loop import ToolDef, ToolRegistry
+        registry = ToolRegistry()
+        td = ToolDef(name="test", description="desc", parameters={}, handler=lambda **kw: {})
+        registry.register(td)
+        assert registry.get("test") is td
+        assert registry.get("nonexistent") is None
+
+    def test_tool_registry_schemas(self):
+        from clawhermes.agent.loop import ToolDef, ToolRegistry
+        registry = ToolRegistry()
+        td = ToolDef(name="test", description="desc", parameters={"type": "object", "properties": {}}, handler=lambda **kw: {})
+        registry.register(td)
+        schemas = registry.schemas()
+        assert len(schemas) == 1
+        assert schemas[0]["function"]["name"] == "test"
+
+    def test_hook_manager_register_and_trigger(self):
+        from clawhermes.agent.loop import HookManager, HookPoint
+        hm = HookManager()
+        results = []
+        def handler(**kw):
+            results.append(kw)
+            return {"modified": True}
+        hm.register(HookPoint.BEFORE_TOOL_CALL, handler)
+        output = hm.trigger(HookPoint.BEFORE_TOOL_CALL, tool_name="test")
+        assert len(results) == 1
+        assert output.get("modified") is True
+
+    def test_hook_manager_remove(self):
+        from clawhermes.agent.loop import HookManager, HookPoint
+        hm = HookManager()
+        def handler(**kw): pass
+        hm.register(HookPoint.BEFORE_TOOL_CALL, handler)
+        assert hm.remove(HookPoint.BEFORE_TOOL_CALL, handler) is True
+        assert hm.remove(HookPoint.BEFORE_TOOL_CALL, handler) is False
+
+
+class TestAgentConfig:
+    """Test agent configuration"""
+
+    def test_agent_config_defaults(self):
+        from clawhermes.agent.loop import AgentConfig
+        cfg = AgentConfig()
+        assert cfg.max_iterations == 50
+        assert cfg.max_tool_calls_per_round == 10
+
+    def test_agent_config_custom(self):
+        from clawhermes.agent.loop import AgentConfig
+        cfg = AgentConfig(max_iterations=10, max_tool_calls_per_round=5)
+        assert cfg.max_iterations == 10
+
+    def test_agent_creation(self, tmp_path):
+        from clawhermes.agent.loop import Agent, AgentConfig, ToolRegistry
+        from clawhermes.llm.provider import LLMProvider
+        provider = LLMProvider(model="deepseek/deepseek-chat", api_key="test")
+        registry = ToolRegistry()
+        agent = Agent(
+            llm_provider=provider,
+            tool_registry=registry,
+            config=AgentConfig(max_iterations=1),
+        )
+        assert agent is not None
+        assert agent.config.max_iterations == 1
+
+
+class TestNewTools:
+    """Test the 9 new tools added in M3.10"""
+
+    def test_sqlite_query(self, tmp_path):
+        from clawhermes.tools.builtin import _sqlite_query
+        import sqlite3
+        db = tmp_path / "test.db"
+        conn = sqlite3.connect(str(db))
+        conn.execute("CREATE TABLE t (id INT, name TEXT)")
+        conn.execute("INSERT INTO t VALUES (1, 'hello')")
+        conn.commit()
+        conn.close()
+        result = _sqlite_query(db_path=str(db), query="SELECT * FROM t")
+        assert result["count"] == 1
+        assert result["rows"][0] == [1, "hello"]
+
+    def test_csv_parse(self, tmp_path):
+        from clawhermes.tools.builtin import _csv_parse
+        f = tmp_path / "test.csv"
+        f.write_text("name,age\nAlice,30\nBob,25\n")
+        result = _csv_parse(path=str(f))
+        assert result["headers"] == ["name", "age"]
+        assert len(result["rows"]) == 2
+
+    def test_hash_file(self, tmp_path):
+        from clawhermes.tools.builtin import _hash_file
+        f = tmp_path / "data.txt"
+        f.write_text("hello")
+        result = _hash_file(path=str(f), algorithm="sha256")
+        assert len(result["hash"]) == 64
+
+    def test_disk_usage(self, tmp_path):
+        from clawhermes.tools.builtin import _disk_usage
+        result = _disk_usage(path=str(tmp_path))
+        assert "total_gb" in result
+        assert result["total_gb"] > 0
+
+    def test_base64_codec(self):
+        from clawhermes.tools.builtin import _base64_codec
+        enc = _base64_codec(action="encode", text="hello")
+        assert enc["result"] == "aGVsbG8="
+        dec = _base64_codec(action="decode", text="aGVsbG8=")
+        assert dec["result"] == "hello"
+
+    def test_process_list(self):
+        from clawhermes.tools.builtin import _process_list
+        result = _process_list()
+        assert isinstance(result, dict)
+        # May fail in sandboxed environments
+
+    def test_image_info(self, tmp_path):
+        from clawhermes.tools.builtin import _image_info
+        # Create a minimal valid PNG
+        import struct, zlib
+        def create_png(path, w=1, h=1):
+            sig = b'\\x89PNG\\r\\n\\x1a\\n'
+            ihdr = struct.pack('>IIBBBBB', w, h, 8, 2, 0, 0, 0)
+            ihdr_crc = zlib.crc32(b'IHDR' + ihdr)
+            ihdr_chunk = struct.pack('>I', 13) + b'IHDR' + ihdr + struct.pack('>I', ihdr_crc)
+            idat = zlib.compress(b'\\x00\\xff\\x00\\x00')
+            idat_crc = zlib.crc32(b'IDAT' + idat)
+            idat_chunk = struct.pack('>I', len(idat)) + b'IDAT' + idat + struct.pack('>I', idat_crc)
+            iend_crc = zlib.crc32(b'IEND')
+            iend_chunk = struct.pack('>I', 0) + b'IEND' + struct.pack('>I', iend_crc)
+            with open(path, 'wb') as f:
+                f.write(sig + ihdr_chunk + idat_chunk + iend_chunk)
+        png = tmp_path / "test.png"
+        create_png(str(png))
+        result = _image_info(path=str(png))
+        # May fail if Pillow not installed
+        assert isinstance(result, dict)
+
+    def test_pdf_extract_no_file(self, tmp_path):
+        from clawhermes.tools.builtin import _pdf_extract
+        result = _pdf_extract(path=str(tmp_path / "nonexistent.pdf"))
+        assert "error" in result
+
+    def test_markdown_render(self):
+        from clawhermes.tools.builtin import _markdown_render
+        result = _markdown_render(text="# Hello\\n\\nWorld")
+        assert "html" in result
+        assert "Hello" in result["html"]

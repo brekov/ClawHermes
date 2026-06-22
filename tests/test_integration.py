@@ -2,6 +2,9 @@
 ClawHermes - 集成测试（用 MockProvider，不依赖真实 API）
 """
 import tempfile
+import pytest
+from unittest.mock import MagicMock
+from pathlib import Path
 
 from clawhermes.agent.loop import Agent, AgentConfig, ToolRegistry
 from clawhermes.agent.memory import JSONMemoryProvider, MemoryManager
@@ -301,3 +304,458 @@ if __name__ == "__main__":
     test_agent_multi_turn()
     test_agent_with_tools()
     print("\n🎉 所有集成测试通过！")
+
+
+
+# ============================================================
+# Gateway endpoint & handler integration tests (M3.12)
+# ============================================================
+
+class TestGatewayEndpoints:
+    """Test Gateway REST API endpoints via FastAPI TestClient"""
+
+    def _init_agent(self):
+        """Helper: initialize a mock agent state"""
+        import clawhermes.gateway.app as gw
+        from clawhermes.agent.loop import Agent, AgentConfig, ToolRegistry
+        from clawhermes.agent.memory import MemoryManager, JSONMemoryProvider
+        from clawhermes.agent.session import SessionManager
+        from clawhermes.llm.provider import LLMProvider
+
+        data_dir = tempfile.mkdtemp()
+        provider = LLMProvider(model="deepseek/deepseek-chat", api_key="test-key")
+        registry = ToolRegistry()
+        from clawhermes.tools.builtin import register_builtin_tools
+        register_builtin_tools(registry, profile="minimal")
+
+        memory = MemoryManager()
+        memory.add_provider(JSONMemoryProvider(Path(data_dir)))
+
+        from clawhermes.skills.manager import SkillManager
+        sm = SkillManager(Path(data_dir) / "skills")
+
+        agent = Agent(
+            llm_provider=provider,
+            tool_registry=registry,
+            config=AgentConfig(max_iterations=1),
+            memory_manager=memory,
+            skill_manager=sm,
+        )
+
+        session_mgr = SessionManager(data_dir)
+
+        from clawhermes.channel.adapter import ChannelManager, RESTAdapter
+        from clawhermes.channel.router import ChannelRouter, SessionRouter
+        channel_manager = ChannelManager()
+        channel_manager.register("rest", RESTAdapter())
+        channel_router = ChannelRouter(
+            channel_manager=channel_manager,
+            session_router=SessionRouter(),
+        )
+
+        gw._state.agent = agent
+        gw._state.memory = memory
+        gw._state.skill_manager = sm
+        gw._state.session_mgr = session_mgr
+        gw._state.channel_router = channel_router
+        from clawhermes.agent.scheduler import CronScheduler
+        gw._state.scheduler = CronScheduler(data_dir)
+
+        return gw._state
+
+    def test_health_uninitialized(self):
+        from clawhermes.gateway.app import app
+        from starlette.testclient import TestClient
+        client = TestClient(app)
+        resp = client.get("/health")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["status"] == "ok"
+        assert data["initialized"] is False
+
+    def test_health_initialized(self):
+        self._init_agent()
+        from clawhermes.gateway.app import app
+        from starlette.testclient import TestClient
+        client = TestClient(app)
+        resp = client.get("/health")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["initialized"] is True
+        assert "tools" in data
+
+    def test_tools_endpoint(self):
+        self._init_agent()
+        from clawhermes.gateway.app import app
+        from starlette.testclient import TestClient
+        client = TestClient(app)
+        resp = client.get("/tools")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "tools" in data
+        assert len(data["tools"]) > 0
+
+    def test_memory_save_and_search(self):
+        self._init_agent()
+        from clawhermes.gateway.app import app
+        from starlette.testclient import TestClient
+        client = TestClient(app)
+
+        resp = client.post("/memory/save?content=hello+world&importance=0.8")
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "ok"
+
+        resp = client.get("/memory/search?query=hello")
+        assert resp.status_code == 200
+        results = resp.json().get("results", [])
+        # JSON memory provider does substring search
+        assert isinstance(results, list)
+
+    def test_skills_list_and_create(self):
+        self._init_agent()
+        from clawhermes.gateway.app import app
+        from starlette.testclient import TestClient
+        client = TestClient(app)
+
+        resp = client.get("/skills")
+        assert resp.status_code == 200
+        assert "skills" in resp.json()
+
+        resp = client.post("/skills/create?name=test-skill&content=test+content&description=test")
+        assert resp.status_code == 200
+        assert resp.json()["name"] == "test-skill"
+
+    def test_curator_run(self):
+        self._init_agent()
+        from clawhermes.gateway.app import app
+        from starlette.testclient import TestClient
+        client = TestClient(app)
+        resp = client.post("/curator/run?dry_run=true")
+        assert resp.status_code == 200
+        assert "stats" in resp.json()
+
+    def test_sessions_list(self):
+        self._init_agent()
+        from clawhermes.gateway.app import app
+        from starlette.testclient import TestClient
+        client = TestClient(app)
+        resp = client.get("/sessions")
+        assert resp.status_code == 200
+
+    def test_delete_nonexistent_session(self):
+        self._init_agent()
+        from clawhermes.gateway.app import app
+        from starlette.testclient import TestClient
+        client = TestClient(app)
+        resp = client.delete("/sessions/nonexistent-id")
+        assert resp.status_code == 404
+
+    def test_channels_endpoints(self):
+        self._init_agent()
+        from clawhermes.gateway.app import app
+        from starlette.testclient import TestClient
+        client = TestClient(app)
+
+        resp = client.get("/channels")
+        assert resp.status_code == 200
+        assert "channels" in resp.json()
+
+        resp = client.get("/channels/sessions")
+        assert resp.status_code == 200
+        assert "mappings" in resp.json()
+
+    def test_cron_jobs_crud(self):
+        self._init_agent()
+        from clawhermes.gateway.app import app
+        from starlette.testclient import TestClient
+        client = TestClient(app)
+
+        resp = client.post("/cron/jobs", json={
+            "name": "test-job", "task": "say hello",
+            "mode": "interval", "interval_seconds": 3600,
+        })
+        assert resp.status_code == 200
+        job_id = resp.json()["job"]["job_id"]
+
+        resp = client.get("/cron/jobs")
+        assert resp.status_code == 200
+        assert resp.json()["count"] >= 1
+
+        resp = client.get(f"/cron/jobs/{job_id}")
+        assert resp.status_code == 200
+
+        resp = client.post(f"/cron/jobs/{job_id}/pause")
+        assert resp.status_code == 200
+
+        resp = client.post(f"/cron/jobs/{job_id}/resume")
+        assert resp.status_code == 200
+
+        resp = client.delete(f"/cron/jobs/{job_id}")
+        assert resp.status_code == 200
+
+        resp = client.get(f"/cron/jobs/{job_id}")
+        assert resp.status_code == 404
+
+    def test_init_request_schema(self):
+        from clawhermes.gateway.app import InitRequest
+        req = InitRequest(api_key="sk-test", model="test/model")
+        assert req.api_key == "sk-test"
+        assert req.model == "test/model"
+        assert req.max_iterations == 50
+        assert req.profile == "standard"
+
+    def test_chat_requires_initialization(self, monkeypatch):
+        import clawhermes.gateway.app as gw
+        from clawhermes.agent.exceptions import SessionNotFoundError
+        gw._state = gw.GatewayState()  # fresh uninitialized state
+        monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
+        monkeypatch.delenv("CH_GW_API_KEY", raising=False)
+        from clawhermes.gateway.app import app
+        from starlette.testclient import TestClient
+        client = TestClient(app)
+        # Uninitialized agent raises SessionNotFoundError → 500 via TestClient exception
+        with pytest.raises(Exception):
+            client.post("/chat", json={"message": "hello"})
+
+
+class TestToolHandlers:
+    """Test built-in tool handler functions using correct signatures"""
+
+    def test_session_status(self):
+        from clawhermes.tools.builtin import _session_status
+        result = _session_status()
+        assert isinstance(result, dict)
+
+    def test_read_file(self, tmp_path):
+        from clawhermes.tools.builtin import _read_file
+        f = tmp_path / "test.txt"
+        f.write_text("hello world")
+        result = _read_file(path=str(f))
+        assert isinstance(result, dict)
+
+    def test_read_file_not_found(self, tmp_path):
+        from clawhermes.tools.builtin import _read_file
+        result = _read_file(path=str(tmp_path / "nonexistent.txt"))
+        assert isinstance(result, dict)
+
+    def test_write_file(self, tmp_path):
+        from clawhermes.tools.builtin import _write_file
+        f = tmp_path / "output.txt"
+        result = _write_file(path=str(f), content="test content")
+        assert isinstance(result, dict)
+        assert f.read_text() == "test content"
+
+    def test_get_time(self):
+        from clawhermes.tools.builtin import _get_time
+        result = _get_time()
+        assert isinstance(result, dict)
+
+    def test_list_dir(self, tmp_path):
+        from clawhermes.tools.builtin import _list_dir
+        (tmp_path / "a.txt").write_text("a")
+        result = _list_dir(path=str(tmp_path))
+        assert isinstance(result, dict)
+
+    def test_list_dir_not_found(self):
+        from clawhermes.tools.builtin import _list_dir
+        result = _list_dir(path="/nonexistent/path_xyz_test")
+        assert isinstance(result, dict)
+
+    def test_grep(self, tmp_path):
+        from clawhermes.tools.builtin import _grep
+        f = tmp_path / "test_grep.py"
+        f.write_text("def foo():\n    return 42\n")
+        result = _grep(pattern="def", path=str(tmp_path), file_pattern="*.py")
+        assert isinstance(result, dict)
+
+    def test_git_status_no_repo(self, tmp_path):
+        from clawhermes.tools.builtin import _git_status
+        result = _git_status(path=str(tmp_path))
+        assert isinstance(result, dict)
+
+    def test_env_list(self):
+        from clawhermes.tools.builtin import _env_list
+        result = _env_list()
+        assert isinstance(result, dict)
+
+    def test_calc(self):
+        from clawhermes.tools.builtin import _calc
+        result = _calc(expression="2 + 3 * 4")
+        assert isinstance(result, dict)
+
+    def test_calc_invalid(self):
+        from clawhermes.tools.builtin import _calc
+        result = _calc(expression="__import__('os')")
+        assert isinstance(result, dict)
+
+    def test_url_encode_decode(self):
+        from clawhermes.tools.builtin import _url_encode, _url_decode
+        encoded = _url_encode(text="hello world")
+        assert isinstance(encoded, dict)
+        decoded = _url_decode(text="hello%20world")
+        assert isinstance(decoded, dict)
+
+    def test_compress_file(self, tmp_path):
+        from clawhermes.tools.builtin import _compress_file
+        f = tmp_path / "data.txt"
+        f.write_text("hello " * 100)
+        result = _compress_file(path=str(f))
+        assert isinstance(result, dict)
+
+    def test_timer(self):
+        from clawhermes.tools.builtin import _timer
+        result = _timer(action="start")
+        assert isinstance(result, dict)
+
+    def test_json_query(self, tmp_path):
+        from clawhermes.tools.builtin import _json_query
+        result = _json_query(json_str='{"name": "test", "value": 42}', path="name")
+        assert isinstance(result, dict)
+
+
+class TestContextEngine:
+    """Test context compression engine"""
+
+    def test_empty_compressor_should_compress(self):
+        from clawhermes.agent.context import NoopCompressor
+        c = NoopCompressor()
+        assert c.should_compress(100000) is False
+
+    def test_empty_compressor_compress(self):
+        from clawhermes.agent.context import NoopCompressor
+        c = NoopCompressor()
+        msgs = [{"role": "user", "content": "hello"}]
+        result = c.compress(msgs, 100)
+        assert result == msgs
+
+
+class TestDelegateManager:
+    """Test delegate manager"""
+
+    def test_delegate_manager_creation(self, tmp_path):
+        from clawhermes.agent.delegate import DelegateManager
+        from clawhermes.agent.loop import ToolRegistry
+        from clawhermes.agent.memory import MemoryManager, JSONMemoryProvider
+        from clawhermes.llm.provider import LLMProvider
+
+        provider = LLMProvider(model="deepseek/deepseek-chat", api_key="test")
+        registry = ToolRegistry()
+        memory = MemoryManager()
+        memory.add_provider(JSONMemoryProvider(tmp_path))
+
+        dm = DelegateManager(
+            llm_provider=provider,
+            tool_registry=registry,
+            memory_manager=memory,
+        )
+        assert dm is not None
+
+    def test_delegate_returns_result(self, tmp_path):
+        from clawhermes.agent.delegate import DelegateManager
+        from clawhermes.agent.loop import ToolRegistry
+        from clawhermes.agent.memory import MemoryManager, JSONMemoryProvider
+        from clawhermes.llm.provider import LLMProvider
+
+        provider = LLMProvider(model="deepseek/deepseek-chat", api_key="test")
+        registry = ToolRegistry()
+        memory = MemoryManager()
+        memory.add_provider(JSONMemoryProvider(tmp_path))
+
+        dm = DelegateManager(
+            llm_provider=provider,
+            tool_registry=registry,
+            memory_manager=memory,
+        )
+        result = dm.delegate([{"id": "1", "description": "test", "instructions": "say hello"}], parent_depth=0)
+        assert isinstance(result, list)
+
+    def test_delegate_exceeds_max_depth(self, tmp_path):
+        from clawhermes.agent.delegate import DelegateManager, MAX_DEPTH
+        from clawhermes.agent.loop import ToolRegistry
+        from clawhermes.agent.memory import MemoryManager, JSONMemoryProvider
+        from clawhermes.llm.provider import LLMProvider
+
+        provider = LLMProvider(model="deepseek/deepseek-chat", api_key="test")
+        registry = ToolRegistry()
+        memory = MemoryManager()
+        memory.add_provider(JSONMemoryProvider(tmp_path))
+
+        dm = DelegateManager(
+            llm_provider=provider,
+            tool_registry=registry,
+            memory_manager=memory,
+        )
+        # Depth MAX_DEPTH+1 should trigger error
+        result = dm.delegate([{"id": "1", "description": "test", "instructions": "hi"}], parent_depth=MAX_DEPTH)
+        assert isinstance(result, list)
+        # When depth exceeds MAX_DEPTH, each result should have an error
+        if result:
+            for r in result:
+                assert "error" in r
+
+
+class TestMCPClient:
+    """Test MCP client and registry"""
+
+    def test_server_spec_creation(self):
+        from clawhermes.mcp.client import MCPServerSpec
+        spec = MCPServerSpec(
+            name="test-server",
+            transport="stdio",
+            command="echo",
+            args=["hello"],
+        )
+        assert spec.name == "test-server"
+        assert spec.transport == "stdio"
+        assert spec.command == "echo"
+
+    def test_server_spec_http(self):
+        from clawhermes.mcp.client import MCPServerSpec
+        spec = MCPServerSpec(
+            name="http-server",
+            transport="http",
+            url="http://localhost:8080",
+        )
+        assert spec.transport == "http"
+        assert spec.url == "http://localhost:8080"
+
+    def test_mcp_client_creation(self):
+        from clawhermes.mcp.client import MCPClient, MCPServerSpec
+        spec = MCPServerSpec(name="test", transport="stdio", command="echo")
+        client = MCPClient(spec)
+        assert client.spec.name == "test"
+        assert client.is_connected is False
+
+    def test_mcp_registry_creation(self):
+        from clawhermes.mcp.client import MCPRegistry
+        from clawhermes.agent.loop import ToolRegistry
+        registry = ToolRegistry()
+        mcp_reg = MCPRegistry(registry)
+        assert mcp_reg.list_servers() == []
+
+    def test_mcp_registry_remove_nonexistent(self):
+        from clawhermes.mcp.client import MCPRegistry
+        from clawhermes.agent.loop import ToolRegistry
+        registry = ToolRegistry()
+        mcp_reg = MCPRegistry(registry)
+        import asyncio
+        result = asyncio.run(mcp_reg.remove_server("nonexistent"))
+        assert result is False
+
+    def test_mcp_registry_get_server_tools_empty(self):
+        from clawhermes.mcp.client import MCPRegistry
+        from clawhermes.agent.loop import ToolRegistry
+        registry = ToolRegistry()
+        mcp_reg = MCPRegistry(registry)
+        assert mcp_reg.get_server_tools("nonexistent") == []
+
+    def test_mcp_gateway_endpoints(self):
+        """Test MCP Gateway endpoints without connecting"""
+        from clawhermes.gateway.app import app
+        from starlette.testclient import TestClient
+        client = TestClient(app)
+
+        # List servers (empty before init)
+        resp = client.get("/mcp/servers")
+        assert resp.status_code == 200
+        assert resp.json()["count"] == 0

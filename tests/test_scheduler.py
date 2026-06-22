@@ -3,8 +3,11 @@ ClawHermes - Cron 调度器测试
 """
 from __future__ import annotations
 
+import asyncio
 import tempfile
 import time
+
+import pytest
 
 from clawhermes.agent.scheduler import (
     CronScheduler,
@@ -143,7 +146,7 @@ class TestCronScheduler:
             assert len(paused) == 1
             assert paused[0].name == "pausable"
 
-    def test_execute_job(self):
+    async def test_execute_job(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             sched = CronScheduler(tmpdir)
             executed = []
@@ -154,10 +157,10 @@ class TestCronScheduler:
 
             sched.set_executor(executor)
             sched.create_job("quick", "print time", ScheduleSpec.interval(1))
-            sched.start()
+            await sched.start()
 
-            time.sleep(2.5)
-            sched.stop()
+            await asyncio.sleep(2.5)
+            await sched.stop()
 
             assert len(executed) >= 1
 
@@ -175,7 +178,7 @@ class TestCronScheduler:
             assert "persistent" in names
             assert "daily" in names
 
-    def test_oneshot_executes_once(self):
+    async def test_oneshot_executes_once(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             sched = CronScheduler(tmpdir)
             call_count = 0
@@ -187,10 +190,10 @@ class TestCronScheduler:
 
             sched.set_executor(executor)
             sched.create_job("once", "fire", ScheduleSpec.oneshot(delay_seconds=1))
-            sched.start()
+            await sched.start()
 
-            time.sleep(2)
-            sched.stop()
+            await asyncio.sleep(2)
+            await sched.stop()
 
             assert call_count == 1
 
@@ -202,18 +205,18 @@ class TestCronScheduler:
             sched.create_job("b", "y", ScheduleSpec.interval(120))
             assert sched.job_count == 2
 
-    def test_start_stop_idempotent(self):
+    async def test_start_stop_idempotent(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             sched = CronScheduler(tmpdir)
-            sched.start()
-            sched.start()
-            sched.stop()
-            sched.stop()
+            await sched.start()
+            await sched.start()  # idempotent
+            await sched.stop()
+            await sched.stop()   # idempotent
 
-    def test_executor_not_set_does_not_crash(self):
+    async def test_executor_not_set_does_not_crash(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             sched = CronScheduler(tmpdir)
             sched.create_job("noexec", "do", ScheduleSpec.oneshot(delay_seconds=1))
-            sched.start()
-            time.sleep(1.5)
-            sched.stop()
+            await sched.start()
+            await asyncio.sleep(1.5)
+            await sched.stop()

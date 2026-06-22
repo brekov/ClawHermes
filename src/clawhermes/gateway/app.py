@@ -3,9 +3,9 @@ ClawHermes - Gateway HTTP API
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
-import threading
 import time
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -44,6 +44,8 @@ class GatewayState:
         self.scheduler: CronScheduler | None = None
         self.channel_router: ChannelRouter | None = None
         self.start_time = time.time()
+        self._bg_tasks: set[asyncio.Task] = set()
+        self._mcp_registry = None
 
     def is_initialized(self) -> bool:
         return self.agent is not None
@@ -62,7 +64,7 @@ class GatewayState:
         from clawhermes.skills.manager import SkillManager
         return self.skill_manager or SkillManager(Path(_get_data_dir()) / "skills")
 
-    def initialize(
+    async def initialize(
         self,
         api_key: str,
         model: str,
@@ -104,26 +106,36 @@ class GatewayState:
             delegate_manager=delegate_mgr,
         )
 
+        # BackgroundReview：fire-and-forget，用 asyncio.to_thread 避免阻塞事件循环
         reviewer = BackgroundReview(provider, memory, sm)
         def _on_end(**kw):
             convo = agent.get_conversation()
             if convo:
-                threading.Thread(target=reviewer.apply, args=(convo,), daemon=True).start()
+                task = asyncio.create_task(
+                    asyncio.to_thread(reviewer.apply, convo),
+                    name="background_review",
+                )
+                self._bg_tasks.add(task)
+                task.add_done_callback(self._bg_tasks.discard)
         agent.hooks.register(HookPoint.AFTER_AGENT_END, _on_end)
 
+        # Curator：每小时运行，纯 asyncio 循环
         curator = Curator(sm)
-        def _curator_loop():
+        async def _curator_loop():
             while True:
-                time.sleep(3600)
+                await asyncio.sleep(3600)
                 try:
                     curator.run()
                 except Exception:
                     pass
-        threading.Thread(target=_curator_loop, daemon=True).start()
+        curator_task = asyncio.create_task(_curator_loop(), name="curator_loop")
+        self._bg_tasks.add(curator_task)
+        curator_task.add_done_callback(self._bg_tasks.discard)
 
+        # Scheduler：asyncio 原生
         scheduler = CronScheduler(data_dir)
         scheduler.set_executor(lambda task, sid: agent.chat(task, session_id=sid))
-        scheduler.start()
+        await scheduler.start()
 
         channel_manager = ChannelManager()
         rest_adapter = RESTAdapter()
@@ -146,6 +158,17 @@ class GatewayState:
 
         logger.info("Agent 初始化完成: %s (%d tools, profile=%s)", model, len(registry.list()), profile)
 
+    async def shutdown(self):
+        """优雅关闭所有后台任务"""
+        if self.scheduler:
+            await self.scheduler.stop()
+        for task in self._bg_tasks:
+            if not task.done():
+                task.cancel()
+        if self._bg_tasks:
+            await asyncio.gather(*self._bg_tasks, return_exceptions=True)
+        self._bg_tasks.clear()
+
 
 _state = GatewayState()
 
@@ -154,7 +177,7 @@ def _get_data_dir() -> str:
     return os.getenv("CH_DATA_DIR", os.path.expanduser("~/.clawhermes"))
 
 
-def _auto_init():
+async def _auto_init():
     if _state.is_initialized():
         return
     api_key = os.getenv("CH_GW_API_KEY") or os.getenv("DEEPSEEK_API_KEY")
@@ -163,7 +186,7 @@ def _auto_init():
     model = os.getenv("CH_GW_MODEL", "deepseek/deepseek-chat")
     profile = os.getenv("CH_TOOLS_PROFILE", "standard")
     try:
-        _state.initialize(api_key=api_key, model=model, profile=profile)
+        await _state.initialize(api_key=api_key, model=model, profile=profile)
     except ClawHermesError as e:
         logger.error("Auto-init failed: %s", e)
     except Exception as e:
@@ -192,24 +215,25 @@ class ChatResponse(BaseModel):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("ClawHermes Gateway 启动")
-    _auto_init()
+    await _auto_init()
     yield
     logger.info("ClawHermes Gateway 关闭")
+    await _state.shutdown()
 
 
-app = FastAPI(title="ClawHermes Gateway", version="0.13.0", lifespan=lifespan)
+app = FastAPI(title="ClawHermes Gateway", version="0.14.0", lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True,
                    allow_methods=["*"], allow_headers=["*"])
 
 
 @app.post("/init")
-def initialize(req: InitRequest):
+async def initialize(req: InitRequest):
     try:
         api_key = req.api_key or os.getenv("DEEPSEEK_API_KEY")
         if not api_key:
             raise HTTPException(400, "请设置 api_key")
         base_url = req.base_url or os.getenv("DEEPSEEK_BASE_URL")
-        _state.initialize(
+        await _state.initialize(
             api_key=api_key,
             model=req.model,
             base_url=base_url,
@@ -241,82 +265,73 @@ def chat(req: ChatRequest):
         try:
             _state.session_mgr.get_session(req.session_id)
         except SessionNotFoundError:
-            pass
+            raise HTTPException(404, f"会话不存在: {req.session_id}")
         sid = req.session_id
     else:
         sid = _state.session_mgr.create_session()
 
     try:
-        _state.session_mgr.add_message(sid, "user", req.message)
-
-        if _state.channel_router is not None:
-            resp = _state.channel_router.route_message(
+        if _state.channel_router:
+            response = _state.channel_router.route_message(
                 content=req.message,
                 channel_type=ChannelType.REST,
                 user_id="rest_user",
                 session_id=sid,
             )
         else:
-            resp = agent.chat(req.message, session_id=sid)
+            response = agent.chat(req.message, session_id=sid)
 
-        _state.session_mgr.add_message(sid, "assistant", resp)
-        return ChatResponse(response=resp, session_id=sid, model=agent.llm.model)
+        model_name = agent.llm.model if hasattr(agent, 'llm') else "unknown"
+        return ChatResponse(response=response, session_id=sid, model=model_name)
     except LLMRateLimitError as e:
-        raise HTTPException(429, f"速率限制: {e}")
+        retry = e.detail.get("retry_after", 60) if hasattr(e, 'detail') else 60
+        raise HTTPException(429, f"LLM 速率限制，{retry}秒后重试", headers={"Retry-After": str(retry)})
     except LLMConnectionError as e:
         raise HTTPException(502, f"LLM 连接失败: {e}")
     except LLMError as e:
-        raise HTTPException(500, f"LLM 错误: {e}")
+        raise HTTPException(500, f"LLM 调用失败: {e}")
     except ClawHermesError as e:
-        raise HTTPException(500, f"对话失败: {e}")
+        raise HTTPException(500, f"Agent 错误: {e}")
     except Exception as e:
-        raise HTTPException(500, f"对话失败: {e}")
+        logger.exception("Unexpected error in chat")
+        raise HTTPException(500, f"内部错误: {e}")
 
 
 @app.get("/health")
 def health():
-    try:
-        a = _state.get_agent()
-        tools = len(a.tools.list())
-    except Exception:
-        tools = 0
-    from importlib.metadata import version as get_version
-    try:
-        app_version = get_version("clawhermes")
-    except Exception:
-        app_version = "0.13.0"
-    return {
+    info = {
         "status": "ok",
-        "version": app_version,
-        "uptime_seconds": int(time.time() - _state.start_time),
-        "tools": tools,
+        "initialized": _state.is_initialized(),
+        "uptime": round(time.time() - _state.start_time, 1),
     }
+    if _state.agent:
+        info["model"] = _state.agent.llm.model if hasattr(_state.agent, 'llm') else "unknown"
+        info["tools"] = len(_state.agent.tools.list())
+    if _state.scheduler:
+        info["cron_jobs"] = _state.scheduler.job_count
+    if _state.channel_router:
+        info["queue_size"] = _state.channel_router.get_queue_size()
+        info["active_session"] = _state.channel_router.get_active_session()
+    return info
 
 
 @app.get("/tools")
 def list_tools():
     agent = _state.get_agent()
-    return {"tools": [
-        {
-            "name": t.name,
-            "description": t.description,
-            "parallel_safe": t.parallel_safe,
-            "group": t.group,
-        }
-        for t in agent.tools.list()
-    ]}
+    return {"tools": agent.tools.schemas()}
 
 
 @app.post("/memory/save")
-def save_memory(content: str = Query(...), importance: float = 0.5):
-    from clawhermes.types import MemoryScope
-    _state.get_memory().save(content, MemoryScope.USER, importance)
+def save_memory(content: str = Query(...), importance: float = 0.5, scope: str = "user"):
+    memory = _state.get_memory()
+    memory.save(content=content, importance=importance, scope=scope)
     return {"status": "ok"}
 
 
 @app.get("/memory/search")
 def search_memory(query: str = Query(...)):
-    results = _state.get_memory().search(query)
+    memory = _state.get_memory()
+    results = memory.search(query)
     return {"results": [{"content": r.content, "importance": r.importance} for r in results]}
 
 
@@ -464,3 +479,58 @@ def list_channel_sessions():
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("CH_GATEWAY_PORT", "18789")))
+
+
+# ============================================================
+# MCP (Model Context Protocol) 集成端点 (M3.7)
+# ============================================================
+
+class MCPAddRequest(BaseModel):
+    name: str
+    transport: str = "stdio"
+    command: str | None = None
+    args: list[str] = []
+    url: str | None = None
+
+
+@app.post("/mcp/servers")
+async def add_mcp_server(req: MCPAddRequest):
+    """添加 MCP Server 并自动注册其工具"""
+    if _state.agent is None:
+        raise HTTPException(400, "请先初始化 Agent (/init)")
+
+    from clawhermes.mcp.client import MCPRegistry, MCPServerSpec
+
+    if not hasattr(_state, '_mcp_registry') or _state._mcp_registry is None:
+        _state._mcp_registry = MCPRegistry(_state.agent.tools)
+
+    spec = MCPServerSpec(
+        name=req.name,
+        transport=req.transport,
+        command=req.command,
+        args=req.args,
+        url=req.url,
+    )
+    try:
+        tools = await _state._mcp_registry.add_server(spec)
+        return {"status": "ok", "server": req.name, "tools": tools, "count": len(tools)}
+    except Exception as e:
+        raise HTTPException(500, f"MCP Server 连接失败: {e}")
+
+
+@app.get("/mcp/servers")
+def list_mcp_servers():
+    """列出所有 MCP Server"""
+    if not hasattr(_state, '_mcp_registry') or _state._mcp_registry is None:
+        return {"servers": [], "count": 0}
+    return {"servers": _state._mcp_registry.list_servers(), "count": len(_state._mcp_registry.list_servers())}
+
+
+@app.delete("/mcp/servers/{name}")
+async def remove_mcp_server(name: str):
+    """移除 MCP Server"""
+    if not hasattr(_state, '_mcp_registry') or _state._mcp_registry is None:
+        raise HTTPException(404, "无 MCP Server")
+    if await _state._mcp_registry.remove_server(name):
+        return {"status": "ok"}
+    raise HTTPException(404, f"MCP Server 未找到: {name}")
