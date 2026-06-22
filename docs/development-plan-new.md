@@ -2,7 +2,7 @@
 
 > 版本：v2.0
 > 日期：2026-06-22
-> 基线版本：v0.13.0（203 测试通过）
+> 基线版本：v0.14.0（310 测试通过）
 > 方法论：软件工程全流程 — 现状评估 → 竞品研究 → 差距分析 → SMART 目标 → 架构演进 → 分阶段路线图 → 质量保障 → 风险管理
 
 ---
@@ -414,10 +414,10 @@ CI/CD:      GitHub Actions（lint + typecheck + test + build）
 
 | 里程碑 | 功能 | 优先级 | 工作量 | 依赖 |
 |:---|:---|:---:|:---:|:---|
-| **M3.7** | **MCP 客户端集成（F13）** — MCP 协议客户端，动态工具发现与注册，支持 3+ MCP Server | 🔴 P0 | 3d | litellm |
-| **M3.10** | **内置工具扩展至 35+** — 浏览器工具(playwright)、数据库工具(sqlite)、图片处理(Pillow)、代码分析(AST) | 🔴 P0 | 4d | — |
-| **M3.11** | **全链路异步化** — BackgroundReview → asyncio，消除全部 threading.Thread，零阻塞调用 | 🔴 P0 | 2d | M3.2 |
-| **M3.12** | **测试覆盖率 > 80%** — 重点补充 gateway/app.py (62%→85%) 和 tools/builtin.py (58%→80%) | 🟡 P1 | 2d | — |
+| **M3.7 ✅** | **MCP 客户端集成（F13）** — MCP 协议客户端，动态工具发现与注册，支持 3+ MCP Server | 🔴 P0 | 3d | litellm |
+| **M3.10 ✅** | **内置工具扩展至 35+** — 浏览器工具(playwright)、数据库工具(sqlite)、图片处理(Pillow)、代码分析(AST) | 🔴 P0 | 4d | — |
+| **M3.11 ✅** | **全链路异步化** — BackgroundReview → asyncio，消除全部 threading.Thread，零阻塞调用 | 🔴 P0 | 2d | M3.2 |
+| **M3.12 ✅** | **测试覆盖率 > 80%** — 重点补充 gateway/app.py (62%→85%) 和 tools/builtin.py (58%→80%) | 🟡 P1 | 2d | — |
 
 #### 7.2.3 Phase 3 中期（v0.15.0）
 

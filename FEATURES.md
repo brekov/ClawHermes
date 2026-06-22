@@ -1,6 +1,6 @@
 # ClawHermes · 完整功能介绍
 
-> 版本：v0.12.2 | 源文件：24 个 | 测试：165/165 ✅
+> 版本：v0.14.0 | 源文件：26 个 | 测试：310/310 ✅
 > GitHub：https://github.com/brekov/ClawHermes
 
 ---
@@ -42,12 +42,13 @@
 ### 1.7 异步接口（F13）
 - `Agent.chat_async()` + `LLMProvider.chat_async()`
 - 基于 litellm.acompletion
+- **v0.14.0**：全链路 asyncio 原生，消除全部 `threading.Thread`
 
 ---
 
 ## 二、工具系统（F3, F8, F9）
 
-### 2.1 26 个内置工具（按 Profile 分级）
+### 2.1 35 个内置工具（按 Profile 分级）
 
 #### minimal（5 个）
 | 工具 | 说明 |
@@ -59,7 +60,7 @@
 |:---|:---|
 | `web_search` / `memory_search` / `memory_save` / `delegate_task` |
 
-#### full（26 个）— standard + 17
+#### full（35 个）— standard + 26
 | 工具 | 说明 | 并行 |
 |:---|:---|---:|
 | `web_fetch` | 获取网页内容 | ✅ |
@@ -79,6 +80,16 @@
 | `url_encode` / `url_decode` | URL 编解码 | ✅ |
 | `calc` | 安全数学计算 | ✅ |
 
+| `sqlite_query` | 查询 SQLite 数据库 | — |
+| `csv_parse` | 解析 CSV 文件 | ✅ |
+| `hash_file` | 文件哈希 (md5/sha1/sha256) | ✅ |
+| `disk_usage` | 磁盘使用情况 | ✅ |
+| `base64_codec` | Base64 编解码 | ✅ |
+| `process_list` | 系统进程列表 | ✅ |
+| `image_info` | 图片信息 (Pillow) | ✅ |
+| `pdf_extract` | PDF 文本提取 (pypdf) | — |
+| `markdown_render` | Markdown → HTML | ✅ |
+
 ### 2.2 钩子系统（F8）
 - 异步 handler 自动检测 + 超时保护（默认 10s）
 - `trigger_async()` / `trigger_sync_with_async()` / `remove()`
@@ -87,6 +98,12 @@
 ### 2.3 工具策略（F9）
 - 并行/串行调度，路径冲突检测
 - 7 个并行安全工具 + 4 个需确认工具
+
+### 2.4 MCP 集成（F13）✨ 新增
+- **MCPClient**：支持 stdio（子进程）和 HTTP 两种传输方式，JSON-RPC 2.0 协议
+- **MCPRegistry**：管理多个 MCP Server 连接，自动发现工具并注册到 ToolRegistry
+- **MCPServerSpec**：声明式 MCP Server 配置
+- **Gateway 端点**：`POST /mcp/servers`、`GET /mcp/servers`、`DELETE /mcp/servers/{name}`
 
 ---
 
@@ -212,7 +229,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/brekov/ClawHermes/main/scrip
 
 ### 9. 测试
 
-- 165 个测试，全部通过 ✅
+- 310 个测试，全部通过 ✅
 - ruff 0 errors | mypy 0 errors（6 strict checks）
-- 覆盖率 67%（核心模块 > 80%）
+- 覆盖率 71%（核心模块 > 80%）
 - GitHub Actions CI：lint + typecheck + test + build

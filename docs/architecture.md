@@ -2,8 +2,8 @@
 
 > 版本：v2.0
 > 日期：2026-06-17
-> 基线版本：v0.12.2
-> 状态：部分已实现 + 规划中
+> 基线版本：v0.14.0
+> 状态：已实现（含 MCP 模块、35 工具、全链路异步）
 
 ---
 
@@ -36,13 +36,17 @@
 │                                                                      │
 │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐  │
 │  │ 工具系统  │ │ 记忆系统  │ │ 技能系统  │ │ Cron调度 │ │ 子Agent  │  │
-│  │ ·26工具  │ │ ·Memory  │ │ ·Skill   │ │ ·cron    │ │ ·委派    │  │
+│  │ ·35工具  │ │ ·Memory  │ │ ·Skill   │ │ ·cron    │ │ ·委派    │  │
 │  │  3级Prof │ │  Manager │ │  加载/   │ │ ·interval│ │ ·深度限制│  │
 │  │ ·钩子体系 │ │ ·向量检索 │ │  管理    │ │ ·oneshot │ │ ·并发执行│  │
-│  │ ·策略引擎 │ │ ·ChromaDB│ │ ·Review  │ │          │ │          │  │
-│  │ ·Docker  │ │ ·用户画像 │ │ ·Curator │ │          │ │          │  │
+│  │ ·策略引擎 │ │ ·ChromaDB│ │ ·Review  │ │ ·asyncio │ │          │  │
+│  │ ·Docker  │ │ ·用户画像 │ │ ·Curator │ │  原生    │ │          │  │
 │  │  沙箱    │ │          │ │ ·Hub联邦 │ │          │ │          │  │
 │  └──────────┘ └──────────┘ └──────────┘ └──────────┘ └──────────┘  │
+│                                                                      │
+│  ┌──────────┐                                                       │
+│  │ MCP 集成 │  MCPClient (stdio+HTTP) · MCPRegistry · 动态工具发现  │
+│  └──────────┘                                                       │
 │                                                                      │
 │  ┌──────────┐ ┌──────────────────────────────────────────────────┐  │
 │  │ ACE 自适 │ │ 消息队列层（规划中）                              │  │
@@ -600,7 +604,7 @@ ToolProfile
 ├── standard (9 tools) — 默认
 │   └── minimal + web_search, memory_search, memory_save, delegate_task
 │
-└── full (26 tools) — 完整能力
+└── full (35 tools) — 完整能力
     └── standard + web_fetch, list_dir, patch_file, grep, search_replace,
                    code_eval, compress_file, http_request, json_query,
                    git_status, git_diff, git_log, env_list, timer,
@@ -613,7 +617,7 @@ ToolProfile
 |---------|:------:|----------|-----------|
 | minimal | 5 | 嵌入式/受限环境 | 最低 |
 | standard | 9 | 日常对话（默认） | 中等 |
-| full | 26 | 开发/运维/高级 | 最高 |
+| full | 35 | 开发/运维/高级 | 最高 |
 
 **工具并行安全标记**：
 
@@ -623,7 +627,7 @@ ToolProfile
 
 ---
 
-## 附录 A：Gateway 端点清单（18个）
+## 附录 A：Gateway 端点清单（23个）
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
