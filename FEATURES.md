@@ -1,6 +1,6 @@
 # ClawHermes · 完整功能介绍
 
-> 版本：v0.14.0 | 源文件：27 个 | 测试：310/310 ✅
+> 版本：v0.14.0 | 源文件：27 个 | 测试：357/357 ✅
 > GitHub：https://github.com/brekov/ClawHermes
 
 ---
@@ -229,7 +229,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/brekov/ClawHermes/main/scrip
 
 ### 9. 测试
 
-- 310 个测试，全部通过 ✅
+- 357 个测试，全部通过 ✅
 - ruff 0 errors | mypy 0 errors（6 strict checks）
-- 覆盖率 71%（核心模块 > 80%）
+- 覆盖率 73%（核心模块 > 80%）
 - GitHub Actions CI：lint + typecheck + test + build

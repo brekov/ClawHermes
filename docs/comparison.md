@@ -384,8 +384,8 @@
 |:---|:---|:---|:---|
 | 类型安全 | TypeScript (编译期) | ❌ 无mypy | ✅ **mypy 0 errors (6项严格检查)** |
 | Lint | ESLint | ❌ | ✅ **ruff 0 errors** |
-| 测试数量 | - | - | ✅ **310测试全通过** |
-| 测试覆盖率 | - | - | ✅ **71%** |
+| 测试数量 | - | - | ✅ **357测试全通过** |
+| 测试覆盖率 | - | - | ✅ **73%** |
 | 配置验证 | ✅ fail-fast | ❌ 运行时暴露 | ✅ **Pydantic Settings** |
 | Schema生成 | ✅ TypeBox → JSON Schema → Swift | ❌ | ✅ Pydantic → JSON Schema |
 
@@ -453,7 +453,7 @@ ClawHermes:  Python开发者生态 → 纯Python + 类型安全 + 向量记忆 +
 | **3级工具Profile** | minimal(5)/standard(9)/full(26)，借鉴 OpenClaw 和 Hermes 的 Profile 隔离 |
 | **ACE自适应压缩** | 对话类型检测+策略自动切换，Hermes 的 ContextEngine 是ABC但无自适应 |
 | **Channel Adapter SDK** | 标准化渠道适配器，OpenClaw 和 Hermes 都没有SDK抽象 |
-| **代码质量** | ruff 0 errors, mypy 0 errors (6项严格检查), 310测试全通过, 71%覆盖率 |
+| **代码质量** | ruff 0 errors, mypy 0 errors (6项严格检查), 357测试全通过, 73%覆盖率 |
 | **Docker支持** | Dockerfile + compose + sandbox，Hermes 没有 |
 | **Cron调度** | 借鉴 Hermes，OpenClaw 没有 |
 | **Federated Skill Hub** | 去中心化技能共享（M3.1 ✅），区别于 OpenClaw 的 ClawHub 和 Hermes 的 agentskills.io |
@@ -538,7 +538,7 @@ ClawHermes:  融合两者设计 + Python 纯原生 → 轻量级生产级 Agent 
 | 技能条件激活 | ❌ | ✅ | ✅ |
 | 插件系统 | ❌ | ✅ 基础 | ✅ pip入口点 |
 | Web搜索质量 | ⚠️ curl+grep | ✅ API集成 | ✅ API集成 |
-| 测试覆盖率 | 71% | > 80% | > 90% |
+| 测试覆盖率 | 73% | > 80% | > 90% |
 | IDE集成 | ❌ | ❌ | ✅ LSP/ACP |
 
 ### 8.3 差异化竞争优势

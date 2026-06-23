@@ -2,7 +2,7 @@
 
 > 版本：v2.0
 > 日期：2026-06-22
-> 基线版本：v0.14.0（310 测试通过）
+> 基线版本：v0.14.0（357 测试通过）
 > 状态：Phase 1 ✅ | Phase 2 ✅ | Phase 3 ✅ v0.14.0 | Phase 3 续 🔄 v0.15.0+
 > 方法论：软件工程全流程 — 现状评估 → 竞品研究 → 差距分析 → SMART 目标 → 架构演进 → 分阶段路线图 → 质量保障 → 风险管理
 
@@ -81,7 +81,7 @@ v1.0.0 时 ClawHermes 应成为：
 | v0.12.0 | 2026-06-17 | Channel SDK、Cron、Docker Sandbox、ACE、异步钩子、26 工具 | 165 |
 | v0.12.2 | 2026-06-17 | P0-P3 评审修复、版本动态化、README 与架构文档同步 | 165 |
 | **v0.13.0** | **2026-06-17** | **并行执行、web_search 重构、Gateway 状态重构、线程安全、Channel Router、消息队列 4 模式** | **203** |
-| **v0.14.0** | **2026-06-22** | **全链路异步化、MCP 集成、工具扩展至 35、测试覆盖率 71%（310 测试）** | **310** |
+| **v0.14.0** | **2026-06-22** | **全链路异步化、MCP 集成、工具扩展至 35、MCP 异步修复、测试覆盖率 73%（357 测试）** | **357** |
 
 ### 2.2 已交付功能清单（19 项）
 
@@ -121,7 +121,7 @@ v1.0.0 时 ClawHermes 应成为：
 | M3.7 | MCP 客户端集成 | MCPClient (stdio + HTTP) + MCPRegistry + 3 Gateway 端点 |
 | M3.10 | 内置工具扩展至 35 | +9 工具（sqlite_query / csv_parse / hash_file / disk_usage / base64_codec / process_list / image_info / pdf_extract / markdown_render） |
 | M3.11 | 全链路异步化 | 消除全部 threading.Thread，100% asyncio 原生 |
-| M3.12 | 测试覆盖率提升 | 66% → 71%（203 → 310 测试），Gateway + 组件全覆盖 |
+| M3.12 | 测试覆盖率提升 | 66% → 73%（203 → 357 测试），Gateway + 组件全覆盖 |
 
 ### 2.4 当前技术栈
 
@@ -244,7 +244,7 @@ CI/CD:      GitHub Actions（lint + typecheck + test + build）
 | 内置工具数 | 35 | 45+ | 🟡 中 |
 | 渠道适配器 | 3（CLI/REST/WS） | 6+ | 🟡 中 |
 | Block Streaming | ❌ 不支持 | ✅ | 🟡 中 |
-| 测试覆盖率 | 71% | >90% | 🟡 中 |
+| 测试覆盖率 | 73% | >90% | 🟡 中 |
 | 多模态记忆 | ❌ 仅文本 | ✅ 图片/文件 | 🟡 中 |
 | Profile 隔离 | 3 级工具 Profile | 完整隔离（config/memory/sessions） | 🟡 中 |
 | 条件激活技能 | ❌ | ✅ | 🟢 低 |
@@ -383,7 +383,7 @@ CI/CD:      GitHub Actions（lint + typecheck + test + build）
 
 | 演进项 | 当前（v0.14.0） | 目标（v1.0.0） |
 |:---|:---|:---|
-| 异步模型 | 全链路 asyncio，零 threading.Thread | 连接池 + 多实例部署就绪 |
+| 异步模型 | 全链路 asyncio（含 1 处可控 threading.Thread 用于 MCP 嵌套协程兼容） | 连接池 + 多实例部署就绪 |
 | Gateway 状态 | GatewayState 类（单实例） | 连接池 + 多实例部署就绪 |
 | 渠道集成 | Channel Router 就绪，适配器待实现 | 6+ 渠道适配器 + 配置热加载 |
 | 技能加载 | 全量加载（浪费 token） | Progressive Disclosure 3 级 + 6 级优先级 + 条件激活 |

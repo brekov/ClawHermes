@@ -4,8 +4,8 @@
 
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![Tests: 310 passed](https://img.shields.io/badge/tests-310%20passed-brightgreen)](tests/)
-[![Coverage: 71%](https://img.shields.io/badge/coverage-71%25-yellow)](tests/)
+[![Tests: 357 passed](https://img.shields.io/badge/tests-357%20passed-brightgreen)](tests/)
+[![Coverage: 73%](https://img.shields.io/badge/coverage-73%25-yellow)](tests/)
 [![Ruff](https://img.shields.io/badge/ruff-0%20errors-brightgreen)](pyproject.toml)
 [![v0.14.0](https://img.shields.io/badge/version-0.14.0-blue)](CHANGELOG.md)
 
@@ -281,7 +281,7 @@ src/clawhermes/
 ## 测试
 
 ```bash
-# 单元测试 + 集成测试（310 个测试，全部通过 ✅）
+# 单元测试 + 集成测试（357 个测试，全部通过 ✅）
 pytest tests/ -v
 
 # 带覆盖率
@@ -319,7 +319,7 @@ mypy src/
 |:------|:-----|:-----|:----:|
 | Phase 1 | v0.11.0 | 代码质量与稳定性 | ✅ |
 | Phase 2 | v0.12.0~v0.13.0 | 功能增强 | ✅（Channel SDK / Cron / Docker Sandbox / ACE） | ✅ |
-| Phase 3 | v0.14.0 | 生态建设 + 异步化 | ✅（MCP / 异步化 / 工具35 / 测试310） | 🔄 |
+| Phase 3 | v0.14.0 | 生态建设 + 异步化 | ✅（MCP / 异步化 / 工具35 / 测试357） | 🔄 |
 | Phase 3 续 | v0.15.0~v0.16.0 | 渠道 + Streaming + 多模态 | 🔄
 | Phase 4 | v1.0.0 | 体验与差异化（Dashboard / Workflow Builder） | 📋 |
 

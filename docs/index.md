@@ -1,15 +1,15 @@
 # ClawHermes
 
 > 融合 **Hermes** 自进化能力与 **OpenClaw** Gateway 体系的 Python AI Agent 框架
-> v0.14.0 · 27 个源文件 · 310 个测试通过 · 35 个内置工具
+> v0.14.0 · 27 个源文件 · 357 个测试通过 · 35 个内置工具
 
 ---
 
 <div>
   <a href="https://github.com/brekov/ClawHermes"><img src="https://img.shields.io/badge/python-3.12%2B-blue" alt="Python 3.12+"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="MIT"></a>
-  <img src="https://img.shields.io/badge/tests-310%2F310-brightgreen" alt="tests 310/310">
-  <img src="https://img.shields.io/badge/coverage-71%25-yellow" alt="coverage 71%">
+  <img src="https://img.shields.io/badge/tests-357%2F357-brightgreen" alt="tests 357/357">
+  <img src="https://img.shields.io/badge/coverage-73%25-yellow" alt="coverage 73%">
   <a href="https://github.com/brekov/ClawHermes/releases"><img src="https://img.shields.io/github/v/release/brekov/ClawHermes" alt="release v0.14.0"></a>
 </div>
 
