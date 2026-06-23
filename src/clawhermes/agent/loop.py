@@ -23,6 +23,34 @@ from clawhermes.llm.provider import LLMProvider, LLMResponse
 logger = logging.getLogger(__name__)
 
 
+def _run_maybe_async(coro_or_value: Any) -> Any:
+    """执行可能是协程的返回值；同步分派路径用于兼容 async handler。
+
+    - 非协程：原样返回。
+    - 协程 + 无运行事件循环：``asyncio.run`` 执行。
+    - 协程 + 已有运行事件循环（例如 parallel-safe 分派在独立 loop 中
+      经 ``run_until_complete`` 回调进入本函数）：在独立线程中新建 loop
+      执行，避免嵌套 ``asyncio.run`` 报错。
+    """
+    if not asyncio.iscoroutine(coro_or_value):
+        return coro_or_value
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(coro_or_value)
+
+    # 已在事件循环中，需在独立线程跑新 loop
+    result_box: dict[str, Any] = {}
+
+    def _runner() -> None:
+        result_box["value"] = asyncio.run(coro_or_value)
+
+    t = threading.Thread(target=_runner)
+    t.start()
+    t.join()
+    return result_box.get("value")
+
+
 class HookPoint:
     BEFORE_TOOL_CALL = "before_tool_call"
     AFTER_TOOL_CALL = "after_tool_call"
@@ -191,7 +219,7 @@ class ToolDispatcher:
 
         start_ms = time.monotonic() * 1000
         try:
-            result = tool_def.handler(**args, **tool_context)
+            result = _run_maybe_async(tool_def.handler(**args, **tool_context))
             duration_ms = time.monotonic() * 1000 - start_ms
             result_data = {
                 "role": "tool",

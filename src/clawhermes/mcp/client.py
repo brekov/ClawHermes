@@ -262,8 +262,16 @@ class MCPRegistry:
         return True
 
     def _make_handler(self, server_name: str, tool_name: str):
-        """为 MCP 工具创建同步 handler"""
-        async def _mcp_handler(**kwargs) -> dict:
+        """为 MCP 工具创建 async handler。
+
+        返回协程函数，使得异步工具分派路径（ToolDispatcher._execute_single_tool_async）
+        经 ``asyncio.iscoroutinefunction`` 判定为真后直接 ``await`` 调用，
+        从而真正执行 ``client.call_tool``，而非返回占位结果。
+
+        同步分派路径（_execute_single_tool）在无事件循环时仍可借助
+        ``asyncio.run`` 正常执行。
+        """
+        async def handler(**kwargs) -> dict:
             client = self._clients.get(server_name)
             if not client:
                 return {"error": f"MCP server not connected: {server_name}"}
@@ -272,14 +280,6 @@ class MCPRegistry:
                 return {"result": result}
             except Exception as e:
                 return {"error": str(e)}
-
-        def handler(**kwargs) -> dict:
-            try:
-                asyncio.get_running_loop()
-            except RuntimeError:
-                return asyncio.run(_mcp_handler(**kwargs))
-            # In running loop, prefer async chat_async for MCP tools
-            return {"info": "MCP tool called; use chat_async for full support"}
 
         return handler
 
