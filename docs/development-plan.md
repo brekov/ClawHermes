@@ -432,8 +432,8 @@ CI/CD:      GitHub Actions（lint + typecheck + test + build）
 |:---|:---|:---:|:---:|
 | **M3.6c** | **Block Streaming（F17）** — SSE 完成即发送，chunk 800-1200 chars，首字延迟降低 50%+ | 🟡 P1 | 3d |
 | **M3.6d** | **DM 配对安全（F18）** — 配对码生成 + 管理员审批 + 签名挑战 | 🟡 P1 | 3d |
-| **M3.6e** | **飞书适配器** — 官方 `lark-oapi` SDK → ChannelAdapter；WebSocket 事件订阅（Lv1·官方 SDK） | 🔴 P0 | 2d | M3.6a |
-| **M3.6f** | **微信适配器** — 社区 `wechatpy` → ChannelAdapter；公众号/企业微信（Lv1·社区 SDK） | 🔴 P0 | 3d | M3.6a |
+| **M3.6e** | ✅ **飞书适配器** — 分层架构 lark-oapi + Hermes vendor 消息引擎；WebSocket 长连接 + Token 管理 + send_response/get_user_info | 🔴 P0 | ✅ 完成 | M3.6a |
+| **M3.6f** | ✅ **微信适配器** — clawhermes-weixin 子仓库 + wechatpy SDK；ChannelAdapter + Gateway 集成 | 🔴 P0 | ✅ 完成 | M3.6a |
 | **M3.6g** | **QQ 适配器** — 子仓库 `clawhermes-qq`，复刻 Hermes QQ SDK 逻辑（Lv3·子仓库复刻） | 🟡 P1 | 2d | M3.6a |
 | **M3.6h** | **Telegram 适配器** — 社区 `python-telegram-bot` → ChannelAdapter（Lv1·社区 SDK） | 🟢 P2 | 2d | M3.6a |
 | **M3.6i** | **Discord 适配器** — 社区 `discord.py` → ChannelAdapter（Lv1·社区 SDK） | 🟢 P2 | 2d | M3.6a |
@@ -712,8 +712,8 @@ CI/CD:      GitHub Actions（lint + typecheck + test + build）
 |:---|:---|:---:|:---:|
 | **Block Streaming（SSE）** | `/chat/stream` SSE 端点，完成即发送，首字延迟 < 500ms | P1 | — |
 | **DM 配对安全模型** | 配对码 6 位数字 + TTL 5min + 管理员审批 | P1 | — |
-| **飞书适配器** | 官方 `lark-oapi` → ChannelAdapter 封装；WebSocket 事件订阅 | P0 | 1 (官方 SDK) |
-| **微信适配器** | 社区 `wechatpy` → ChannelAdapter 封装；公众号/企业微信 | P0 | 1 (社区 SDK) |
+| ✅ **飞书适配器** | 分层架构 lark-oapi + Hermes vendor 消息引擎；WebSocket 长连接 + Token管理 + 媒体消息；clawhermes-lark 子仓库 | P0 | ✅ 完成 |
+| ✅ **微信适配器** | clawhermes-weixin 子仓库 + wechatpy；ChannelAdapter + Gateway 集成 | P0 | ✅ 完成 |
 | **QQ 适配器** | QQ Bot 官方 HTTP API + Hermes QQ SDK 逻辑复刻 | P1 | 3 (子仓库复刻) |
 | **Telegram 适配器** | 社区 `python-telegram-bot` → ChannelAdapter 封装 | P2 | 1 (社区 SDK) |
 | **Discord 适配器** | 社区 `discord.py` → ChannelAdapter 封装 | P2 | 1 (社区 SDK) |

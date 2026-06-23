@@ -50,15 +50,27 @@ class TestFeishuAdapter:
     async def test_send_response(self, adapter):
         from clawhermes.channel.adapter import ChannelResponse
 
-        mock_client = MagicMock()
+        # send_response 调用 asyncio.to_thread(client.im.v1.message.create, req)
+        # asyncio.to_thread 以普通 callable 调用（不 await），所以用 MagicMock
         mock_resp = MagicMock()
-        mock_resp.success.return_value = True
-        mock_client.arequest = AsyncMock(return_value=mock_resp)
+        mock_resp.code = 0
+        mock_msg = MagicMock()
+        mock_msg.message_id = "msg-test-1"
+        mock_resp.data = mock_msg
+
+        mock_create = MagicMock(return_value=mock_resp)
+        mock_message = MagicMock()
+        mock_message.create = mock_create
+        mock_im = MagicMock()
+        mock_im.v1.message = mock_message
+        mock_client = MagicMock()
+        mock_client.im = mock_im
         adapter._client = mock_client
 
-        msg = ChannelMessage("m1", ChannelType.FEISHU, ChannelUser("ou1"), "hi")
+        msg = ChannelMessage("m1", ChannelType.FEISHU, ChannelUser("ou1"), "hi",
+                            metadata={"chat_id": "oc_test"})
         await adapter.send_response(ChannelResponse(content="ok"), msg)
-        mock_client.arequest.assert_called_once()
+        mock_create.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_handle_webhook_url_verification(self, adapter):
