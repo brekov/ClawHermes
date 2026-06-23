@@ -1,5 +1,48 @@
 # Changelog
 
+## v0.14.1 (2026-06-23)
+
+渠道配置架构修复 — 死字段激活 + YAML 单一来源
+
+### 配置架构重构
+
+- **新增长 `channel/config.py`** — ChannelConfigLoader：YAML + ${VAR} 环境变量插值
+  - 敏感值（密钥）：存放在 .env，通过 YAML `${FEISHU_APP_ID}` 语法引用
+  - 操作配置（非敏感）：存放在 `channels/<name>.yaml` 中
+  - 优先级：环境变量 > YAML > 内置默认值
+- **app.py** — 27 处 `os.environ.get("FEISHU_*")` → 1 处 `build_adapter_config("feishu")`
+  - 配置加载统一入口，零向后兼容 fallback
+- **.env.example** — 27 个 FEISHU_* 变量 → 6 个纯敏感值（密钥/Token 类）
+- **feishu.yaml.example** — 完整 26 字段操作配置示例，使用 ${VAR} 引用 .env 敏感值
+- **配置分层原则**：`.env（敏感值）→ ${VAR} 插值 → channels/*.yaml → build_adapter_config()`
+
+### M3.6e 飞书适配器 — 15 个死配置生效
+
+- **LarkConfig 26/26 字段全部操作化**（之前仅 11 个生效）：
+  - **加密**：`encrypt_key` → Webhook SHA256+hmac 签名校验
+  - **Bot 身份**：`bot_open_id`、`bot_user_id` → @提及双重匹配（open_id 首选，user_id 回退）；`bot_name` → `get_user_info()` 返回
+  - **权限门控**：`group_policy`（5 策略）、`allowed_group_users`（白/黑名单）、`admins`（管理员绕过）、`allow_bots`（三档过滤）、`require_mention`（@提及门控）
+  - **WS 可配**：`ws_reconnect_nonce`、`ws_reconnect_interval` 替换硬编码 5s；`ws_ping_interval`、`ws_ping_timeout` 注入 lark.ws.Client
+  - **高级**：`dedup_cache_size` → OrderedDict LRU 限界去重；`reactions_enabled` → 反应事件开关
+- **消息去重**：对齐 Hermes `_seen_message_ids` 模式
+- **按 chat_id 串行处理锁**：对齐 Hermes `_chat_locks`
+- **Webhook 签名校验**：SHA256(timestamp+nonce+encrypt_key+body) + hmac.compare_digest
+
+### 文档全量同步
+
+- **全部 14 个文档** 更新至 v0.14.1 基线（功能清单、架构图、模块统计、端点清单、配置分层）
+
+### 质量
+
+- 373 测试全部通过
+- ruff 0 errors | mypy 0 errors
+- 代码行数：~6,900 行（+~150 行 config loader + adapter logic）
+- clawhermes-lark：6,863 行（含 5,512 行 Hermes vendor 消息引擎）
+
+## v0.14.0 (2026-06-22)
+
+Phase 3 中期 — 全链路异步化 / 测试覆盖率 / MCP 集成 / 工具扩展至 35
+
 ## v0.14.0 (2026-06-22)
 
 Phase 3 中期 — 全链路异步化 / 测试覆盖率 / MCP 集成 / 工具扩展至 35

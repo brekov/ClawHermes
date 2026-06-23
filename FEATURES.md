@@ -1,6 +1,6 @@
 # ClawHermes · 完整功能介绍
 
-> 版本：v0.14.0 | 源文件：30 个 | 测试：373/373 ✅
+> 版本：v0.14.1 | 源文件：31 个 + 2 个子仓库 | 测试：373/373 ✅
 > GitHub：https://github.com/brekov/ClawHermes
 
 ---
@@ -187,7 +187,7 @@
 
 ### 6.4 异常体系（F14）
 - `ClawHermesError` → 5 大类 17 子类
-- 另有 SandboxError / ChannelError 扩展异常
+- SandboxError / ChannelError / ChannelConnectionError / ChannelMessageError 扩展异常
 
 ### 6.5 mypy 严格类型
 - 6 项严格检查：warn_return_any / unused_ignores / redundant_casts / check_untyped_defs / no_implicit_optional / strict_equality

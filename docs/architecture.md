@@ -1,9 +1,9 @@
 # ClawHermes · 架构设计文档
 
-> 版本：v2.0
-> 日期：2026-06-17
-> 基线版本：v0.14.0
-> 状态：已实现（含 MCP 模块、35 工具、全链路异步）
+> 版本：v2.1
+> 日期：2026-06-23
+> 基线版本：v0.14.1
+> 状态：已实现（ChannelConfigLoader、飞书 26 字段、微信双模式、YAML ${VAR} 配置分层）
 
 ---
 
@@ -12,7 +12,7 @@
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
 │                        Channel 适配层                                │
-│   ChannelAdapter ABC + CLI / REST / WebSocket 内置适配器             │
+│   ChannelAdapter ABC + CLI / REST / WebSocket + 飞书 + 微信          │
 │   (未来: Slack / Discord / 飞书 / 微信 / Telegram)                   │
 └──────────────────────────────┬───────────────────────────────────────┘
                                │
@@ -458,7 +458,7 @@ media:
 | 流式输出 | **Block Streaming**（规划中） | 按 SSE 块流式输出（工具调用块、文本块分别推送），兼顾实时性和完整性；完整响应模式作为降级方案 |
 | 渠道集成方式 | **Channel Router 中间层** | 解耦 Gateway 与渠道，Gateway 不直接调用 Agent |
 | 消息队列默认模式 | **steer** | 借鉴 OpenClaw，适合大多数场景 |
-| 渠道配置格式 | **YAML + 环境变量引用** | 与现有 config.yaml 一致，敏感信息通过环境变量注入 |
+| 渠道配置格式 | ✅ **YAML + 环境变量引用** | 已实现：`channel/config.py` ChannelConfigLoader，${VAR} 插值，.env/频道分层 |
 | 渠道依赖管理 | **可选依赖 (extras)** | telegram/discord/slack 等为可选安装，不污染核心 |
 | 流式输出模式 | **编辑模式（Telegram/Discord）+ 新消息模式（Slack/飞书）** | 不同平台 API 能力不同，适配器自行选择 |
 | DM 安全模型 | **pairing 模式默认** | 借鉴 OpenClaw，安全优先 |
@@ -495,7 +495,7 @@ gateway/app.py
 
 ## 6. v1.0 目标架构
 
-> 以下为 v1.0 完整目标架构，与当前实现（v0.14.0）对比
+> 以下为 v1.0 完整目标架构，与当前实现（v0.14.1）对比
 
 ### 6.1 已实现模块（v0.11.0）
 
@@ -514,7 +514,7 @@ gateway/app.py
 | `gateway/app.py` | FastAPI REST 服务（13个端点） | ✅ |
 | `.github/workflows/ci.yml` | CI 流水线 | ✅ |
 
-### 6.2 已实现模块（v0.14.0）
+### 6.2 已实现模块（v0.14.1）
 
 | 模块 | 职责 | 阶段 |
 |------|------|------|
@@ -524,7 +524,7 @@ gateway/app.py
 | `tools/sandbox.py` | Docker 沙箱执行环境 | Phase 2 ✅ |
 | `skills/hub.py` | 联邦技能中心（SkillHub） | Phase 3 ✅ |
 
-### 6.3 新增模块（v0.14.0）
+### 6.3 新增模块（v0.14.1）
 
 | 模块 | 职责 | 阶段 |
 |------|------|------|
@@ -625,7 +625,7 @@ ToolProfile
 
 ---
 
-## 附录 A：Gateway 端点清单（23个）
+## 附录 A：Gateway 端点清单（26个）
 
 | 方法 | 路径 | 说明 |
 |------|------|------|

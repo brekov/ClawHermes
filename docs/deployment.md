@@ -1,6 +1,6 @@
 # ClawHermes · 部署指南
 
-> 版本：v2.1 | 日期：2026-06-17
+> 版本：v2.2 | 日期：2026-06-23
 
 ---
 
@@ -81,7 +81,7 @@ clawhermes chat
 ```bash
 # 健康检查
 curl http://localhost:18789/health
-# {"status":"ok","version":"0.14.0","uptime":3600,"tools":35}
+# {"status":"ok","version":"0.14.1","uptime":3600,"tools":35}
 
 # 初始化 Agent
 curl -X POST http://localhost:18789/init \
@@ -112,3 +112,26 @@ curl -X POST http://localhost:18789/cron/jobs \
 | `CH_GATEWAY_PORT` | Gateway 端口 | 18789 |
 | `CH_TOOLS_PROFILE` | 工具集级别 | standard |
 | `CH_DATA_DIR` | 数据目录 | ~/.clawhermes |
+
+## 渠道配置
+
+飞书/微信等渠道的配置采用 **YAML + 环境变量** 分层模式：
+
+```bash
+# 1. 安装渠道子仓库
+pip install -e ./clawhermes-lark    # 飞书
+pip install -e ./clawhermes-weixin  # 微信
+
+# 2. 配置环境变量（敏感值）
+cp config/.env.example .env
+# 编辑 .env 填入 FEISHU_APP_ID / FEISHU_APP_SECRET 等密钥
+
+# 3. 配置渠道（操作参数）
+cp config/channels/feishu.yaml.example ~/.clawhermes/channels/feishu.yaml
+# 编辑 YAML 调整策略/重连参数等
+
+# 4. 启动（自动加载渠道配置）
+clawhermes gateway start
+```
+
+详见 [env-reference.md](env-reference.md) 和 [config/README.md](../config/README.md)。

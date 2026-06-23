@@ -1,9 +1,9 @@
 # ClawHermes · 项目推进计划
 
-> 版本：v2.0
-> 日期：2026-06-22
-> 基线版本：v0.14.0（373 测试通过）
-> 状态：Phase 1 ✅ | Phase 2 ✅ | Phase 3 ✅ v0.14.0 | Phase 3 续 🔄 v0.15.0+
+> 版本：v2.1
+> 日期：2026-06-23
+> 基线版本：v0.14.1（373 测试通过）
+> 状态：Phase 1 ✅ | Phase 2 ✅ | Phase 3 ✅ v0.14.0 → v0.14.1 | Phase 3 续 🔄 v0.15.0+
 > 方法论：软件工程全流程 — 现状评估 → 竞品研究 → 差距分析 → SMART 目标 → 架构演进 → 分阶段路线图 → 质量保障 → 风险管理
 
 ---
@@ -54,7 +54,7 @@
 | 自适应压缩 | ❌ | ❌ | **✅ ACE（独创）** |
 | 自进化闭环 | ✅ | ❌ | **✅** |
 | 钩子体系 | ❌ | ✅ 同步 | **✅ 异步** |
-| 消息渠道 | ❌ | 22+ | **SDK 抽象（三者唯一）** |
+| 消息渠道 | ❌ | 22+ | **SDK 抽象 + 飞书 P0 + 微信 P0 ✅** |
 | MCP 协议 | ✅ | ❌ | ✅ |
 
 ### 1.4 北极星目标（v1.0.0）
@@ -82,6 +82,7 @@ v1.0.0 时 ClawHermes 应成为：
 | v0.12.2 | 2026-06-17 | P0-P3 评审修复、版本动态化、README 与架构文档同步 | 165 |
 | **v0.13.0** | **2026-06-17** | **并行执行、web_search 重构、Gateway 状态重构、线程安全、Channel Router、消息队列 4 模式** | **203** |
 | **v0.14.0** | **2026-06-22** | **全链路异步化、MCP 集成、工具扩展至 35、MCP 异步修复、测试覆盖率 73%（373 测试）** | **373** |
+| **v0.14.1** | **2026-06-23** | **渠道配置架构重构（YAML ${VAR} 单一来源）、15 死配置字段激活、LarkConfig 26/26 全部生效** | **373** |
 
 ### 2.2 已交付功能清单（19 项）
 
@@ -244,7 +245,7 @@ CI/CD:      GitHub Actions（lint + typecheck + test + build）
 |:---|:---|:---|:---:|
 | MCP 协议 | ❌ 不支持 | ✅ MCP 客户端 | 🔴 高 |
 | 内置工具数 | 35 | 45+ | 🟡 中 |
-| 渠道适配器 | 3（CLI/REST/WS） | 6+ | 🟡 中 |
+| 渠道适配器 | 5（CLI/REST/WS/飞书/微信） | 8+ | 🟢 低 |
 | Block Streaming | ❌ 不支持 | ✅ | 🟡 中 |
 | 测试覆盖率 | 73% | >90% | 🟡 中 |
 | 多模态记忆 | ❌ 仅文本 | ✅ 图片/文件 | 🟡 中 |
@@ -383,7 +384,7 @@ CI/CD:      GitHub Actions（lint + typecheck + test + build）
 
 ### 6.2 关键架构演进
 
-| 演进项 | 当前（v0.14.0） | 目标（v1.0.0） |
+| 演进项 | 当前（v0.14.1） | 目标（v1.0.0） |
 |:---|:---|:---|
 | 异步模型 | 全链路 asyncio（含 1 处可控 threading.Thread 用于 MCP 嵌套协程兼容） | 连接池 + 多实例部署就绪 |
 | Gateway 状态 | GatewayState 类（单实例） | 连接池 + 多实例部署就绪 |
@@ -449,7 +450,7 @@ CI/CD:      GitHub Actions（lint + typecheck + test + build）
 | **M3.5** | **技能审核流** — 发布前安全审核 + 依赖检查 + 兼容性验证 | 🟢 P2 | 2d |
 | **M3.2b** | **Skill Evolution Graph** — 技能演化 DAG 图谱可视化 | 🟢 P2 | 2d |
 | **M3.6k** | **WebChat 适配器** — 基于 WebSocket 的 Web 聊天 UI | 🟢 P2 | 2d | M3.6a |
-| **M3.6l** | **渠道配置热加载** — YAML 变更自动检测，无需重启 | 🟢 P2 | 1d | M3.6a |
+| **M3.6l** | ✅ **渠道配置架构** — ChannelConfigLoader + YAML ${VAR} 插值 + .env/频道分层 | 🟡 P1 | ✅ 完成 | M3.6a |
 | **M3.6m** | **媒体处理** — 图片/文件/语音消息处理 | 🟢 P2 | 2d |
 | **M3.13** | **测试覆盖率 > 85%** — 全模块覆盖，补充集成测试 | 🟡 P1 | 2d |
 
@@ -655,8 +656,8 @@ CI/CD:      GitHub Actions（lint + typecheck + test + build）
 
 | 渠道 | 实现级别 | SDK 来源 | Git 子仓库 | 备注 |
 |:---|:---:|:---|:---|:---|
-| **飞书** | 1 → 3 | `lark-oapi`（官方） | `clawhermes-lark` | 优先官方 SDK；若有定制需求则复刻为子仓库 |
-| **微信** | 1 → 3 | `wechatpy`（社区） | `clawhermes-weixin` | 官方无完整 Python SDK，社区版为首选 |
+| **飞书** | ✅ 1 | `lark-oapi`（官方 SDK） | `clawhermes-lark` | ✅ 26 字段全部生效，权限门控 + Webhook 签名 + WS 可配 + 去重 LRU |
+| **微信** | ✅ 1 | iLink Bot API + 企微 Webhook | `clawhermes-weixin` | ✅ 个人微信长轮询 + 企微 Webhook 双模式 |
 | **QQ** | 1 → 3 | QQ Bot 官方 API | `clawhermes-qq` | 官方仅提供 HTTP API，复用 Hermes QQ SDK 逻辑 |
 | **Telegram** | 1 | `python-telegram-bot`（社区） | — | 社区 SDK 成熟稳定 |
 | **Discord** | 1 | `discord.py`（社区） | — | 社区 SDK 成熟稳定 |
@@ -665,7 +666,7 @@ CI/CD:      GitHub Actions（lint + typecheck + test + build）
 > **子仓库命名规范**：`clawhermes-{platform}`，统一放在 `github.com/brekov/` 下，
 > 通过 `git submodule` 或 `pip` extras 引入。
 
-### A.1 当前状态（v0.14.0）
+### A.1 当前状态（v0.14.1）
 
 ```
                     ┌──────────────────────────┐
