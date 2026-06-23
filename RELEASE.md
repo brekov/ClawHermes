@@ -51,12 +51,6 @@ pip install -e ./clawhermes-lark    # 飞书渠道
 pip install -e ./clawhermes-weixin  # 微信渠道
 ```
 
-渠道配置（可选）：
-
-```bash
-cp config/channels/feishu.yaml.example ~/.clawhermes/channels/feishu.yaml
-```
-
 新增环境变量（仅敏感值）：
 
 | 变量 | 说明 |
@@ -68,9 +62,14 @@ cp config/channels/feishu.yaml.example ~/.clawhermes/channels/feishu.yaml
 
 > 非敏感操作配置（domain、group_policy 等 20 项）移至 `channels/feishu.yaml`。详情见 `config/channels/feishu.yaml.example`。
 
-## 子仓库
+## 渠道配置示例
 
-| 仓库 | 行数 | 说明 |
-|------|:---:|------|
-| [clawhermes-lark](https://github.com/brekov/clawhermes-lark) | 6,863 | 飞书适配器（lark-oapi + Hermes vendor 消息引擎 5,512 行） |
-| [clawhermes-weixin](https://github.com/brekov/clawhermes-weixin) | 308 | 微信适配器（iLink Bot + 企微 Webhook） |
+```yaml
+# channels/feishu.yaml — 敏感值通过 ${VAR} 从 .env 注入
+app_id: "${FEISHU_APP_ID}"
+app_secret: "${FEISHU_APP_SECRET}"
+domain: feishu
+connection_mode: websocket
+group_policy: allowlist
+require_mention: true
+```
