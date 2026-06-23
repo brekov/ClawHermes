@@ -30,8 +30,8 @@ from clawhermes.agent.scheduler import CronScheduler, ScheduleMode, ScheduleSpec
 from clawhermes.agent.session import SessionManager
 from clawhermes.channel.adapter import ChannelManager, ChannelType, RESTAdapter
 from clawhermes.channel.adapters.feishu import FeishuAdapter
-from clawhermes.channel.config import build_adapter_config
 from clawhermes.channel.adapters.wechat import WeChatAdapter, WeComAdapter
+from clawhermes.channel.config import build_adapter_config
 from clawhermes.channel.router import ChannelRouter, SessionRouter
 from clawhermes.llm.provider import LLMProvider
 from clawhermes.tools.builtin import register_builtin_tools

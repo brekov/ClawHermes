@@ -31,10 +31,10 @@ def _resolve_env_ref(value: Any) -> Any:
                 default = default.strip()
             env_val = os.environ.get(var_name)
             if env_val is not None:
-                return env_val
+                return str(env_val)
             if default is not None:
-                return default
-            return m.group(0)
+                return str(default)
+            return str(m.group(0))
         return _ENV_REF_RE.sub(_replace, value)
 
     if isinstance(value, dict):
@@ -96,7 +96,9 @@ def load_channel_config(channel_name: str) -> dict[str, Any]:
             except Exception as e:
                 logger.warning("Failed to load channel config %s: %s", path, e)
 
-    return _resolve_env_ref(config)
+    resolved = _resolve_env_ref(config)
+    assert isinstance(resolved, dict)
+    return resolved
 
 
 def build_adapter_config(channel_name: str) -> dict[str, Any]:
