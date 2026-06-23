@@ -1,6 +1,9 @@
 # ============================================
-# 消息渠道配置示例 — Discord（规划中，M3.6i）
+# 消息渠道配置示例 — Discord（P2 规划中）
 # ============================================
+# 计划使用社区 discord.py SDK
+# 预计版本: v0.16.0+
+# 详见 docs/development-plan.md Phase 3 后期
 
 channel_type: discord
 enabled: false
@@ -8,12 +11,5 @@ enabled: false
 # Discord Bot Token（从 https://discord.com/developers 获取）
 bot_token: "..."
 
-# 意图（Gateway Intents）
-intents:
-  message_content: true
-  guild_messages: true
-  direct_messages: true
-
-# 消息处理选项
-mention_only: true
-command_prefix: "!"     # 指令前缀（如 !ask）
+# 消息处理选项（对齐 ChannelAdapter 接口）
+# 具体字段以实施时的 discord.py 配置为准

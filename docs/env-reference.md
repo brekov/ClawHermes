@@ -2,6 +2,19 @@
 
 > 版本：v2.0
 > 日期：2026-06-17
+> 配置原则：**敏感值在 .env，操作配置在 YAML**（见 `docs/architecture.md` 渠道配置格式）
+
+---
+
+## 配置分层
+
+```
+.env                        ← 敏感值（API Key / Secret / Token）
+config.yaml                 ← 主配置（非敏感）
+channels/<name>.yaml        ← 渠道操作配置 + ${VAR} 引用 .env
+```
+
+YAML 中通过 `${FEISHU_APP_ID}` 语法引用环境变量，程序启动时自动注入。
 
 ---
 
@@ -37,25 +50,67 @@
 
 ### 飞书（Feishu / Lark）
 
-需先安装子仓库：`git submodule update --init && pip install -e ./clawhermes-lark`
+需先安装子仓库：`pip install -e ./clawhermes-lark`
 
-| 变量 | 说明 | 默认值 |
+#### `.env` — 敏感值（密钥/Token）
+
+| 变量 | 说明 |
+|------|------|
+| `FEISHU_APP_ID` | 飞书应用 App ID |
+| `FEISHU_APP_SECRET` | 飞书应用 App Secret |
+| `FEISHU_VERIFICATION_TOKEN` | 事件订阅 Verification Token |
+| `FEISHU_ENCRYPT_KEY` | 事件推送 Encrypt Key |
+| `FEISHU_BOT_OPEN_ID` | Bot 的 open_id（可选，用于 @提及 匹配） |
+| `FEISHU_BOT_USER_ID` | Bot 的 user_id（可选，tenant-scoped，需 contact 权限） |
+
+#### `channels/feishu.yaml` — 操作配置（非敏感）
+
+完整示例见 `config/channels/feishu.yaml.example`。
+
+| 字段 | 说明 | 默认值 |
 |------|------|--------|
-| `FEISHU_APP_ID` | 飞书应用 App ID | —（不设置则不启用） |
-| `FEISHU_APP_SECRET` | 飞书应用 App Secret | — |
-| `FEISHU_VERIFICATION_TOKEN` | 事件订阅 Verification Token | — |
-| `FEISHU_ENCRYPT_KEY` | 事件推送 Encrypt Key | — |
+| `domain` | 平台域名 | `feishu` |
+| `connection_mode` | 连接方式 | `websocket` |
+| `bot_name` | Bot 显示名称 | `""` |
+| `group_policy` | 群聊权限策略 | `allowlist` |
+| `allowed_group_users` | 白名单/黑名单 open_id | `[]` |
+| `admins` | 管理员 open_id | `[]` |
+| `allow_bots` | Bot 消息过滤 | `none` |
+| `require_mention` | 群聊 @提及门控 | `true` |
+| `webhook_host` | Webhook 绑定地址 | `0.0.0.0` |
+| `webhook_port` | Webhook 端口 | `8080` |
+| `webhook_path` | Webhook 路径 | `/feishu/webhook` |
+| `ws_reconnect_nonce` | 重连抖动上限（秒） | `30` |
+| `ws_reconnect_interval` | 重连间隔（秒） | `120` |
+| `ws_ping_interval` | 心跳间隔 | `null` |
+| `ws_ping_timeout` | 心跳超时 | `null` |
+| `log_level` | 日志级别 | `20` |
+| `max_retries` | API 重试次数 | `3` |
+| `retry_delay` | 重试基础延迟 | `1.0` |
+| `dedup_cache_size` | 去重 LRU 容量 | `1024` |
+| `reactions_enabled` | "正在输入"状态 | `true` |
 
-> Webhook 端点：`POST /feishu/webhook`
+> 环境变量可覆盖 YAML 配置（优先级：环境变量 > YAML > 默认值）
+> Gateway Webhook 端点：`POST /feishu/webhook`
 
 ### 微信（WeChat / WeCom）
 
-需先安装子仓库：`git submodule update --init && pip install -e ./clawhermes-weixin`
+需先安装子仓库：`pip install -e ./clawhermes-weixin`
 
-| 变量 | 说明 | 默认值 |
+#### `.env` — 敏感值
+
+| 变量 | 说明 |
+|------|------|
+| `WECHAT_SESSION_KEY` | 个人微信 iLink Bot session_key |
+| `WECOM_BOT_KEY` | 企业微信机器人 Webhook Key |
+
+#### `channels/wechat.yaml` — 操作配置
+
+完整示例见 `config/channels/wechat.yaml.example`。
+
+| 字段 | 说明 | 默认值 |
 |------|------|--------|
-| `WECHAT_SESSION_KEY` | 个人微信 iLink Bot session_key | —（不设置则不启用） |
-| `WECOM_BOT_KEY` | 企业微信机器人 Webhook Key | —（不设置则不启用） |
+| `sub_type` | personal / enterprise | `personal` |
 
 > Webhook 端点：`POST /wechat/webhook`、`POST /wecom/webhook`
 

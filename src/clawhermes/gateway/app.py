@@ -31,6 +31,7 @@ from clawhermes.agent.session import SessionManager
 from clawhermes.channel.adapter import ChannelManager, ChannelType, RESTAdapter
 from clawhermes.channel.adapters.feishu import FeishuAdapter
 from clawhermes.channel.adapters.wechat import WeChatAdapter, WeComAdapter
+from clawhermes.channel.config import build_adapter_config
 from clawhermes.channel.router import ChannelRouter, SessionRouter
 from clawhermes.llm.provider import LLMProvider
 from clawhermes.tools.builtin import register_builtin_tools
@@ -148,30 +149,57 @@ class GatewayState:
         rest_adapter = RESTAdapter()
         channel_manager.register("rest", rest_adapter)
 
-        # WeChat/WeCom Adapter（可选，需安装 clawhermes-weixin + 环境变量）
+        # ── 渠道初始化（YAML 配置为单一来源）──
+        # .env → ${VAR} 插值 → channels/<name>.yaml → build_adapter_config
+        # 详见 docs/architecture.md "渠道配置格式"
+
+        # WeChat/WeCom Adapter（需安装 clawhermes-weixin）
         if WeChatAdapter is not None:
-            wx_session_key = os.environ.get("WECHAT_SESSION_KEY", "")
+            wx_cfg = build_adapter_config("wechat")
+            wx_session_key = wx_cfg.get("session_key", "")
+            wx_bot_key = wx_cfg.get("bot_key", "")
             if wx_session_key:
                 self.wechat_adapter = WeChatAdapter({"session_key": wx_session_key})
                 channel_manager.register("wechat", self.wechat_adapter)
                 logger.info("WeChat Adapter 已启用（iLink 长轮询）")
-        if WeComAdapter is not None:
-            wx_bot_key = os.environ.get("WECOM_BOT_KEY", "")
             if wx_bot_key:
                 self.wecom_adapter = WeComAdapter({"bot_key": wx_bot_key})
                 channel_manager.register("wecom", self.wecom_adapter)
                 logger.info("WeCom Adapter 已启用（Webhook 模式）")
 
-        # Feishu Adapter（可选，需安装 clawhermes-lark + 环境变量）
+        # Feishu Adapter（需安装 clawhermes-lark）
         if FeishuAdapter is not None:
-            fa_id = os.environ.get("FEISHU_APP_ID", "")
-            fa_secret = os.environ.get("FEISHU_APP_SECRET", "")
-            if fa_id and fa_secret:
-                self.feishu_adapter = FeishuAdapter({
-                    "app_id": fa_id, "app_secret": fa_secret,
-                    "verification_token": os.environ.get("FEISHU_VERIFICATION_TOKEN", ""),
-                    "encrypt_key": os.environ.get("FEISHU_ENCRYPT_KEY", ""),
-                })
+            fa_cfg = build_adapter_config("feishu")
+            if fa_cfg.get("app_id") and fa_cfg.get("app_secret"):
+                adapter_cfg = {
+                    "app_id": fa_cfg["app_id"],
+                    "app_secret": fa_cfg["app_secret"],
+                    "verification_token": fa_cfg.get("verification_token", ""),
+                    "encrypt_key": fa_cfg.get("encrypt_key", ""),
+                    "domain": fa_cfg.get("domain", "feishu"),
+                    "connection_mode": fa_cfg.get("connection_mode", "websocket"),
+                    "bot_open_id": fa_cfg.get("bot_open_id", ""),
+                    "bot_user_id": fa_cfg.get("bot_user_id", ""),
+                    "bot_name": fa_cfg.get("bot_name", ""),
+                    "group_policy": fa_cfg.get("group_policy", "allowlist"),
+                    "allowed_group_users": fa_cfg.get("allowed_group_users", []),
+                    "admins": fa_cfg.get("admins", []),
+                    "allow_bots": fa_cfg.get("allow_bots", "none"),
+                    "require_mention": _to_bool(fa_cfg.get("require_mention", True)),
+                    "webhook_host": fa_cfg.get("webhook_host", "0.0.0.0"),
+                    "webhook_port": int(fa_cfg.get("webhook_port", 8080)),
+                    "webhook_path": fa_cfg.get("webhook_path", "/feishu/webhook"),
+                    "ws_reconnect_nonce": int(fa_cfg.get("ws_reconnect_nonce", 30)),
+                    "ws_reconnect_interval": int(fa_cfg.get("ws_reconnect_interval", 120)),
+                    "ws_ping_interval": fa_cfg.get("ws_ping_interval"),
+                    "ws_ping_timeout": fa_cfg.get("ws_ping_timeout"),
+                    "log_level": int(fa_cfg.get("log_level", 20)),
+                    "max_retries": int(fa_cfg.get("max_retries", 3)),
+                    "retry_delay": float(fa_cfg.get("retry_delay", 1.0)),
+                    "dedup_cache_size": int(fa_cfg.get("dedup_cache_size", 1024)),
+                    "reactions_enabled": _to_bool(fa_cfg.get("reactions_enabled", True)),
+                }
+                self.feishu_adapter = FeishuAdapter(adapter_cfg)
                 channel_manager.register("feishu", self.feishu_adapter)
                 logger.info("Feishu Adapter 已启用（clawhermes-lark）")
         session_router = SessionRouter()
@@ -538,6 +566,16 @@ async def wecom_webhook(request: Request):
 
 if __name__ == "__main__":
     import uvicorn
+
+
+def _to_bool(val: Any) -> bool:
+    """将各种类型转换为 bool"""
+    if isinstance(val, bool):
+        return val
+    if isinstance(val, str):
+        return val.lower() in ("true", "1", "yes")
+    return bool(val)
+
     uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("CH_GATEWAY_PORT", "18789")))
 
 
