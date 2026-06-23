@@ -39,9 +39,17 @@ Phase 3 中期 — 全链路异步化 / 测试覆盖率 / MCP 集成 / 工具扩
   - `markdown_render` — Markdown → HTML（可选 markdown）
 - **工具总数**：26 → 35，跨越 data / file / system / util / media 5 个新分组
 
+### 修复 & 测试增强
+
+- **MCP 工具异步路径修复**：`MCPRegistry._make_handler` 改为返回 `async def handler`，修复 MCP 工具经异步分派路径静默失效（返回占位结果而非实际执行）的 bug
+  - 新增 `_run_maybe_async()` 辅助函数兼容同步/异步 handler 混合分派
+  - **权衡说明**：`_run_maybe_async` 在嵌套事件循环场景下通过 `threading.Thread` 执行协程。这是刻意打破 v0.14.0 "零 threading.Thread" 声明的工程权衡：该线程仅在一次性的嵌套循环边缘场景触发，短生命周期且不会泄漏。主流路径仍为零 Thread
+- **CLI 测试覆盖**：新增 `tests/test_cli.py` 21 测试，覆盖 doctor/chat/gateway/config/agent/setup 全部子命令主路径
+- **MCP 测试覆盖**：新增 `tests/test_mcp_client.py` 26 测试，覆盖 stdio/HTTP 双传输 + Registry + 同步/异步分派路径
+
 ### 质量
 
-- 310 测试全部通过
+- 357 测试全部通过
 - ruff 0 errors | mypy 0 errors（6 strict checks）
 - 代码行数：~3,700 行（+301 行 MCP 模块, +281 行工具扩展）
 
