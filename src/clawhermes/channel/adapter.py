@@ -58,6 +58,15 @@ class ChannelMessage:
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
+    def to_response(self, content: str, session_id: str = "") -> "ChannelResponse":
+        """从消息创建对应的响应对象"""
+        return ChannelResponse(
+            content=content,
+            session_id=session_id or self.session_id,
+            metadata={},
+        )
+
+
 @dataclass
 class ChannelResponse:
     content: str
