@@ -15,6 +15,10 @@ from clawhermes.channel.adapter import (
     RESTAdapter,
     WebSocketAdapter,
 )
+from clawhermes.channel.config import (
+    build_adapter_config,
+    load_channel_config,
+)
 from clawhermes.channel.router import (
     ChannelRouter,
     QueuedMessage,
@@ -40,5 +44,7 @@ __all__ = [
     "QueueMode",
     "QueuedMessage",
     "SessionMapping",
-    "SessionRouter",
+        "SessionRouter",
+    "build_adapter_config",
+    "load_channel_config",
 ]

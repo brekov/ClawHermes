@@ -1,19 +1,16 @@
 # ============================================
-# 消息渠道配置示例 — Slack（规划中，M3.6j）
+# 消息渠道配置示例 — Slack（P2 规划中）
 # ============================================
+# 计划使用官方 slack-bolt SDK（Socket Mode）
+# 预计版本: v0.16.0+
+# 详见 docs/development-plan.md Phase 3 后期
 
 channel_type: slack
 enabled: false
 
 # Slack Bot Token（从 https://api.slack.com/apps 获取）
 bot_token: "xoxb-..."
+app_token: "xapp-..."           # Socket Mode 必需
 
-# 监听的频道（留空则监听所有已加入频道）
-channels:
-  - "#general"
-  - "#dev"
-
-# 消息处理选项
-mention_only: false      # 仅响应 @提及的消息
-ignore_bots: true        # 忽略其他 bot 的消息
-reply_in_thread: true    # 在消息线程中回复
+# 消息处理选项（对齐 ChannelAdapter 接口）
+# 具体字段以实施时的 Slack SDK 配置为准

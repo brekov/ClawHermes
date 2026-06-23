@@ -1,24 +1,19 @@
 # ============================================
-# 消息渠道配置示例 — 微信（规划中，当前通过环境变量配置）
+# 消息渠道配置 — 微信 / 企业微信（v0.14.0+ 可用）
 # ============================================
-# 当前方式：
-#   个人微信：设置 WECHAT_SESSION_KEY 环境变量
-#   企业微信：设置 WECOM_BOT_KEY 环境变量
-# YAML 配置将在 M3.6l 渠道配置热加载中实现
+# 配置文件：~/.clawhermes/channels/wechat.yaml
+# 敏感值：存放在 .env（WECHAT_SESSION_KEY / WECOM_BOT_KEY）
+# 引用语法：${WECHAT_SESSION_KEY} → 从环境变量注入
 # ============================================
 
 channel_type: wechat
-enabled: false
+enabled: true
 
-# 子类型：personal（个人微信）| enterprise（企业微信）
-sub_type: personal
+# ── 子类型 ────────────────────────────────────────────────────────
+sub_type: personal                # personal（个人微信 iLink Bot）| enterprise（企业微信 Webhook）
 
-# 个人微信 — iLink Bot session_key
-session_key: "..."
+# ── 个人微信 — iLink Bot API（从 .env 注入）───────────────────────
+session_key: "${WECHAT_SESSION_KEY}"
 
-# 企业微信 — Webhook Bot Key
-# bot_key: "..."
-# webhook_url: "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=..."
-
-# 消息处理选项
-mention_only: false
+# ── 企业微信 — Webhook（从 .env 注入）────────────────────────────
+bot_key: "${WECOM_BOT_KEY}"
