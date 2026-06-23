@@ -49,15 +49,16 @@ class TestFeishuAdapter:
     @pytest.mark.asyncio
     async def test_send_response(self, adapter):
         from clawhermes.channel.adapter import ChannelResponse
-        from unittest.mock import patch, AsyncMock
 
+        # send_response 调用 asyncio.to_thread(client.im.v1.message.create, req)
+        # asyncio.to_thread 以普通 callable 调用（不 await），所以用 MagicMock
         mock_resp = MagicMock()
         mock_resp.code = 0
         mock_msg = MagicMock()
         mock_msg.message_id = "msg-test-1"
         mock_resp.data = mock_msg
 
-        mock_create = AsyncMock(return_value=mock_resp)
+        mock_create = MagicMock(return_value=mock_resp)
         mock_message = MagicMock()
         mock_message.create = mock_create
         mock_im = MagicMock()
