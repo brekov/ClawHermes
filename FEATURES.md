@@ -1,6 +1,6 @@
 # ClawHermes · 完整功能介绍
 
-> 版本：v0.14.0 | 源文件：27 个 | 测试：357/357 ✅
+> 版本：v0.14.0 | 源文件：30 个 | 测试：373/373 ✅
 > GitHub：https://github.com/brekov/ClawHermes
 
 ---
@@ -136,7 +136,7 @@
 
 ---
 
-## 五、Gateway API（23 个端点）
+## 五、Gateway API（26 个端点）
 
 ### Agent 核心（12 个）
 | 端点 | 方法 | 说明 |
@@ -229,7 +229,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/brekov/ClawHermes/main/scrip
 
 ### 9. 测试
 
-- 357 个测试，全部通过 ✅
+- 373 个测试，全部通过 ✅
 - ruff 0 errors | mypy 0 errors（6 strict checks）
 - 覆盖率 73%（核心模块 > 80%）
 - GitHub Actions CI：lint + typecheck + test + build

@@ -61,7 +61,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/brekov/ClawHermes/main/scrip
 
 ## Gateway 说明
 
-ClawHermes Gateway 是一个 **REST API** 服务，提供 23 个端点，通过 HTTP API 暴露 Agent 核心能力。
+ClawHermes Gateway 是一个 **REST API** 服务，提供 26 个端点，通过 HTTP API 暴露 Agent 核心能力。
 
 ### 启动
 

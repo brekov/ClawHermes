@@ -4,7 +4,7 @@
 
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![Tests: 357 passed](https://img.shields.io/badge/tests-357%20passed-brightgreen)](tests/)
+[![Tests: 373 passed](https://img.shields.io/badge/tests-373%20passed-brightgreen)](tests/)
 [![Coverage: 73%](https://img.shields.io/badge/coverage-73%25-yellow)](tests/)
 [![Ruff](https://img.shields.io/badge/ruff-0%20errors-brightgreen)](pyproject.toml)
 [![v0.14.0](https://img.shields.io/badge/version-0.14.0-blue)](CHANGELOG.md)
@@ -67,7 +67,7 @@ curl http://127.0.0.1:18789/sessions
 ```
 ┌──────────────────────────────────────────────────────────────┐
 │                      Gateway 层（REST API）                   │
-│  CLI / HTTP（FastAPI · 23 个 REST 端点 · Cron调度 · Docker沙箱 · MCP） │
+│  CLI / HTTP（FastAPI · 26 个 REST 端点 · Cron调度 · Docker沙箱 · MCP） │
 └────────────────────────┬─────────────────────────────────────┘
                          │
 ┌────────────────────────▼─────────────────────────────────────┐
@@ -248,7 +248,7 @@ src/clawhermes/
 │   └── chroma_memory.py    # ChromaDB 向量记忆
 │
 └── gateway/
-    ├── app.py              # FastAPI Gateway（23 个 REST 端点）
+    ├── app.py              # FastAPI Gateway（26 个 REST 端点）
     └── setup.py            # Provider 配置管理
 ```
 
@@ -281,7 +281,7 @@ src/clawhermes/
 ## 测试
 
 ```bash
-# 单元测试 + 集成测试（357 个测试，全部通过 ✅）
+# 单元测试 + 集成测试（373 个测试，全部通过 ✅）
 pytest tests/ -v
 
 # 带覆盖率

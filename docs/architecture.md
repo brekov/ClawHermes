@@ -18,7 +18,7 @@
                                │
 ┌──────────────────────────────▼───────────────────────────────────────┐
 │                          Gateway 层                                  │
-│        FastAPI REST 服务（23 个端点 · Cron调度 · Docker沙箱）         │
+│        FastAPI REST 服务（26 个端点 · Cron调度 · Docker沙箱）         │
 │              CLI 接口 / HTTP API / WebSocket                         │
 └──────────────────────────────┬───────────────────────────────────────┘
                                │
@@ -85,7 +85,7 @@
 
 | 模块 | 职责 | 关键类/函数 |
 |------|------|-------------|
-| `gateway/app.py` | FastAPI REST 服务（23 个端点） | `app` (FastAPI instance) |
+| `gateway/app.py` | FastAPI REST 服务（26 个端点） | `app` (FastAPI instance) |
 | `gateway/app.py` | Agent 初始化与组件装配 | `_create_agent_components()` / `_auto_init()` |
 | `gateway/app.py` | Cron 调度端点（6个） | `create_cron_job` / `list_cron_jobs` / `get_cron_job` / `delete_cron_job` / `pause_cron_job` / `resume_cron_job` |
 | `gateway/app.py` | 会话管理端点（3个） | `list_sessions` / `get_session` / `delete_session` |

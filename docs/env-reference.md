@@ -33,6 +33,32 @@
 |------|------|--------|
 | `CH_DATA_DIR` | 数据目录 | `~/.clawhermes` |
 
+## 渠道
+
+### 飞书（Feishu / Lark）
+
+需先安装子仓库：`git submodule update --init && pip install -e ./clawhermes-lark`
+
+| 变量 | 说明 | 默认值 |
+|------|------|--------|
+| `FEISHU_APP_ID` | 飞书应用 App ID | —（不设置则不启用） |
+| `FEISHU_APP_SECRET` | 飞书应用 App Secret | — |
+| `FEISHU_VERIFICATION_TOKEN` | 事件订阅 Verification Token | — |
+| `FEISHU_ENCRYPT_KEY` | 事件推送 Encrypt Key | — |
+
+> Webhook 端点：`POST /feishu/webhook`
+
+### 微信（WeChat / WeCom）
+
+需先安装子仓库：`git submodule update --init && pip install -e ./clawhermes-weixin`
+
+| 变量 | 说明 | 默认值 |
+|------|------|--------|
+| `WECHAT_SESSION_KEY` | 个人微信 iLink Bot session_key | —（不设置则不启用） |
+| `WECOM_BOT_KEY` | 企业微信机器人 Webhook Key | —（不设置则不启用） |
+
+> Webhook 端点：`POST /wechat/webhook`、`POST /wecom/webhook`
+
 ## 模型命名规则
 
 通过 litellm 接入 132 个 provider，格式为 `provider/model`：

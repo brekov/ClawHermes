@@ -2,7 +2,7 @@
 
 > 版本：v2.0
 > 日期：2026-06-22
-> 基线版本：v0.14.0（357 测试通过）
+> 基线版本：v0.14.0（373 测试通过）
 > 状态：Phase 1 ✅ | Phase 2 ✅ | Phase 3 ✅ v0.14.0 | Phase 3 续 🔄 v0.15.0+
 > 方法论：软件工程全流程 — 现状评估 → 竞品研究 → 差距分析 → SMART 目标 → 架构演进 → 分阶段路线图 → 质量保障 → 风险管理
 
@@ -38,7 +38,7 @@
 |:---|:---|:---|
 | **越用越聪明** | Background Review + Curator 自进化闭环 + 向量记忆语义搜索 | 借鉴 Hermes，OpenClaw 无此能力 |
 | **工程可靠** | Pydantic 类型化配置 / asyncio 异步 / fail-fast 校验 / 7 钩子点 / 工具策略引擎 | 借鉴 OpenClaw 工程实践 |
-| **即插即用** | `pip install` / REST API 23 端点 / Channel Adapter SDK / Docker 一键 | 规避 Hermes 60+ 参数与 OpenClaw TS 编译链 |
+| **即插即用** | `pip install` / REST API 26 端点 / Channel Adapter SDK / Docker 一键 | 规避 Hermes 60+ 参数与 OpenClaw TS 编译链 |
 
 ### 1.3 差异化定位矩阵
 
@@ -81,7 +81,7 @@ v1.0.0 时 ClawHermes 应成为：
 | v0.12.0 | 2026-06-17 | Channel SDK、Cron、Docker Sandbox、ACE、异步钩子、26 工具 | 165 |
 | v0.12.2 | 2026-06-17 | P0-P3 评审修复、版本动态化、README 与架构文档同步 | 165 |
 | **v0.13.0** | **2026-06-17** | **并行执行、web_search 重构、Gateway 状态重构、线程安全、Channel Router、消息队列 4 模式** | **203** |
-| **v0.14.0** | **2026-06-22** | **全链路异步化、MCP 集成、工具扩展至 35、MCP 异步修复、测试覆盖率 73%（357 测试）** | **357** |
+| **v0.14.0** | **2026-06-22** | **全链路异步化、MCP 集成、工具扩展至 35、MCP 异步修复、测试覆盖率 73%（373 测试）** | **373** |
 
 ### 2.2 已交付功能清单（19 项）
 
@@ -121,7 +121,7 @@ v1.0.0 时 ClawHermes 应成为：
 | M3.7 | MCP 客户端集成 | MCPClient (stdio + HTTP) + MCPRegistry + 3 Gateway 端点 |
 | M3.10 | 内置工具扩展至 35 | +9 工具（sqlite_query / csv_parse / hash_file / disk_usage / base64_codec / process_list / image_info / pdf_extract / markdown_render） |
 | M3.11 | 全链路异步化 | 消除全部 threading.Thread，100% asyncio 原生 |
-| M3.12 | 测试覆盖率提升 | 66% → 73%（203 → 357 测试），Gateway + 组件全覆盖 |
+| M3.12 | 测试覆盖率提升 | 66% → 73%（203 → 373 测试），Gateway + 组件全覆盖 |
 
 ### 2.4 当前技术栈
 
@@ -138,7 +138,7 @@ Web 框架:   FastAPI + uvicorn
 CI/CD:      GitHub Actions（lint + typecheck + test + build）
 ```
 
-### 2.5 Gateway 端点现状（23 个）
+### 2.5 Gateway 端点现状（26 个）
 
 | 分类 | 端点 | 方法 |
 |:---|:---|:---:|
@@ -148,6 +148,8 @@ CI/CD:      GitHub Actions（lint + typecheck + test + build）
 | 会话 | `/sessions` `/sessions/{id}` | GET/DELETE |
 | 调度 | `/cron/jobs` `/cron/jobs/{id}` `/cron/jobs/{id}/pause` `/cron/jobs/{id}/resume` | CRUD |
 | 渠道 | `/channels` `/channels/sessions` | GET |
+| 微信 | `/wechat/webhook` `/wecom/webhook` | POST |
+| 飞书 | `/feishu/webhook` | POST |
 | MCP | `/mcp/servers` `/mcp/servers/{name}` | POST/GET/DELETE |
 
 ---
@@ -319,7 +321,7 @@ CI/CD:      GitHub Actions（lint + typecheck + test + build）
 │                                                                      │
 │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐  │
 │  │ REST API │ │ WebSocket│ │ Telegram │ │ Discord  │ │ Slack    │  │
-│  │ (23端点) │ │ (实时推送)│ │ Bot API  │ │ Bot API  │ │ Bolt SDK │  │
+│  │ (26端点) │ │ (实时推送)│ │ Bot API  │ │ Bot API  │ │ Bolt SDK │  │
 │  └────┬─────┘ └────┬─────┘ └────┬─────┘ └────┬─────┘ └────┬─────┘  │
 │       └────────────┴────────────┴────────────┴────────────┘         │
 │                                │                                     │
@@ -336,7 +338,7 @@ CI/CD:      GitHub Actions（lint + typecheck + test + build）
 ┌────────────────────────────────▼────────────────────────────────────┐
 │                       Gateway 层（v0.14.0 ✅）                       │
 │                                                                      │
-│  FastAPI · GatewayState 类 · 23 REST 端点 · Cron 调度 · Docker 沙箱 │
+│  FastAPI · GatewayState 类 · 26 REST 端点 · Cron 调度 · Docker 沙箱 │
 └────────────────────────────────┬────────────────────────────────────┘
                                    │
 ┌─────────────────────────────────▼───────────────────────────────────┐
