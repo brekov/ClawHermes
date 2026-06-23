@@ -33,4 +33,8 @@ context:
 
 tools:
   parallel_execution: true
-  profile: standard             # minimal | standard | full
+  profile: standard             # minimal | standard | full（5/9/35 工具）
+  max_workers: 8                # 并行工具最大并发数
+  default_timeout_ms: 30000     # 工具默认超时（毫秒）
+  # allow: []                   # 白名单工具名
+  # deny: []                    # 黑名单工具名

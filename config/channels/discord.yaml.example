@@ -1,8 +1,5 @@
 # ============================================
-# 消息渠道配置示例 — Discord
-# ============================================
-# 保存位置：~/.clawhermes/channels/discord.yaml
-# 适配器类：ChannelAdapter(channel_type=ChannelType.DISCORD)
+# 消息渠道配置示例 — Discord（规划中，M3.6i）
 # ============================================
 
 channel_type: discord

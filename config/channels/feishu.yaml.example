@@ -1,8 +1,8 @@
 # ============================================
-# 消息渠道配置示例 — 飞书
+# 消息渠道配置示例 — 飞书（规划中，当前通过环境变量配置）
 # ============================================
-# 保存位置：~/.clawhermes/channels/feishu.yaml
-# 适配器类：ChannelAdapter(channel_type=ChannelType.FEISHU)
+# 当前方式：设置 FEISHU_APP_ID / FEISHU_APP_SECRET 环境变量
+# YAML 配置将在 M3.6l 渠道配置热加载中实现
 # ============================================
 
 channel_type: feishu

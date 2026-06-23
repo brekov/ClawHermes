@@ -1,8 +1,5 @@
 # ============================================
-# 消息渠道配置示例 — Slack
-# ============================================
-# 保存位置：~/.clawhermes/channels/slack.yaml
-# 适配器类：ChannelAdapter(channel_type=ChannelType.SLACK)
+# 消息渠道配置示例 — Slack（规划中，M3.6j）
 # ============================================
 
 channel_type: slack
