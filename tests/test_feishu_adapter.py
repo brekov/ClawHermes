@@ -1,5 +1,6 @@
 """
 ClawHermes - 飞书适配器测试（薄封装 → clawhermes-lark 子仓库）
+当 clawhermes-lark 未安装时自动跳过。
 """
 from __future__ import annotations
 
@@ -11,6 +12,11 @@ from clawhermes.channel.adapter import ChannelMessage, ChannelType, ChannelUser
 from clawhermes.channel.adapters.feishu import (
     FeishuAdapter,
     create_feishu_adapter,
+)
+
+pytestmark = pytest.mark.skipif(
+    FeishuAdapter is None,
+    reason="clawhermes-lark 未安装（pip install clawhermes-lark）",
 )
 
 
@@ -29,14 +35,12 @@ class TestFeishuAdapter:
 
     @pytest.mark.asyncio
     async def test_start_skip_without_credentials(self):
-        """无凭证时跳过启动"""
         adapter = FeishuAdapter({})
         await adapter.start()
         assert adapter.is_running is False
 
     @pytest.mark.asyncio
     async def test_stop_cleanup(self, adapter):
-        """stop 应清理资源"""
         with patch("clawhermes_lark.adapter.lark.Client"):
             await adapter.start()
             await adapter.stop()
@@ -44,7 +48,6 @@ class TestFeishuAdapter:
 
     @pytest.mark.asyncio
     async def test_send_response(self, adapter):
-        """通过 lark-oapi Builder 发送消息"""
         from clawhermes.channel.adapter import ChannelResponse
 
         mock_client = MagicMock()
