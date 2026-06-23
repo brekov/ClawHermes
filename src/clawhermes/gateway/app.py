@@ -9,9 +9,11 @@ import os
 import time
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Any
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from clawhermes.agent.delegate import DelegateManager
@@ -27,6 +29,7 @@ from clawhermes.agent.memory import JSONMemoryProvider, MemoryManager
 from clawhermes.agent.scheduler import CronScheduler, ScheduleMode, ScheduleSpec
 from clawhermes.agent.session import SessionManager
 from clawhermes.channel.adapter import ChannelManager, ChannelType, RESTAdapter
+from clawhermes.channel.adapters.feishu import FeishuAdapter
 from clawhermes.channel.router import ChannelRouter, SessionRouter
 from clawhermes.llm.provider import LLMProvider
 from clawhermes.tools.builtin import register_builtin_tools
@@ -43,6 +46,7 @@ class GatewayState:
         self.session_mgr: SessionManager | None = None
         self.scheduler: CronScheduler | None = None
         self.channel_router: ChannelRouter | None = None
+        self.feishu_adapter: Any = None  # FeishuAdapter | None
         self.start_time = time.time()
         self._bg_tasks: set[asyncio.Task] = set()
         self._mcp_registry = None
@@ -140,6 +144,19 @@ class GatewayState:
         channel_manager = ChannelManager()
         rest_adapter = RESTAdapter()
         channel_manager.register("rest", rest_adapter)
+
+        # Feishu Adapter（可选，需安装 clawhermes-lark + 环境变量）
+        if FeishuAdapter is not None:
+            fa_id = os.environ.get("FEISHU_APP_ID", "")
+            fa_secret = os.environ.get("FEISHU_APP_SECRET", "")
+            if fa_id and fa_secret:
+                self.feishu_adapter = FeishuAdapter({
+                    "app_id": fa_id, "app_secret": fa_secret,
+                    "verification_token": os.environ.get("FEISHU_VERIFICATION_TOKEN", ""),
+                    "encrypt_key": os.environ.get("FEISHU_ENCRYPT_KEY", ""),
+                })
+                channel_manager.register("feishu", self.feishu_adapter)
+                logger.info("Feishu Adapter 已启用（clawhermes-lark）")
         session_router = SessionRouter()
         channel_router = ChannelRouter(
             channel_manager=channel_manager,
@@ -484,6 +501,20 @@ def list_channel_sessions():
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("CH_GATEWAY_PORT", "18789")))
+
+
+# ============================================================
+# Feishu Webhook（飞书消息事件回调）
+# ============================================================
+
+@app.api_route("/feishu/webhook", methods=["POST"])
+async def feishu_webhook(request: Request):
+    """飞书事件回调端点（需启用 clawhermes-lark）"""
+    if _state.feishu_adapter is None:
+        raise HTTPException(503, "Feishu Adapter 未启用")
+    body = await request.json()
+    result = await _state.feishu_adapter.handle_webhook(body)
+    return JSONResponse(content=result)
 
 
 # ============================================================
