@@ -229,7 +229,7 @@ CI/CD:      GitHub Actions（lint + typecheck + test + build）
 | **创新突破** | 三者均无 | Channel Adapter SDK 标准化抽象 | ✅ |
 | **追赶补齐** | Hermes MCP | MCP 客户端集成 | ✅ 已达成 |
 | **追赶补齐** | Hermes 70+ 工具 | 工具扩展至 45+ | 📋 P1 |
-| **追赶补齐** | OpenClaw 渠道 | 6+ 渠道适配器 | 📋 P1 |
+| **追赶补齐** | OpenClaw 渠道 | 6+ 渠道适配器（四级 SDK 策略） | 📋 P1 |
 | **追赶补齐** | OpenClaw Dashboard | Observability Dashboard | 📋 P1 |
 
 ---
@@ -432,12 +432,12 @@ CI/CD:      GitHub Actions（lint + typecheck + test + build）
 |:---|:---|:---:|:---:|
 | **M3.6c** | **Block Streaming（F17）** — SSE 完成即发送，chunk 800-1200 chars，首字延迟降低 50%+ | 🟡 P1 | 3d |
 | **M3.6d** | **DM 配对安全（F18）** — 配对码生成 + 管理员审批 + 签名挑战 | 🟡 P1 | 3d |
-| **M3.6e** | **飞书适配器** — WebSocket 事件订阅，国内办公首选 | 🔴 P0 | 2d | M3.6a |
-| **M3.6f** | **微信适配器** — 公众号/企业微信，覆盖最广用户群 | 🔴 P0 | 3d | M3.6a |
-| **M3.6g** | **QQ 适配器** — QQ Bot API，年轻用户主力 | 🟡 P1 | 2d | M3.6a |
-| **M3.6h** | **Telegram 适配器** — Bot API | 🟢 P2 | 2d | M3.6a |
-| **M3.6i** | **Discord 适配器** — Bot API + Gateway 集成 | 🟢 P2 | 2d | M3.6a |
-| **M3.6j** | **Slack 适配器** — Bolt SDK | 🟢 P2 | 2d | M3.6a |
+| **M3.6e** | **飞书适配器** — 官方 `lark-oapi` SDK → ChannelAdapter；WebSocket 事件订阅（Lv1·官方 SDK） | 🔴 P0 | 2d | M3.6a |
+| **M3.6f** | **微信适配器** — 社区 `wechatpy` → ChannelAdapter；公众号/企业微信（Lv1·社区 SDK） | 🔴 P0 | 3d | M3.6a |
+| **M3.6g** | **QQ 适配器** — 子仓库 `clawhermes-qq`，复刻 Hermes QQ SDK 逻辑（Lv3·子仓库复刻） | 🟡 P1 | 2d | M3.6a |
+| **M3.6h** | **Telegram 适配器** — 社区 `python-telegram-bot` → ChannelAdapter（Lv1·社区 SDK） | 🟢 P2 | 2d | M3.6a |
+| **M3.6i** | **Discord 适配器** — 社区 `discord.py` → ChannelAdapter（Lv1·社区 SDK） | 🟢 P2 | 2d | M3.6a |
+| **M3.6j** | **Slack 适配器** — 官方 `slack-bolt` → ChannelAdapter（Lv1·官方 SDK） | 🟢 P2 | 2d | M3.6a |
 
 | 里程碑 | 功能 | 优先级 | 工作量 |
 |:---|:---|:---:|:---:|
@@ -601,7 +601,7 @@ CI/CD:      GitHub Actions（lint + typecheck + test + build）
 
 > **本计划将随项目进展持续迭代。每个里程碑完成后回顾并修订下一阶段计划。**
 >
-> **当前焦点：Phase 3 v0.14.0 — MCP 集成 + 工具扩展至 35 + 全链路异步化。**
+> **当前焦点：Phase 3 v0.15.0 — 渠道适配器（飞书 P0）+ Block Streaming + DM 配对安全。**
 
 ---
 
@@ -609,6 +609,59 @@ CI/CD:      GitHub Actions（lint + typecheck + test + build）
 
 > ClawHermes 的消息网关定位：**SDK 驱动的可嵌入消息路由层**，而非 OpenClaw 式的全渠道平台。
 > 核心策略：Channel Adapter SDK 标准化 → 少量高质量适配器 → 社区贡献长尾渠道。
+
+### A.0 渠道适配器实现策略（四级优先级）
+
+消息渠道适配器遵循**四级实现策略**，从复用已有实现到自主实现逐级降级，
+优先利用现有生态，降低维护成本：
+
+| 级别 | 策略 | 说明 | 示例 |
+|:---:|:---|:---|:---|
+| **1** | 🔍 **官方 SDK** | 优先查找并使用平台官方维护的 SDK（pip/npm/Maven） | 飞书 `lark-oapi`、微信 `wechatpy`、QQ 官方 Bot SDK |
+| **2** | 🌐 **社区实现** | 无官方 SDK 或官方 SDK 不满足需求时，使用成熟社区项目 | Hermes 集成的飞书/QQ/微信 SDK |
+| **3** | 📦 **Git 子仓库复刻** | 无可用社区实现时，新建 git 子仓库，参考官方 SDK 逻辑复刻 | `@larksuite/openclaw-lark`、`@tencent-weixin/openclaw-weixin-cli` |
+| **4** | 🛠️ **裸 API 调用** | 无任何 SDK 可用时，新建 git 子仓库直接调用 REST/WebSocket API | 极少数新平台或冷门渠道 |
+
+**决策流程**：
+
+```
+新渠道需求
+    │
+    ▼
+┌─────────────────┐    有    ┌──────────────────┐
+│ 1. 有官方 SDK？  │────────►│ pip install +     │
+└────────┬────────┘         │ 封装 ChannelAdapter│
+         │ 无                └──────────────────┘
+         ▼
+┌─────────────────┐    有    ┌──────────────────┐
+│ 2. 有社区实现？   │────────►│ 引入依赖 +        │
+└────────┬────────┘         │ 适配 ChannelAdapter│
+         │ 无                └──────────────────┘
+         ▼
+┌─────────────────┐    可    ┌──────────────────┐
+│ 3. 可复刻官方？   │────────►│ git submodule +   │
+└────────┬────────┘         │ 复刻核心逻辑       │
+         │ 不可              └──────────────────┘
+         ▼
+┌─────────────────┐         ┌──────────────────┐
+│ 4. 裸 API 实现   │────────►│ git submodule +   │
+└─────────────────┘         │ HTTP/WS 客户端    │
+                            └──────────────────┘
+```
+
+**各渠道分级明细**：
+
+| 渠道 | 实现级别 | SDK 来源 | Git 子仓库 | 备注 |
+|:---|:---:|:---|:---|:---|
+| **飞书** | 1 → 3 | `lark-oapi`（官方） | `clawhermes-lark` | 优先官方 SDK；若有定制需求则复刻为子仓库 |
+| **微信** | 1 → 3 | `wechatpy`（社区） | `clawhermes-weixin` | 官方无完整 Python SDK，社区版为首选 |
+| **QQ** | 1 → 3 | QQ Bot 官方 API | `clawhermes-qq` | 官方仅提供 HTTP API，复用 Hermes QQ SDK 逻辑 |
+| **Telegram** | 1 | `python-telegram-bot`（社区） | — | 社区 SDK 成熟稳定 |
+| **Discord** | 1 | `discord.py`（社区） | — | 社区 SDK 成熟稳定 |
+| **Slack** | 1 | `slack-bolt`（官方） | — | 官方 SDK 完善 |
+
+> **子仓库命名规范**：`clawhermes-{platform}`，统一放在 `github.com/brekov/` 下，
+> 通过 `git submodule` 或 `pip` extras 引入。
 
 ### A.1 当前状态（v0.14.0）
 
@@ -655,17 +708,17 @@ CI/CD:      GitHub Actions（lint + typecheck + test + build）
 
 #### Phase 3 后期（v0.15.0）— 渠道接入
 
-| 任务 | 说明 | 优先级 |
-|:---|:---|:---:|
-| **Block Streaming（SSE）** | `/chat/stream` SSE 端点，完成即发送，首字延迟 < 500ms | P1 |
-| **DM 配对安全模型** | 配对码 6 位数字 + TTL 5min + 管理员审批 | P1 |
-| **飞书适配器** | lark-oapi，WebSocket 事件订阅，国内办公首选 | P0 |
-| **微信适配器** | 公众号/企业微信，覆盖最广用户群 | P0 |
-| **QQ 适配器** | QQ Bot API，年轻用户主力 | P1 |
-| **Telegram 适配器** | python-telegram-bot | P2 |
-| **Discord 适配器** | discord.py，Gateway 集成 | P2 |
-| **Slack 适配器** | slack-bolt，Socket Mode | P2 |
-| 渠道连接健康检查 | `health()` 方法，断线自动重连 | P2 |
+| 任务 | 说明 | 优先级 | 实现级别 |
+|:---|:---|:---:|:---:|
+| **Block Streaming（SSE）** | `/chat/stream` SSE 端点，完成即发送，首字延迟 < 500ms | P1 | — |
+| **DM 配对安全模型** | 配对码 6 位数字 + TTL 5min + 管理员审批 | P1 | — |
+| **飞书适配器** | 官方 `lark-oapi` → ChannelAdapter 封装；WebSocket 事件订阅 | P0 | 1 (官方 SDK) |
+| **微信适配器** | 社区 `wechatpy` → ChannelAdapter 封装；公众号/企业微信 | P0 | 1 (社区 SDK) |
+| **QQ 适配器** | QQ Bot 官方 HTTP API + Hermes QQ SDK 逻辑复刻 | P1 | 3 (子仓库复刻) |
+| **Telegram 适配器** | 社区 `python-telegram-bot` → ChannelAdapter 封装 | P2 | 1 (社区 SDK) |
+| **Discord 适配器** | 社区 `discord.py` → ChannelAdapter 封装 | P2 | 1 (社区 SDK) |
+| **Slack 适配器** | 官方 `slack-bolt` → ChannelAdapter 封装，Socket Mode | P2 | 1 (官方 SDK) |
+| 渠道连接健康检查 | `health()` 方法，断线自动重连 | P2 | — |
 
 #### Phase 3 收尾（v0.16.0）— 完善体验
 
