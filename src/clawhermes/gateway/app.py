@@ -10,7 +10,7 @@ import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -27,6 +27,7 @@ from clawhermes.agent.memory import JSONMemoryProvider, MemoryManager
 from clawhermes.agent.scheduler import CronScheduler, ScheduleMode, ScheduleSpec
 from clawhermes.agent.session import SessionManager
 from clawhermes.channel.adapter import ChannelManager, ChannelType, RESTAdapter
+from clawhermes.channel.adapters.wechat import WeChatAdapter, WeComAdapter
 from clawhermes.channel.router import ChannelRouter, SessionRouter
 from clawhermes.llm.provider import LLMProvider
 from clawhermes.tools.builtin import register_builtin_tools
@@ -44,6 +45,8 @@ class GatewayState:
         self.scheduler: CronScheduler | None = None
         self.channel_router: ChannelRouter | None = None
         self.start_time = time.time()
+        self.wechat_adapter: Any = None  # WeChatAdapter | None
+        self.wecom_adapter: Any = None  # WeComAdapter | None
         self._bg_tasks: set[asyncio.Task] = set()
         self._mcp_registry = None
 
@@ -140,6 +143,20 @@ class GatewayState:
         channel_manager = ChannelManager()
         rest_adapter = RESTAdapter()
         channel_manager.register("rest", rest_adapter)
+
+        # WeChat/WeCom Adapter（可选，需安装 clawhermes-weixin + 环境变量）
+        if WeChatAdapter is not None:
+            wx_session_key = os.environ.get("WECHAT_SESSION_KEY", "")
+            if wx_session_key:
+                self.wechat_adapter = WeChatAdapter({"session_key": wx_session_key})
+                channel_manager.register("wechat", self.wechat_adapter)
+                logger.info("WeChat Adapter 已启用（iLink 长轮询）")
+        if WeComAdapter is not None:
+            wx_bot_key = os.environ.get("WECOM_BOT_KEY", "")
+            if wx_bot_key:
+                self.wecom_adapter = WeComAdapter({"bot_key": wx_bot_key})
+                channel_manager.register("wecom", self.wecom_adapter)
+                logger.info("WeCom Adapter 已启用（Webhook 模式）")
         session_router = SessionRouter()
         channel_router = ChannelRouter(
             channel_manager=channel_manager,
@@ -479,6 +496,27 @@ def list_channel_sessions():
     if _state.channel_router is None:
         return {"mappings": [], "count": 0}
     return {"mappings": _state.channel_router.session_router.list_mappings()}
+
+
+
+@app.api_route("/wechat/webhook", methods=["POST"])
+async def wechat_webhook(request: Request):
+    """个人微信 Webhook 端点（兼容 iLink 回调）"""
+    if _state.wechat_adapter is None:
+        raise HTTPException(501, "WeChat Adapter 未启用")
+    body = await request.json()
+    result = await _state.wechat_adapter.handle_webhook(body)
+    return result
+
+
+@app.api_route("/wecom/webhook", methods=["POST"])
+async def wecom_webhook(request: Request):
+    """企业微信 Webhook 端点"""
+    if _state.wecom_adapter is None:
+        raise HTTPException(501, "WeCom Adapter 未启用")
+    body = await request.json()
+    result = await _state.wecom_adapter.handle_webhook(body)
+    return result
 
 
 if __name__ == "__main__":
