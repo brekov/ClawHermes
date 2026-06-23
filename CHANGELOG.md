@@ -53,6 +53,27 @@ Phase 3 中期 — 全链路异步化 / 测试覆盖率 / MCP 集成 / 工具扩
 - ruff 0 errors | mypy 0 errors（6 strict checks）
 - 代码行数：~3,700 行（+301 行 MCP 模块, +281 行工具扩展）
 
+
+### M3.6e 飞书渠道适配器
+
+- **clawhermes-lark v0.1.0 子仓库**：分层架构实现
+  - **Layer 1 (lark-oapi)**: Token 管理/认证/WebSocket 长连接/API 调用
+  - **Layer 2 (Hermes vendor)**: 复刻 Hermes feishu_hermes.py (5512行) — 消息解析/Markdown→飞书 Post 转换/@提及标准化
+  - **Layer 3 (ChannelAdapter)**: 统一接口 `start`/`stop`/`send_response`/`get_user_info`
+- **send_response 完整实现**：通过 lark-oapi CreateMessage API 实际发送消息（+指数退避重试）
+- **get_user_info 实现**：通过 lark-oapi Contact API 获取用户信息
+- **媒体消息支持**：`send_image`/`send_file`（上传 + 发送二合一）
+- **Hermes vendor 兼容层**：`sys.modules` 注入机制解决 Hermes 5 大内部依赖（228行 shim）
+- **WebSocket 长连接**：自动重连 + 事件分发（参考 openclaw-lark monitor 模式）
+- **ClawHermes 薄封装**：`channel/adapters/feishu.py`（36行）→ 实际逻辑在 clawhermes-lark
+
+### M3.6f 微信渠道适配器
+
+- **clawhermes-weixin 子仓库**：微信渠道适配器独立实现
+- **wechatpy 社区 SDK**：公众号/企业微信消息收发
+- **ChannelAdapter 封装**：与飞书接口一致
+- **Gateway 集成**：消息路由 + 渠道注册
+
 ## v0.13.0 (2026-06-17)
 
 Phase 3 核心架构强化 — 并行执行 / 搜索重构 / Gateway 状态重构 / 线程安全
