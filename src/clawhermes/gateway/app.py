@@ -30,6 +30,7 @@ from clawhermes.agent.scheduler import CronScheduler, ScheduleMode, ScheduleSpec
 from clawhermes.agent.session import SessionManager
 from clawhermes.channel.adapter import ChannelManager, ChannelType, RESTAdapter
 from clawhermes.channel.adapters.feishu import FeishuAdapter
+from clawhermes.channel.adapters.qq import QQAdapter
 from clawhermes.channel.adapters.wechat import WeChatAdapter, WeComAdapter
 from clawhermes.channel.config import build_adapter_config
 from clawhermes.channel.pairing import DMPairingManager
@@ -54,6 +55,7 @@ class GatewayState:
         self.start_time = time.time()
         self.wechat_adapter: Any = None  # WeChatAdapter | None
         self.wecom_adapter: Any = None  # WeComAdapter | None
+        self.qq_adapter: Any = None  # QQAdapter | None
         self._bg_tasks: set[asyncio.Task] = set()
         self._mcp_registry = None
 
@@ -204,6 +206,19 @@ class GatewayState:
                 self.feishu_adapter = FeishuAdapter(adapter_cfg)
                 channel_manager.register("feishu", self.feishu_adapter)
                 logger.info("Feishu Adapter 已启用（clawhermes-lark）")
+
+        # QQ Adapter（需安装 clawhermes-qq）
+        if QQAdapter is not None:
+            qq_cfg = build_adapter_config("qq")
+            if qq_cfg.get("app_id") and qq_cfg.get("token"):
+                self.qq_adapter = QQAdapter({
+                    "app_id": qq_cfg["app_id"],
+                    "token": qq_cfg["token"],
+                    "secret": qq_cfg.get("secret", ""),
+                    "sandbox": _to_bool(qq_cfg.get("sandbox", True)),
+                })
+                channel_manager.register("qq", self.qq_adapter)
+                logger.info("QQ Adapter 已启用（clawhermes-qq）")
         session_router = SessionRouter()
         pairing_manager = DMPairingManager()
         channel_router = ChannelRouter(
@@ -647,6 +662,21 @@ async def feishu_webhook(request: Request):
         raise HTTPException(503, "Feishu Adapter 未启用")
     body = await request.json()
     result = await _state.feishu_adapter.handle_webhook(body)
+    return JSONResponse(content=result)
+
+
+# ============================================================
+# QQ Webhook（QQ Bot 事件回调）
+# ============================================================
+
+
+@app.api_route("/qq/webhook", methods=["POST"])
+async def qq_webhook(request: Request):
+    """QQ Bot 事件回调端点（需启用 clawhermes-qq）"""
+    if _state.qq_adapter is None:
+        raise HTTPException(503, "QQ Adapter 未启用")
+    body = await request.json()
+    result = await _state.qq_adapter.handle_webhook(body)
     return JSONResponse(content=result)
 
 

@@ -2,7 +2,7 @@
 
 > 版本：v2.1
 > 日期：2026-06-24
-> 基线版本：v0.15.0（376 测试通过，Block Streaming ✅，DM 配对 + QQ 适配器开发中）
+> 基线版本：v0.15.0（Block Streaming ✅，DM 配对 PR #20 + QQ 适配器 PR #21 审查中）
 > 状态：Phase 1 ✅ | Phase 2 ✅ | Phase 3 ✅ v0.13.0 → v0.14.0 | v0.15.0 🔄 | 下一目标 v0.16.0
 > 方法论：软件工程全流程 — 现状评估 → 竞品研究 → 差距分析 → SMART 目标 → 架构演进 → 分阶段路线图 → 质量保障 → 风险管理
 
@@ -444,7 +444,7 @@ CI/CD:      GitHub Actions（lint + typecheck + test + build）
 | **M3.6d** | **DM 配对安全（F18）** — 配对码生成 + 管理员审批 + 签名挑战 | 🟡 P1 | 3d |
 | **M3.6e** | ✅ **飞书适配器** — 分层架构 lark-oapi + Hermes vendor 消息引擎；WebSocket 长连接 + Token 管理 + send_response/get_user_info | 🔴 P0 | ✅ 完成 | M3.6a |
 | **M3.6f** | ✅ **微信适配器** — clawhermes-weixin 子仓库 + wechatpy SDK；ChannelAdapter + Gateway 集成 | 🔴 P0 | ✅ 完成 | M3.6a |
-| **M3.6g** | **QQ 适配器** — 子仓库 `clawhermes-qq`，复刻 Hermes QQ SDK 逻辑（Lv3·子仓库复刻） | 🟡 P1 | 2d | M3.6a |
+| **M3.6g** | 🔄 **QQ 适配器（PR #21 审查中）** — 子仓库 `clawhermes-qq`，复刻 Hermes QQ SDK 逻辑（Lv3·子仓库复刻） | 🟡 P1 | 2d | M3.6a |
 | **M3.6h** | **Telegram 适配器** — 社区 python-telegram-bot → ChannelAdapter（Lv1·社区 SDK）→ 推至 v0.16.0 | 🟢 P2 | — | M3.6a |
 | **M3.6i** | **Discord 适配器** — 社区 discord.py → ChannelAdapter（Lv1·社区 SDK）→ 推至 v0.16.0 | 🟢 P2 | — | M3.6a |
 | **M3.6j** | **Slack 适配器** — 官方 slack-bolt → ChannelAdapter（Lv1·官方 SDK）→ 推至 v0.16.0 | 🟢 P2 | — | M3.6a |
