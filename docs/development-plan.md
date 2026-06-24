@@ -2,8 +2,8 @@
 
 > 版本：v2.1
 > 日期：2026-06-23
-> 基线版本：v0.15.0 Draft（373 测试通过）
-> 状态：Phase 1 ✅ | Phase 2 ✅ | Phase 3 ✅ v0.14.0 → v0.15.0 | Phase 3 续 🔄 v0.16.0+
+> 基线版本：v0.15.0（376 测试通过，Block Streaming 开发中）
+> 状态：Phase 1 ✅ | Phase 2 ✅ | Phase 3 ✅ v0.13.0 → v0.14.0 | v0.15.0 🔄 | 下一目标 v0.16.0
 > 方法论：软件工程全流程 — 现状评估 → 竞品研究 → 差距分析 → SMART 目标 → 架构演进 → 分阶段路线图 → 质量保障 → 风险管理
 
 ---
@@ -11,7 +11,7 @@
 ## 目录
 
 1. [项目定位与核心目标](#1-项目定位与核心目标)
-2. [当前进度评估（v0.14.0）](#2-当前进度评估v0140)
+2. [当前进度评估（v0.15.0）](#2-当前进度评估v0150)
 3. [竞品深度研究](#3-竞品深度研究)
 4. [差距分析与差异化方向](#4-差距分析与差异化方向)
 5. [SMART 目标设定](#5-smart-目标设定)
@@ -70,9 +70,9 @@ v1.0.0 时 ClawHermes 应成为：
 
 ---
 
-## 2. 当前进度评估（v0.14.0）
 
 ### 2.1 版本交付历史
+## 2. 当前进度评估（v0.15.0）
 
 | 版本 | 日期 | 核心交付 | 测试 |
 |:---|:---|:---|:---:|
@@ -83,6 +83,8 @@ v1.0.0 时 ClawHermes 应成为：
 | **v0.13.0** | **2026-06-17** | **并行执行、web_search 重构、Gateway 状态重构、线程安全、Channel Router、消息队列 4 模式** | **203** |
 | **v0.14.0** | **2026-06-22** | **全链路异步化、MCP 集成、工具扩展至 35、MCP 异步修复、测试覆盖率 73%（373 测试）** | **373** |
 | **v0.14.1** | **2026-06-23** | **渠道配置架构重构（YAML ${VAR} 单一来源）、15 死配置字段激活、LarkConfig 26/26 全部生效、微信双模式** | **373** |
+| **v0.14.2** | **2026-06-23** | **文档审计 — 端点纠错 23→26、项目定位修正、Channel 架构重写、RELEASE.md 对齐 GitHub 格式** | **373** |
+| **v0.15.0** | **2026-06-24** | **Block Streaming SSE（M3.6c）— LLMProvider.chat_stream() + Agent.chat_stream() + POST /chat/stream** | **376** |
 
 ### 2.2 已交付功能清单（19 项）
 
@@ -237,7 +239,7 @@ CI/CD:      GitHub Actions（lint + typecheck + test + build）
 
 ## 4. 差距分析与差异化方向
 
-### 4.1 关键差距（v0.14.0 → v1.0.0）
+### 4.1 关键差距（v0.15.0 → v1.0.0）
 
 | 差距领域 | 当前 | 目标 | 严重程度 |
 |:---|:---|:---|:---:|
@@ -382,7 +384,7 @@ CI/CD:      GitHub Actions（lint + typecheck + test + build）
 
 ### 6.2 关键架构演进
 
-| 演进项 | 当前（v0.14.1） | 目标（v1.0.0） |
+| 演进项 | 当前（v0.15.0） | 目标（v1.0.0） |
 |:---|:---|:---|
 | 异步模型 | 全链路 asyncio（含 1 处可控 threading.Thread 用于 MCP 嵌套协程兼容） | 连接池 + 多实例部署就绪 |
 | Gateway 状态 | GatewayState 类（单实例） | 连接池 + 多实例部署就绪 |
@@ -391,7 +393,7 @@ CI/CD:      GitHub Actions（lint + typecheck + test + build）
 | 工具系统 | 35 内置 + MCP 动态工具 | 45+ 内置 + MCP 动态工具 |
 | 记忆系统 | 文本向量 | 多模态（图片/文件/代码）+ 用户画像 |
 | 可观测性 | 日志 | Dashboard + 结构化日志 + OpenTelemetry |
-| 流式输出 | 同步返回 | Block Streaming（SSE） |
+| 流式输出 | ✅ Block Streaming（SSE）v0.15.0 | Block Streaming（SSE）|
 
 ---
 
@@ -431,7 +433,6 @@ CI/CD:      GitHub Actions（lint + typecheck + test + build）
 
 | 里程碑 | 功能 | 优先级 | 工作量 |
 |:---|:---|:---:|:---:|
-| **M3.6c** | **Block Streaming（F17）** — SSE 完成即发送，chunk 800-1200 chars，首字延迟降低 50%+ | 🟡 P1 | 3d |
 | **M3.6c** | ✅ **Block Streaming（F17）** — SSE 完成即发送，chunk 800-1200 chars，首字延迟降低 50%+ | 🟡 P1 | ✅ 完成 |
 | **M3.6d** | **DM 配对安全（F18）** — 配对码生成 + 管理员审批 + 签名挑战 | 🟡 P1 | 3d |
 | **M3.6e** | ✅ **飞书适配器** — 分层架构 lark-oapi + Hermes vendor 消息引擎；WebSocket 长连接 + Token 管理 + send_response/get_user_info | 🔴 P0 | ✅ 完成 | M3.6a |
@@ -665,7 +666,7 @@ CI/CD:      GitHub Actions（lint + typecheck + test + build）
 > **子仓库命名规范**：`clawhermes-{platform}`，统一放在 `github.com/brekov/` 下，
 > 通过 `git submodule` 或 `pip` extras 引入。
 
-### A.1 当前状态（v0.14.1）
+### A.1 当前状态（v0.15.0）
 
 ```
                     ┌──────────────────────────┐
