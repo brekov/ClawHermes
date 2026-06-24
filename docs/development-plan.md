@@ -2,8 +2,8 @@
 
 > 版本：v2.1
 > 日期：2026-06-24
-> 基线版本：v0.15.0（376 测试通过，Block Streaming ✅）
-> 状态：Phase 1 ✅ | Phase 2 ✅ | Phase 3 ✅ v0.13.0 → v0.14.0 | v0.15.0 ✅ | 下一目标 v0.16.0
+> 基线版本：v0.15.0（376 测试通过，Block Streaming ✅，DM 配对 + QQ 适配器开发中）
+> 状态：Phase 1 ✅ | Phase 2 ✅ | Phase 3 ✅ v0.13.0 → v0.14.0 | v0.15.0 🔄 | 下一目标 v0.16.0
 > 方法论：软件工程全流程 — 现状评估 → 竞品研究 → 差距分析 → SMART 目标 → 架构演进 → 分阶段路线图 → 质量保障 → 风险管理
 
 ---
@@ -84,7 +84,7 @@ v1.0.0 时 ClawHermes 应成为：
 | **v0.14.0** | **2026-06-22** | **全链路异步化、MCP 集成、工具扩展至 35、MCP 异步修复、测试覆盖率 73%（373 测试）** | **373** |
 | **v0.14.1** | **2026-06-23** | **渠道配置架构重构（YAML ${VAR} 单一来源）、15 死配置字段激活、LarkConfig 26/26 全部生效、微信双模式** | **373** |
 | **v0.14.2** | **2026-06-23** | **文档审计 — 端点纠错 23→26、项目定位修正、Channel 架构重写、RELEASE.md 对齐 GitHub 格式** | **373** |
-| **v0.15.0** | **2026-06-24** | **Block Streaming SSE（M3.6c）— LLMProvider.chat_stream() + Agent.chat_stream() + POST /chat/stream** | **376** |
+| **v0.15.0** | **2026-06-24** | **Block Streaming SSE（M3.6c）+ DM 配对安全（M3.6d）+ QQ 适配器（M3.6g）** | **376** |
 
 ### 2.2 已交付功能清单（19 项）
 
@@ -279,12 +279,20 @@ CI/CD:      GitHub Actions（lint + typecheck + test + build）
 | 全链路异步化 | 消除全部 threading.Thread 调用，100% asyncio | 1 周 |
 | 测试覆盖率 > 80% | 65% → 80%，重点补充 gateway + tools；⚠️ 实际 ~61%，Phase 3 后期推进 | 1 周 |
 
+### 5.1b v0.15.0 剩余目标（🔄 开发中）
+
+| 目标 | 衡量标准 | 时限 |
+|:---|:---|:---|
+| DM 配对安全模型 | pairing 码 + 管理员审批 + 签名挑战 | 3d |
+| QQ 适配器 | QQ Bot HTTP API + 子仓库复刻，完成第三渠道 | 2d |
+
 ### 5.2 v0.16.0（Phase 3 后期）
 
 | 目标 | 衡量标准 | 时限 |
 |:---|:---|:---|
-| DM 配对安全模型 | pairing 码 + 管理员审批 + 签名挑战 | 2 周 |
-| QQ 适配器 | QQ Bot HTTP API + 子仓库复刻，完成第三渠道 | 2 周 |
+| Telegram 适配器 | 社区 python-telegram-bot → ChannelAdapter 封装 | 1 周 |
+| Discord 适配器 | 社区 discord.py → ChannelAdapter 封装 | 1 周 |
+| Slack 适配器 | 官方 slack-bolt → ChannelAdapter 封装 | 1 周 |
 | Profile 隔离 | 独立 config/memory/sessions per profile | 1 周 |
 
 ### 5.3 v0.17.0（Phase 3 收尾）
@@ -387,7 +395,7 @@ CI/CD:      GitHub Actions（lint + typecheck + test + build）
 |:---|:---|:---|
 | 异步模型 | 全链路 asyncio（含 1 处可控 threading.Thread 用于 MCP 嵌套协程兼容） | 连接池 + 多实例部署就绪 |
 | Gateway 状态 | GatewayState 类（单实例） | 连接池 + 多实例部署就绪 |
-| 渠道集成 | Channel Router + 飞书 + 微信 ✅；QQ 待实现 | 6+ 渠道适配器 + 配置热加载 |
+| 渠道集成 | Channel Router + 飞书 + 微信 ✅；QQ + DM 配对开发中 | 8+ 渠道适配器 + 配置热加载 |
 | 技能加载 | 全量加载（浪费 token） | Progressive Disclosure 3 级 + 6 级优先级 + 条件激活 |
 | 工具系统 | 35 内置 + MCP 动态工具 | 45+ 内置 + MCP 动态工具 |
 | 记忆系统 | 文本向量 | 多模态（图片/文件/代码）+ 用户画像 |
@@ -437,9 +445,9 @@ CI/CD:      GitHub Actions（lint + typecheck + test + build）
 | **M3.6e** | ✅ **飞书适配器** — 分层架构 lark-oapi + Hermes vendor 消息引擎；WebSocket 长连接 + Token 管理 + send_response/get_user_info | 🔴 P0 | ✅ 完成 | M3.6a |
 | **M3.6f** | ✅ **微信适配器** — clawhermes-weixin 子仓库 + wechatpy SDK；ChannelAdapter + Gateway 集成 | 🔴 P0 | ✅ 完成 | M3.6a |
 | **M3.6g** | **QQ 适配器** — 子仓库 `clawhermes-qq`，复刻 Hermes QQ SDK 逻辑（Lv3·子仓库复刻） | 🟡 P1 | 2d | M3.6a |
-| **M3.6h** | **Telegram 适配器** — 社区 `python-telegram-bot` → ChannelAdapter（Lv1·社区 SDK） | 🟢 P2 | 2d | M3.6a |
-| **M3.6i** | **Discord 适配器** — 社区 `discord.py` → ChannelAdapter（Lv1·社区 SDK） | 🟢 P2 | 2d | M3.6a |
-| **M3.6j** | **Slack 适配器** — 官方 `slack-bolt` → ChannelAdapter（Lv1·官方 SDK） | 🟢 P2 | 2d | M3.6a |
+| **M3.6h** | **Telegram 适配器** — 社区 python-telegram-bot → ChannelAdapter（Lv1·社区 SDK）→ 推至 v0.16.0 | 🟢 P2 | — | M3.6a |
+| **M3.6i** | **Discord 适配器** — 社区 discord.py → ChannelAdapter（Lv1·社区 SDK）→ 推至 v0.16.0 | 🟢 P2 | — | M3.6a |
+| **M3.6j** | **Slack 适配器** — 官方 slack-bolt → ChannelAdapter（Lv1·官方 SDK）→ 推至 v0.16.0 | 🟢 P2 | — | M3.6a |
 
 | 里程碑 | 功能 | 优先级 | 工作量 |
 |:---|:---|:---:|:---:|
@@ -560,7 +568,7 @@ CI/CD:      GitHub Actions（lint + typecheck + test + build）
 | 版本 | 测试 | 覆盖率 | 新功能 | 文档 |
 |:---|:---:|:---:|:---|:---:|
 | v0.14.0 | 373 | 61% | MCP + 35 工具 + 全链路异步 | CHANGELOG + MCP 文档 |
-| v0.15.0 | 376 | 61% | Block Streaming SSE + 飞书 + 微信渠道 | CHANGELOG + 渠道指南 |
+| v0.15.0 | 420+ | >65% | Block Streaming + DM 配对 + QQ + 飞书 + 微信 | CHANGELOG + 渠道指南 |
 | v0.16.0 | 450+ | >75% | QQ 适配器 + DM 配对 + Profile 隔离 | QQ 适配器文档 |
 | v1.0.0 | 500+ | >90% | 全部 Phase 4 功能 | 完整文档集 |
 
@@ -574,8 +582,8 @@ CI/CD:      GitHub Actions（lint + typecheck + test + build）
 |:---|:---:|:---:|:---:|:---:|
 | 内置工具数 | 35 | 35 | 45 | 50+ |
 | MCP 工具 | 0 | ✅ | ✅ | ✅ | ✅ |
-| 渠道适配器 | 3 | 5（CLI/REST/WS/飞书/微信） | 6 | 8+ |
-| 测试用例 | 203 | 376 | 450 | 500+ |
+| 渠道适配器 | 3 | 6（CLI/REST/WS/飞书/微信/QQ） | 8 | 8+ |
+| 测试用例 | 203 | 420+ | 500 | 500+ |
 | 测试覆盖率 | 65% | 61% | 75% | 90%+ |
 | Block Streaming | ❌ | ✅ | ✅ | ✅ |
 | MCP 集成 | ❌ | ✅ | ✅ | ✅ | ✅ |
@@ -585,7 +593,7 @@ CI/CD:      GitHub Actions（lint + typecheck + test + build）
 | 多模态记忆 | ❌ | ❌ | ❌ | ✅ | ✅ |
 | Dashboard | ❌ | ❌ | ❌ | ❌ | ✅ |
 | IDE 集成 | ❌ | ❌ | ❌ | ❌ | ✅ |
-| DM 安全模型 | ❌ | ❌ | ✅ | ✅ | ✅ |
+| DM 安全模型 | ❌ | ✅ | ✅ | ✅ |
 | 结构化日志 | ❌ | ❌ | ❌ | ❌ | ✅ |
 
 ### 11.2 差异化优势追踪
@@ -603,7 +611,7 @@ CI/CD:      GitHub Actions（lint + typecheck + test + build）
 
 > **本计划将随项目进展持续迭代。每个里程碑完成后回顾并修订下一阶段计划。**
 >
-> **当前焦点：Phase 3 v0.16.0 — QQ 适配器 + DM 配对安全。**
+> **当前焦点：Phase 3 v0.15.0 — DM 配对安全 + QQ 适配器。**
 
 ---
 
@@ -713,7 +721,9 @@ CI/CD:      GitHub Actions（lint + typecheck + test + build）
 
 | 任务 | 说明 | 优先级 | 实现级别 |
 |:---|:---|:---:|:---:|
-| **DM 配对安全模型** | 配对码 6 位数字 + TTL 5min + 管理员审批 | P1 | — |
+| **Telegram 适配器** | 社区  → ChannelAdapter 封装 | P2 | 1 (社区 SDK) |
+| **Discord 适配器** | 社区  → ChannelAdapter 封装 | P2 | 1 (社区 SDK) |
+| **Slack 适配器** | 官方  → ChannelAdapter 封装 | P2 | 1 (官方 SDK) |
 | ✅ **飞书适配器** | 分层架构 lark-oapi + Hermes vendor 消息引擎；WebSocket 长连接 + Token管理 + 媒体消息；clawhermes-lark 子仓库 | P0 | ✅ 完成 |
 | ✅ **微信适配器** | clawhermes-weixin 子仓库 + wechatpy；ChannelAdapter + Gateway 集成 | P0 | ✅ 完成 |
 | **QQ 适配器** | QQ Bot 官方 HTTP API + Hermes QQ SDK 逻辑复刻 | P1 | 3 (子仓库复刻) |
