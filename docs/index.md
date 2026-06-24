@@ -1,7 +1,7 @@
 # ClawHermes
 
 > 融合 **Hermes** 自进化能力与 **OpenClaw** Gateway 体系的 Python AI Agent 框架
-> v0.14.1 · 31 个源文件 + 2 个子仓库 · 373 个测试 · 35 个工具 · 飞书/微信渠道
+> v0.15.0 · 31 个源文件 + 2 个子仓库 · 373 个测试 · 35 个工具 · 飞书/微信渠道
 
 ---
 
@@ -10,7 +10,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="MIT"></a>
   <img src="https://img.shields.io/badge/tests-373%2F373-brightgreen" alt="tests 373/373">
   <img src="https://img.shields.io/badge/coverage-73%25-yellow" alt="coverage 73%">
-  <a href="https://github.com/brekov/ClawHermes/releases"><img src="https://img.shields.io/github/v/release/brekov/ClawHermes" alt="release v0.14.1"></a>
+  <a href="https://github.com/brekov/ClawHermes/releases"><img src="https://img.shields.io/github/v/release/brekov/ClawHermes" alt="release v0.15.0"></a>
 </div>
 
 ---
@@ -76,4 +76,4 @@ bash <(curl -fsSL https://raw.githubusercontent.com/brekov/ClawHermes/main/scrip
 
 ---
 
-*ClawHermes · 融合 Hermes 与 OpenClaw 的 AI Agent 框架 · v0.14.1 · MIT License*
+*ClawHermes · 融合 Hermes 与 OpenClaw 的 AI Agent 框架 · v0.15.0 · MIT License*

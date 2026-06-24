@@ -67,7 +67,7 @@ curl http://127.0.0.1:18789/sessions
 ```
 ┌──────────────────────────────────────────────────────────────┐
 │                      Gateway 层（REST API）                   │
-│  CLI / HTTP（FastAPI · 26 个 REST 端点 · Cron调度 · Docker沙箱 · MCP） │
+│  CLI / HTTP（FastAPI · 23 个 REST 端点 · Cron调度 · Docker沙箱 · MCP） │
 └────────────────────────┬─────────────────────────────────────┘
                          │
 ┌────────────────────────▼─────────────────────────────────────┐
@@ -248,7 +248,7 @@ src/clawhermes/
 │   └── chroma_memory.py    # ChromaDB 向量记忆
 │
 └── gateway/
-    ├── app.py              # FastAPI Gateway（26 个 REST 端点）
+    ├── app.py              # FastAPI Gateway（23 个 REST 端点）
     └── setup.py            # Provider 配置管理
 ```
 

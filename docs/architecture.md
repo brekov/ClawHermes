@@ -2,8 +2,8 @@
 
 > 版本：v2.1
 > 日期：2026-06-23
-> 基线版本：v0.14.1
-> 状态：已实现（ChannelConfigLoader、飞书 26 字段、微信双模式、YAML ${VAR} 配置分层）
+> 基线版本：v0.15.0 (Draft)
+> 状态：已实现 ChannelConfigLoader、飞书 26 字段、微信双模式、YAML ${VAR} 配置分层
 
 ---
 
@@ -12,13 +12,13 @@
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
 │                        Channel 适配层                                │
-│   ChannelAdapter ABC + CLI / REST / WebSocket + 飞书 + 微信          │
-│   (未来: Slack / Discord / 飞书 / 微信 / Telegram)                   │
+│   ChannelAdapter ABC + CLI / REST / WebSocket          │
+│   (飞书/微信 → 子仓库 clawhermes-lark / clawhermes-weixin)                   │
 └──────────────────────────────┬───────────────────────────────────────┘
                                │
 ┌──────────────────────────────▼───────────────────────────────────────┐
 │                          Gateway 层                                  │
-│        FastAPI REST 服务（26 个端点 · Cron调度 · Docker沙箱）         │
+│        FastAPI REST 服务（23 个端点 · Cron调度 · Docker沙箱）         │
 │              CLI 接口 / HTTP API / WebSocket                         │
 └──────────────────────────────┬───────────────────────────────────────┘
                                │
@@ -85,7 +85,7 @@
 
 | 模块 | 职责 | 关键类/函数 |
 |------|------|-------------|
-| `gateway/app.py` | FastAPI REST 服务（26 个端点） | `app` (FastAPI instance) |
+| `gateway/app.py` | FastAPI REST 服务（23 个端点） | `app` (FastAPI instance) |
 | `gateway/app.py` | Agent 初始化与组件装配 | `_create_agent_components()` / `_auto_init()` |
 | `gateway/app.py` | Cron 调度端点（6个） | `create_cron_job` / `list_cron_jobs` / `get_cron_job` / `delete_cron_job` / `pause_cron_job` / `resume_cron_job` |
 | `gateway/app.py` | 会话管理端点（3个） | `list_sessions` / `get_session` / `delete_session` |
@@ -142,17 +142,52 @@
 
 ### 2.6 Channel 层
 
+ClawHermes 通过 **Channel Adapter SDK** 提供标准化渠道接口，渠道适配器以 **git 子仓库** 形式独立维护，
+遵循**四级实现策略**：
+
+```
+新渠道需求
+    │
+    ▼
+1. 有官方为 Agent 开发的 SDK？ → git submodule 引入 + 适配 ChannelAdapter  ← 首选
+    │ 无
+    ▼
+2. 有社区为 Agent 开发的 SDK？ → git submodule 引入 + 适配 ChannelAdapter   ← 次选
+    │ 无
+    ▼
+3. 可复刻官方 Agent SDK？ → git submodule + 复刻核心逻辑 + ChannelAdapter    ← 三选
+    │ 不可
+    ▼
+4. 有官方其他 SDK？ → git submodule 引入 + 适配 ChannelAdapter              ← 四选
+    │ 不可
+    ▼
+5. 裸 API 实现 → git submodule + HTTP/WS 客户端 + ChannelAdapter            ← 末选
+```
+
+**已实现模块**：
+
 | 模块 | 职责 | 关键类 |
 |------|------|--------|
 | `channel/adapter.py` | ChannelAdapter ABC + 内置适配器 | `ChannelAdapter` / `CLIAdapter` / `RESTAdapter` / `WebSocketAdapter` |
+| `channel/config.py` | 渠道配置管理（YAML + ${VAR} 插值） | `ChannelConfigLoader` |
 | `channel/router.py` | 消息路由 + 队列 + 配对 | `ChannelRouter` / `SessionRouter` / `DMPairingManager` |
-| `channel/config.py` | 渠道配置管理 + 热加载 | `ChannelConfigStore` / `ChannelConfig` |
-| `channel/streaming.py` | Block Streaming 分块发送 | `BlockStreamer` / `StreamingConfig` |
-| `channel/adapters/telegram.py` | Telegram 适配器 | `TelegramAdapter` |
-| `channel/adapters/discord.py` | Discord 适配器 | `DiscordAdapter` |
-| `channel/adapters/slack.py` | Slack 适配器 | `SlackAdapter` |
-| `channel/adapters/feishu.py` | 飞书适配器 | `FeishuAdapter` |
-| `channel/adapters/webchat.py` | WebChat 适配器 | `WebChatAdapter` |
+
+**待实现模块**（Phase 3 后续）：
+
+| 模块 | 职责 |
+|------|------|
+| `channel/streaming.py` | Block Streaming 分块发送（Phase 3） |
+
+**渠道适配器（git 子仓库，外部维护）**：
+
+| 子仓库 | 渠道 | 实现级别 | 状态 |
+|--------|------|:---:|:---:|
+| `clawhermes-lark` | 飞书 | 1（官方 SDK: lark-oapi） | ✅ |
+| `clawhermes-weixin` | 微信（个人 + 企业） | 1（社区 SDK: wechatpy） | ✅ |
+| `clawhermes-qq` | QQ | 3（复刻 Hermes QQ SDK） | 📋 v0.16.0 |
+| — | Telegram | 1（社区 SDK: python-telegram-bot） | 📋 v0.16.0 |
+| — | Discord | 1（社区 SDK: discord.py） | 📋 v0.16.0 |
+| — | Slack | 1（官方 SDK: slack-bolt） | 📋 v0.16.0 |
 
 ### 2.7 Skill Hub 层
 
@@ -280,49 +315,116 @@ SkillManager 自动发现新技能
 
 ### 3.6 消息渠道架构
 
-#### 3.6.1 渠道系统总览
+#### 3.6.1 渠道决策流程（四级策略）
+
+ClawHermes 的消息渠道采用**决策树模式**，按优先级选择实现方式：
 
 ```
-┌──────────────────────────────────────────────────────────────────────┐
-│                        消息渠道系统架构                                │
-│                                                                      │
-│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐  │
-│  │ Telegram  │ │ Discord  │ │  Slack   │ │  飞书    │ │ WebChat  │  │
-│  │ Adapter  │ │ Adapter  │ │ Adapter  │ │ Adapter  │ │ Adapter  │  │
-│  └─────┬────┘ └─────┬────┘ └─────┬────┘ └─────┬────┘ └─────┬────┘  │
-│        └────────────┼───────────┼───────────┼────────────┘        │
-│                      ▼           ▼           ▼                      │
-│  ┌───────────────────────────────────────────────────────────────┐  │
-│  │                    Channel Router                              │  │
-│  │  · 消息路由：(channel_type, chat_id) → session_id              │  │
-│  │  · 消息队列：steer / followup / collect / interrupt            │  │
-│  │  · Block Streaming：完成即发送，可配置 chunk/coalesce           │  │
-│  │  · DM 配对：配对码生成 + 管理员审批                             │  │
-│  │  · 渠道健康检查：每个适配器 health() 统一监控                   │  │
-│  └──────────────────────────┬────────────────────────────────────┘  │
-│                             │                                       │
-│  ┌──────────────────────────▼────────────────────────────────────┐  │
-│  │                    Session Router                               │  │
-│  │  · 会话映射：(channel_type, chat_id) → Agent session_id        │  │
-│  │  · 跨渠道会话：可选的跨渠道会话合并                             │  │
-│  │  · 会话重置策略：daily / idle / manual                          │  │
-│  └──────────────────────────┬────────────────────────────────────┘  │
-│                             │                                       │
-│  ┌──────────────────────────▼────────────────────────────────────┐  │
-│  │                    Agent Core                                   │  │
-│  │  Agent.chat_async() / Agent.chat() → Background Review         │  │
-│  └───────────────────────────────────────────────────────────────┘  │
-│                                                                      │
-│  ┌───────────────────────────────────────────────────────────────┐  │
-│  │                    Channel Config Store                         │  │
-│  │  · YAML 配置文件：~/.clawhermes/channels/<name>.yaml           │  │
-│  │  · 热加载：文件变更自动检测 + 适配器重载                        │  │
-│  │  · 凭证管理：API Token 加密存储，与配置分离                     │  │
-│  └───────────────────────────────────────────────────────────────┘  │
-└──────────────────────────────────────────────────────────────────────┘
+新渠道需求
+    │
+    ▼
+┌─────────────────────────┐    有    ┌──────────────────────────┐
+│ 1. 有官方 Agent SDK？    │────────►│ git submodule 引入       │
+│    例：lark-oapi         │         │ + ChannelAdapter 适配    │  ← 首选
+└────────┬────────────────┘         └──────────────────────────┘
+         │ 无
+         ▼
+┌─────────────────────────┐    有    ┌──────────────────────────┐
+│ 2. 有社区 Agent SDK？    │────────►│ git submodule 引入       │
+│    例：wechatpy          │         │ + ChannelAdapter 适配    │  ← 次选
+└────────┬────────────────┘         └──────────────────────────┘
+         │ 无
+         ▼
+┌─────────────────────────┐    可    ┌──────────────────────────┐
+│ 3. 可复刻官方 Agent SDK？│────────►│ git submodule +          │
+│    例：QQ Bot (参考Hermes)│         │ 复刻核心逻辑 + 适配      │  ← 三选
+└────────┬────────────────┘         └──────────────────────────┘
+         │ 不可
+         ▼
+┌─────────────────────────┐    可    ┌──────────────────────────┐
+│ 4. 有官方其他 SDK？      │────────►│ git submodule 引入       │
+│    例：slack-bolt        │         │ + ChannelAdapter 适配    │  ← 四选
+└────────┬────────────────┘         └──────────────────────────┘
+         │ 不可
+         ▼
+┌─────────────────────────┐         ┌──────────────────────────┐
+│ 5. 裸 API 实现           │────────►│ git submodule +          │
+│    极少新平台/冷门渠道    │         │ HTTP/WS 客户端 + 适配     │  ← 末选
+└─────────────────────────┘         └──────────────────────────┘
 ```
 
-#### 3.6.2 Channel Router 核心流程
+#### 3.6.2 当前渠道状态
+
+```
+                    ┌──────────────────────────┐
+                    │     Channel Router ✅     │
+                    │  · SessionRouter         │
+                    │  · 4 队列模式             │
+                    │  · allowlist 过滤        │
+                    └───────────┬──────────────┘
+                                │
+        ┌───────────────────────┼───────────────────────┐
+        │                       │                       │
+  ┌─────▼─────┐          ┌─────▼─────┐          ┌─────▼─────┐
+  │ CLI ✅    │          │ REST ✅   │          │ WS ✅     │
+  │ (print)   │          │ (Future)  │          │ (conn reg)│
+  └───────────┘          └───────────┘          └───────────┘
+                                │
+        ┌───────────────────────┼───────────────────────┐
+        │                       │                       │
+  ┌─────▼─────┐          ┌─────▼─────┐          ┌─────▼─────┐
+  │ 飞书 ✅   │          │ 微信 ✅   │          │ QQ 📋     │
+  │clawhermes │          │clawhermes │          │clawhermes │
+  │ -lark     │          │ -weixin   │          │ -qq       │
+  │ lark-oapi │          │ wechatpy  │          │ p0.16.0   │
+  └───────────┘          └───────────┘          └───────────┘
+```
+
+#### 3.6.3 消息渠道系统总览
+
+```
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                          消息渠道系统架构                                      │
+│                                                                              │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐      │
+│  │   飞书    │  │   微信    │  │    QQ    │  │ Telegram │  │  Discord │ ... │
+│  │ Adapter  │  │ Adapter  │  │ Adapter  │  │ Adapter  │  │ Adapter  │     │
+│  │(子仓库 ✅)│  │(子仓库 ✅)│  │(子仓库 📋)│  │(社区SDK 📋)│  │(社区SDK 📋)│     │
+│  └─────┬────┘  └─────┬────┘  └─────┬────┘  └─────┬────┘  └─────┬────┘      │
+│        └──────────────┼─────────────┼─────────────┼────────────┘            │
+│                       ▼             ▼             ▼                          │
+│  ┌─────────────────────────────────────────────────────────────────────┐    │
+│  │                      Channel Router                                  │    │
+│  │  · 消息路由：(channel_type, chat_id) → session_id                    │    │
+│  │  · 消息队列：steer / followup / collect / interrupt                  │    │
+│  │  · Block Streaming：完成即发送，可配置 chunk/coalesce（TODO）         │    │
+│  │  · DM 配对：配对码生成 + 管理员审批（TODO）                           │    │
+│  │  · 渠道健康检查：每个适配器 health() 统一监控（TODO）                  │    │
+│  └──────────────────────────┬──────────────────────────────────────────┘    │
+│                             │                                               │
+│  ┌──────────────────────────▼──────────────────────────────────────────┐    │
+│  │                    Session Router                                     │    │
+│  │  · 会话映射：(channel_type, chat_id) → Agent session_id              │    │
+│  │  · 跨渠道会话：可选的跨渠道会话合并                                   │    │
+│  │  · 会话重置策略：daily / idle / manual                                │    │
+│  └──────────────────────────┬──────────────────────────────────────────┘    │
+│                             │                                               │
+│  ┌──────────────────────────▼──────────────────────────────────────────┐    │
+│  │                    Agent Core                                         │    │
+│  │  Agent.chat_async() / Agent.chat() → Background Review               │    │
+│  └─────────────────────────────────────────────────────────────────────┘    │
+│                                                                              │
+│  ┌─────────────────────────────────────────────────────────────────────┐    │
+│  │                    Channel Config Store                               │    │
+│  │  · YAML 配置文件：~/.clawhermes/channels/<name>.yaml                 │    │
+│  │  · 凭证管理：API Token 通过 ${VAR} 引用 .env，与配置分离               │    │
+│  └─────────────────────────────────────────────────────────────────────┘    │
+└──────────────────────────────────────────────────────────────────────────────┘
+```
+
+#### 3.6.4 Channel Router 核心流程
+
+同 v0.14.1，保持不变：
 
 ```
 渠道消息到达 → ChannelAdapter.receive_message()
@@ -343,101 +445,79 @@ ChannelRouter.route(message)
     ↓
 5. 响应路由：ChannelRouter → ChannelAdapter.send_response()
     ↓
-6. Block Streaming（可选）：分块发送响应
+6. Block Streaming（待实现）：分块发送响应
 ```
 
-#### 3.6.3 ChannelAdapter 接口扩展
+#### 3.6.5 ChannelAdapter 接口
 
-现有 ChannelAdapter ABC 的 4 个抽象方法（start/stop/send_response/get_user_info）需要扩展：
+| 方法 | 类型 | 说明 | 状态 |
+|------|------|------|:---:|
+| `start()` | 抽象 | 启动渠道监听 | ✅ |
+| `stop()` | 抽象 | 停止渠道监听 | ✅ |
+| `send_response()` | 抽象 | 发送响应 | ✅ |
+| `get_user_info()` | 抽象 | 获取用户信息 | ✅ |
+| `health()` | 抽象 | 渠道健康检查 | 📋 Phase 3 |
+| `send_typing()` | 抽象 | "正在输入"指示 | 📋 Phase 3 |
+| `send_media()` | 抽象 | 媒体消息（图片/文件/语音） | 📋 Phase 3 |
 
-| 方法 | 类型 | 说明 |
-|------|------|------|
-| `start()` | 抽象 | 启动渠道监听 |
-| `stop()` | 抽象 | 停止渠道监听 |
-| `send_response()` | 抽象 | 发送响应 |
-| `get_user_info()` | 抽象 | 获取用户信息 |
-| `health()` | 新增抽象 | 渠道健康检查 |
-| `send_typing()` | 新增抽象 | 发送"正在输入"指示 |
-| `send_media()` | 新增抽象 | 发送媒体消息（图片/文件/语音） |
-| `validate_config()` | 新增类方法 | 验证渠道配置 |
-
-#### 3.6.4 消息队列模式
+#### 3.6.6 消息队列模式
 
 | 模式 | 行为 | 适用场景 |
 |------|------|---------|
-| steer | 注入当前轮次，当前工具完成后自然融入 | 默认模式，适合大多数场景 |
-| followup | 排队等下一轮 | 非紧急消息，避免打断 |
-| collect | 等待安静窗口后合并 | 群聊中多条消息合并处理 |
-| interrupt | 中止当前运行，执行新消息 | 紧急指令，如 /stop |
+| steer | 注入当前轮次，工具完成后融合 | 默认模式 |
+| followup | 排队等下一轮 | 非紧急追加 |
+| collect | 安静窗口后合并 | 群聊批量 |
+| interrupt | 中止当前执行新消息 | 紧急指令 |
 
-#### 3.6.5 DM 配对安全模型
-
-```
-未知用户 DM → 生成配对码（8位，1小时有效）
-    ↓
-发送配对码给用户："配对码: XKGH5N7P，请联系管理员审批"
-    ↓
-管理员审批：clawhermes channel pairing approve <channel> <code>
-    ↓
-用户加入 allowlist → 后续消息正常处理
-```
-
-配对码特性：
-- 8 位随机字符串，大小写不敏感
-- 1 小时有效期
-- 每个用户每天最多 3 次配对请求（防滥用）
-- 管理员可查看待审批列表、撤销已批准用户
-
-#### 3.6.6 Block Streaming
+#### 3.6.7 DM 配对安全模型（Phase 3 待实现）
 
 ```
-Agent 生成响应 → 分块策略：
-    ├── text_end（默认）：文本块结束时发送
-    └── message_end：完整消息结束时发送
-
-分块参数：
-    ├── chunk_size：800-1200 字符（优先段落断行 → 换行 → 句子）
-    ├── coalesce：空闲合并，减少单行消息刷屏
-    └── 编辑模式：通过编辑原消息实现流式更新（Telegram/Discord）
+未知用户 DM → 生成配对码（8位，1小时有效）→ 管理员审批 → 加入 allowlist
 ```
 
-#### 3.6.7 渠道配置架构
+#### 3.6.8 渠道配置架构
 
 ```yaml
-# ~/.clawhermes/channels/telegram.yaml
-channel_type: telegram
+# ~/.clawhermes/channels/feishu.yaml
+channel_type: feishu
 enabled: true
 
 adapter:
-  bot_token: "${TELEGRAM_BOT_TOKEN}"   # 环境变量引用
-  api_base: "https://api.telegram.org"
+  domain: feishu            # feishu / lark / ...
+  connection_mode: websocket
+  bot_name: ""
 
 routing:
-  queue_mode: steer          # steer / followup / collect / interrupt
-  session_reset: idle        # daily / idle / manual
-  idle_timeout_minutes: 1440
+  queue_mode: steer
+  session_reset: daily
 
 security:
-  dm_policy: pairing         # pairing / open / closed
-  allowlist: []              # 允许的用户 ID 列表
-  admin_users: []            # 管理员用户 ID
+  group_policy: allowlist
+  allowed_group_users: []
+  admins: []
+  allow_bots: none
+  require_mention: true
 
-streaming:
-  enabled: true
-  mode: text_end             # text_end / message_end
-  chunk_size: 1000
-  coalesce_idle_ms: 500
+webhook:
+  host: 0.0.0.0
+  port: 8080
+  path: /feishu/webhook
 
-media:
-  images: true
-  files: true
-  voice: false
-  max_file_size_mb: 20
-```
+websocket:
+  reconnect_nonce: 30
+  reconnect_interval: 120
+  ping_interval: null
+  ping_timeout: null
 
----
+performance:
+  log_level: 20
+  max_retries: 3
+  retry_delay: 1.0
+  dedup_cache_size: 1024
 
-## 4. 关键技术决策
+features:
+  reactions_enabled: true
+```## 4. 关键技术决策
 
 | 决策 | 选择 | 理由 |
 |------|------|------|
@@ -511,7 +591,7 @@ gateway/app.py
 | `agent/delegate.py` | 子 Agent 委派 | ✅ |
 | `skills/hub.py` | 联邦技能中心（SkillManifest + SkillHub） | ✅ |
 | `llm/provider.py` | LLM Provider + CredentialPool + chat_async | ✅ |
-| `gateway/app.py` | FastAPI REST 服务（13个端点） | ✅ |
+| `gateway/app.py` | FastAPI REST 服务（12个端点） | ✅ |
 | `.github/workflows/ci.yml` | CI 流水线 | ✅ |
 
 ### 6.2 已实现模块（v0.14.1）
@@ -539,13 +619,13 @@ gateway/app.py
 | `agent/queue.py` | 消息队列独立模块（当前内联于 loop.py / types.py） | Phase 4 |
 | `agent/profile.py` | Profile 隔离（多 Profile 并发运行） | Phase 3 |
 | `agent/security.py` | 设备安全（DM 配对 + 签名挑战） | Phase 3 |
-| `channel/config.py` | 渠道配置管理 + 热加载 | Phase 3 |
+| `channel/config.py` | 渠道配置管理 + 热加载 | ✅ Phase 3 (v0.14.1) |
 | `channel/streaming.py` | Block Streaming | Phase 3 |
-| `channel/adapters/telegram.py` | Telegram 适配器 | Phase 3 |
-| `channel/adapters/discord.py` | Discord 适配器 | Phase 3 |
-| `channel/adapters/slack.py` | Slack 适配器 | Phase 3 |
-| `channel/adapters/feishu.py` | 飞书适配器 | Phase 3 |
-| `channel/adapters/webchat.py` | WebChat 适配器 | Phase 3 |
+| `channel/adapters/telegram.py` | Telegram 适配器 | 📋 Phase 3 续 |
+| `channel/adapters/discord.py` | Discord 适配器 | 📋 Phase 3 续 |
+| `channel/adapters/slack.py` | Slack 适配器 | 📋 Phase 3 续 |
+| `channel/adapters/feishu.py` | 飞书适配器（已迁移至子仓库 `clawhermes-lark`） | ✅ Phase 3 (v0.14.1) |
+| `channel/adapters/webchat.py` | WebChat 适配器 | 📋 Phase 3 续 |
 | `skills/evolution.py` | 技能进化图谱 | Phase 3 |
 | `memory/multimodal.py` | 多模态记忆 | Phase 3 |
 | `agent/user_model.py` | 用户画像持久化 | Phase 3 |
@@ -625,7 +705,7 @@ ToolProfile
 
 ---
 
-## 附录 A：Gateway 端点清单（26个）
+## 附录 A：Gateway 端点清单（23 个）
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
@@ -647,6 +727,11 @@ ToolProfile
 | DELETE | `/cron/jobs/{id}` | 删除调度任务 |
 | POST | `/cron/jobs/{id}/pause` | 暂停调度任务 |
 | POST | `/cron/jobs/{id}/resume` | 恢复调度任务 |
+| GET | `/channels` | 渠道列表 |
+| GET | `/channels/sessions` | 渠道会话 |
+| POST | `/mcp/servers` | 注册 MCP Server |
+| GET | `/mcp/servers` | 列出 MCP Server |
+| DELETE | `/mcp/servers/{name}` | 删除 MCP Server |
 
 ---
 

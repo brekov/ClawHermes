@@ -1,17 +1,14 @@
-# ClawHermes v0.14.1 — Release Notes
+# ClawHermes v0.15.0 — Release Notes (Draft)
 
 > 发布日期：2026-06-23
-> Tag: v0.14.1
-> Phase 3 续：渠道配置架构重构 + 飞书适配器强化
+> Tag: v0.15.0 (Draft)
+> Phase 3 续：渠道适配器强化 + 文档审计修正
 
 ---
 
 ## 概览
 
-v0.14.1 聚焦渠道配置架构两大修复：(1) 配置从环境变量裸读重构为 YAML + ${VAR} 插值，
-敏感值/操作配置严格分层；(2) 飞书适配器 LarkConfig 从 11 字段生效提升至 26/26 全部操作化，
-权限门控、Webhook 签名、WS 重连等高级能力真正可用。
-
+v0.15.0 延续 Phase 3 渠道适配器建设，飞书 LarkConfig 26/26 字段全部生效，微信双模式完善，同时完成全项目文档审计与修正。
 ## 新增特性
 
 | 里程碑 | 特性 | 说明 |
@@ -38,7 +35,7 @@ v0.14.1 聚焦渠道配置架构两大修复：(1) 配置从环境变量裸读�
 | 测试用例 | 373 | 373 | — |
 | 源文件 | 30 | 31 | +config.py |
 | 内置工具 | 35 | 35 | — |
-| API 端点 | 26 | 26 | — |
+| API 端点 | 18 | 23 | +channels +MCP |
 | 渠道适配器 | 3 | 5 | +飞书 +微信 |
 | .env FEISHU_ 变量 | 27 | 6 | -78% |
 | ruff | 0 | 0 | ✅ |
@@ -81,10 +78,30 @@ pip install -e ./clawhermes-weixin  # 微信渠道
 | `FEISHU_VERIFICATION_TOKEN` | 事件订阅令牌 |
 | `FEISHU_ENCRYPT_KEY` | 推送加密密钥 |
 
-## 新增 API 端点
+## Gateway 端点 (23 个)
 
-```
-POST   /feishu/webhook     飞书消息事件回调
-POST   /wechat/webhook     个人微信消息回调
-POST   /wecom/webhook      企业微信消息回调
-```
+| 方法 | 路径 | 说明 |
+|:---:|:---|:---|
+| POST | `/init` | 初始化 Agent |
+| POST | `/chat` | 对话 |
+| GET | `/health` | 健康检查 |
+| GET | `/tools` | 工具列表 |
+| POST | `/memory/save` | 保存记忆 |
+| GET | `/memory/search` | 搜索记忆 |
+| GET | `/skills` | 技能列表 |
+| POST | `/skills/create` | 创建技能 |
+| POST | `/curator/run` | 运行 Curator |
+| GET | `/sessions` | 会话列表 |
+| GET | `/sessions/{id}` | 会话详情 |
+| DELETE | `/sessions/{id}` | 删除会话 |
+| POST | `/cron/jobs` | 创建调度任务 |
+| GET | `/cron/jobs` | 列出调度任务 |
+| GET | `/cron/jobs/{id}` | 任务详情 |
+| DELETE | `/cron/jobs/{id}` | 删除任务 |
+| POST | `/cron/jobs/{id}/pause` | 暂停 |
+| POST | `/cron/jobs/{id}/resume` | 恢复 |
+| GET | `/channels` | 渠道列表 |
+| GET | `/channels/sessions` | 渠道会话 |
+| POST | `/mcp/servers` | MCP Server 注册 |
+| GET | `/mcp/servers` | MCP Server 列表 |
+| DELETE | `/mcp/servers/{name}` | 删除 MCP Server |

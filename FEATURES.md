@@ -1,6 +1,6 @@
 # ClawHermes · 完整功能介绍
 
-> 版本：v0.14.1 | 源文件：31 个 + 2 个子仓库 | 测试：373/373 ✅
+> 版本：v0.15.0 (Draft) | 源文件：31 个 + 2 个子仓库 | 测试：373/373 ✅
 > GitHub：https://github.com/brekov/ClawHermes
 
 ---
@@ -136,7 +136,7 @@
 
 ---
 
-## 五、Gateway API（26 个端点）
+## 五、Gateway API（23 个端点）
 
 ### Agent 核心（12 个）
 | 端点 | 方法 | 说明 |

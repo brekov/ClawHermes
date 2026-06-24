@@ -15,7 +15,7 @@
 | 定位 | 生产级个人/团队 AI 助手 | 自进化 Agent 研究框架 | 融合两者设计的生产级框架 |
 | GitHub Stars | 高 | 106k+ | 新项目 |
 | 许可证 | MIT | MIT | MIT |
-| 当前版本 | - | - | **v0.14.1** |
+| 当前版本 | - | - | **v0.15.0 (Draft)** |
 
 ---
 
@@ -313,8 +313,8 @@
 
 | 特性 | OpenClaw | Hermes | ClawHermes |
 |:---|:---|:---|:---|
-| 渠道支持 | **22+ 渠道** | 6 渠道 | **0（v0.10.0 已移除）** |
-| 定位 | 消息网关 + Agent | Agent + 渠道 | **纯 Agent 框架（REST API）** |
+| 渠道支持 | **22+ 渠道** | 6 渠道 | **5（3 内置 + 飞书/微信子仓库）** |
+| 定位 | 消息网关 + Agent | Agent + 渠道 | **Agent 框架 + Channel SDK（子仓库集成）** |
 | Canvas/A2UI | ✅ **HTML/CSS/JS可视化工作区** | ❌ | ❌ |
 | Node系统 | ✅ **macOS/iOS/Android/headless** | ❌ | ❌ |
 
@@ -334,23 +334,34 @@
 
 ### 3.9 消息渠道架构对比
 
-| 特性 | OpenClaw | Hermes | ClawHermes (重构后) |
+ClawHermes 采用 **git 子仓库 + ChannelAdapter ABC** 模式，渠道适配器外部维护、按需集成：
+
+| 特性 | OpenClaw | Hermes | ClawHermes |
 |------|----------|--------|---------------------|
-| 渠道数 | 22+ | 20+ | 3 内置 + 5 外部适配器 |
-| 架构模式 | Gateway 中心化 | Gateway + 适配器 | **Channel Router + 适配器** |
-| 消息协议 | WebSocket（请求/响应/事件帧） | 各平台 SDK 直连 | **Channel Router 统一路由** |
-| 消息队列 | steer/followup/collect/interrupt | 串行处理 | **steer/followup/collect/interrupt** |
-| Block Streaming | ✅ 编辑模式 + chunk/coalesce | ✅ 编辑模式（部分平台） | **✅ 编辑+新消息双模式** |
-| DM 安全 | pairing + open + allowlist | allowlist + admin/user 分层 | **pairing + allowlist + admin** |
-| 设备配对 | 签名挑战 v3（绑定 platform+deviceFamily） | 无 | **配对码 + 管理员审批** |
-| 会话路由 | (channel, chat_id) → session | (platform, chat_id) → session | **(channel_type, chat_id) → session** |
-| 会话重置 | daily / idle / manual | daily / idle | **daily / idle / manual** |
-| 渠道健康检查 | ✅ Gateway 统一监控 | ❌ | **✅ health() 统一接口** |
-| 配置热加载 | ❌ 需重启 | ❌ 需重启 | **✅ YAML 变更自动检测** |
-| 媒体处理 | 图片/文件/语音/视频 | 图片/文件/语音 | **图片/文件/语音** |
-| 渠道隔离 | ✅ 单渠道崩溃不影响其他 | ❌ 单进程 | **✅ 适配器独立运行** |
-| 群聊支持 | ✅ 完整 | ✅ 完整 | **✅ mention_only + allow_groups** |
-| SDK 抽象 | ❌ 无 | ❌ 无 | **✅ ChannelAdapter ABC** |
+| 渠道数 | 22+ 内置 | 20+ 适配器 | 3 内置（CLI/REST/WS）+ 子仓库（飞书/微信） |
+| 架构模式 | Gateway 中心化 | Gateway + 适配器 | **Channel Router + 子仓库** |
+| 集成方式 | 内嵌编译 | 内嵌源码 | **git submodule + pip extras** |
+| 实现策略 | 统一 Gateway 协议 | 各平台 SDK 直连 | **四级决策树（官方 SDK → 社区 → 复刻 → API）** |
+| 消息协议 | WebSocket（3 帧） | SDK 原生协议 | **Channel Router 统一路由** |
+| 消息队列 | ✅ 4 模式 | 串行处理 | ✅ **4 模式（v0.14.0）** |
+| Block Streaming | ✅ 完成即发送 | ❌ | 📋 Phase 3 暂未实现 |
+| DM 安全 | ✅ 签名挑战 v3 | allowlist | 📋 Phase 3 暂未实现 |
+| Channel SDK 抽象 | ❌ 无 | ❌ 无 | ✅ **ChannelAdapter ABC（三者唯一）** |
+| 渠道配置 | 代码内嵌 | 环境变量 | ✅ **YAML + ${VAR}（v0.14.1）** |
+| 渠道隔离 | ✅ | ❌ 单进程 | ✅ **子仓库独立维护** |
+
+**四级实现策略详情**：
+
+| 级别 | 策略 | 飞书 | 微信 | QQ | Telegram/Discord/Slack |
+|:---:|:---|:---:|:---:|:---:|:---:|
+| 1 | 官方 SDK | ✅ `lark-oapi` | ✅ `wechatpy` | — | ✅ `slack-bolt` |
+| 2 | 社区实现 | — | — | — | ✅ `python-telegram-bot` / `discord.py` |
+| 3 | 子仓库复刻 | — | — | 📋 参考 Hermes QQ SDK | — |
+| 4 | 裸 API | — | — | — | — |
+
+> ClawHermes 只维护 ChannelAdapter ABC 抽象层和 3 个内置适配器（CLI/REST/WebSocket）。
+> 平台特定渠道代码全部在独立 git 子仓库中，部署者按需 `git submodule` 或 `pip install`。
+> 这种模式借鉴了 OpenClaw 的 Gateway 中心化思想，但通过 SDK 抽象 + 子仓库实现了更好的模块化和维护性。
 
 ---
 
@@ -462,7 +473,7 @@ ClawHermes:  Python开发者生态 → 纯Python + 类型安全 + 向量记忆 +
 
 | 项目 | 说明 | 优先级 |
 |:---|:---|:---:|
-| **内置工具数** | 26 个 vs Hermes 70+ / OpenClaw 40+ | 🟡 中 |
+| **内置工具数** | 35 个 vs Hermes 70+ / OpenClaw 40+ | 🟡 中 |
 | **MCP协议** | Hermes 有 MCP 客户端，ClawHermes 没有 | 🟡 中 |
 | **浏览器工具** | Hermes 有 10 个浏览器工具，ClawHermes 没有 | 🟡 中 |
 | **并行执行深度** | PARALLEL_SAFE 声明但实际串行执行 | 🟡 中 |
@@ -477,10 +488,11 @@ ClawHermes:  Python开发者生态 → 纯Python + 类型安全 + 向量记忆 +
 | **Gateway全局状态** | Gateway 存在全局状态问题 | 🟡 中 |
 | **SessionManager线程安全** | 线程安全待完善 | 🟡 中 |
 | **异步一致性** | 异步模型一致性待完善 | 🟡 中 |
-| **消息渠道** | 3 内置（未集成Gateway） | 22+ | 20+ | 🔴 高 |
-| **Gateway-Channel 集成** | 未集成，/chat 直接调用 Agent | ✅ | ✅ | 🔴 高 |
-| **消息队列模式** | ❌ | ✅ 4种 | 串行 | 🟡 中 |
-| **DM 安全模型** | ❌ | ✅ pairing+open | allowlist | 🟡 中 |
+| **消息渠道** | 3 内置 + 子仓库（飞书/微信）| 22+ | 20+ | 🟡 中 |
+| **Gateway-Channel 集成** | Channel Router 就绪，子仓库适配中 | ✅ | ✅ | 🟡 中 |
+| **消息队列模式** | ✅ 4 种（v0.14.0）| ✅ 4 种 | 串行 | 🟢 低 |
+| **DM 安全模型** | 📋 Phase 3 | ✅ pairing+open | allowlist | 🟡 中 |
+| **Block Streaming** | 📋 Phase 3 | ✅编辑+合并 | ❌ | 🟡 中 |
 
 ### 6.3 三者都没有的（ClawHermes 独创）
 
@@ -510,7 +522,7 @@ ClawHermes:  融合两者设计 + Python 纯原生 → 轻量级生产级 Agent 
              劣势: 工具数追平 | 无MCP | 并行串行 | 无IDE集成
 ```
 
-**一句话：** ClawHermes 在核心能力上对齐了 OpenClaw 和 Hermes 的设计精华，专注 Agent 核心（REST API），在 Python 生态、向量记忆、类型安全、自适应压缩等方面有自己的独创优势。消息渠道集成不是 ClawHermes 的职责，而是 OpenClaw 的优势所在。
+**一句话：** ClawHermes 在核心能力上对齐了 OpenClaw 和 Hermes 的设计精华，在 Python 生态、向量记忆、类型安全、自适应压缩等方面有独创优势。消息渠道通过 **Channel Adapter SDK + git 子仓库** 模式按需集成，项目本体保持纯净。
 
 ---
 
@@ -531,7 +543,7 @@ ClawHermes:  融合两者设计 + Python 纯原生 → 轻量级生产级 Agent 
 
 | 差距 | 当前 (v0.14.1) | Phase 3 目标 | v1.0 目标 |
 |------|------|-------------|----------|
-| 内置工具数 | 26 | 35+ | 50+ |
+| 内置工具数 | 35 | 45+ | 50+ |
 | 并行执行 | ⚠️ 串行 | ✅ 真并行 | ✅ 真并行 |
 | MCP协议 | ❌ | ✅ MCP客户端 | ✅ MCP客户端 |
 | 浏览器工具 | ❌ | ✅ 基础集 | ✅ 完整集 |
