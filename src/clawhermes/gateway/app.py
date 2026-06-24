@@ -13,7 +13,7 @@ from typing import Any
 
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
 from clawhermes.agent.delegate import DelegateManager
@@ -357,6 +357,58 @@ def chat(req: ChatRequest):
     except Exception as e:
         logger.exception("Unexpected error in chat")
         raise HTTPException(500, f"内部错误: {e}")
+
+
+@app.post("/chat/stream")
+async def chat_stream(req: ChatRequest):
+    """流式聊天 — SSE (text/event-stream) 端点。
+
+    使用 Agent.chat_stream() 生成 SSE 事件流：text | tool_call | tool_result | error | done。
+    """
+    agent = _state.get_agent()
+    if _state.session_mgr is None:
+        raise HTTPException(500, "Session 管理器未初始化")
+
+    if req.session_id:
+        try:
+            _state.session_mgr.get_session(req.session_id)
+        except SessionNotFoundError:
+            raise HTTPException(404, f"会话不存在: {req.session_id}")
+        sid = req.session_id
+    else:
+        sid = _state.session_mgr.create_session()
+
+    import json as _json
+
+    async def _event_stream():
+        try:
+            async for event in agent.chat_stream(req.message, session_id=sid):
+                event_name = event.get("event", "message")
+                event_data = event.get("data", "")
+                if not isinstance(event_data, str):
+                    event_data = _json.dumps(event_data, ensure_ascii=False)
+                yield f"event: {event_name}\ndata: {event_data}\n\n"
+        except LLMRateLimitError as e:
+            retry = getattr(e, 'retry_after', 60)
+            yield f"event: error\ndata: LLM 速率限制，{retry}秒后重试\n\n"
+        except LLMConnectionError as e:
+            yield f"event: error\ndata: LLM 连接失败: {e}\n\n"
+        except LLMError as e:
+            yield f"event: error\ndata: LLM 调用失败: {e}\n\n"
+        except ClawHermesError as e:
+            yield f"event: error\ndata: Agent 错误: {e}\n\n"
+        except Exception as e:
+            logger.exception("Unexpected error in chat/stream")
+            yield f"event: error\ndata: 内部错误: {e}\n\n"
+
+    return StreamingResponse(
+        _event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @app.get("/health")

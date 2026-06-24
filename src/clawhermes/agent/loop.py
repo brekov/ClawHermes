@@ -9,6 +9,7 @@ import json
 import logging
 import threading
 import time
+from collections.abc import AsyncGenerator
 from dataclasses import dataclass
 from typing import Any, Callable, List
 
@@ -581,6 +582,145 @@ class Agent:
     async def chat_async(self, user_message: str, session_id: str = "") -> str:
         """异步聊天接口，使用原生异步LLM调用"""
         return await self._chat_async_internal(user_message, session_id)
+
+
+    async def chat_stream(
+        self, user_message: str, session_id: str = ""
+    ) -> AsyncGenerator[dict, None]:
+        """流式聊天 — 以 SSE 事件流逐块返回响应。
+
+        与 chat_async() 使用相同的 Agent 循环逻辑，
+        但通过 LLMProvider.chat_stream() 获取流式 token，
+        每个完成块即时 yield 为 SSE 事件：
+
+        - {"event":"text","data":"..."}    内容块（800-1200 chars）
+        - {"event":"tool_call","data":{...}} 工具调用
+        - {"event":"tool_result","data":{...}} 工具结果
+        - {"event":"error","data":"..."}    错误
+        - {"event":"done","data":{...}}     完成（含 usage）
+        """
+        messages: list[dict] = []
+        messages.append({
+            "role": "system",
+            "content": self.prompt.build(),
+        })
+        messages.append({"role": "user", "content": user_message})
+
+        for iteration in range(self.config.max_iterations):
+            hook_result = self.hooks.trigger(
+                HookPoint.BEFORE_AGENT_RUN,
+                messages=messages,
+                iteration=iteration,
+            )
+            if hook_result.get("abort"):
+                yield {"event": "text", "data": str(hook_result.get("response", ""))}
+                yield {"event": "done", "data": {"aborted": True}}
+                return
+
+            if self._interrupt.is_set():
+                yield {"event": "text", "data": "（已中断）"}
+                yield {"event": "done", "data": {"interrupted": True}}
+                return
+
+            if self.context_engine and iteration > 1:
+                prompt_tokens = sum(len(m.get("content", "")) for m in messages)
+                if self.context_engine.should_compress(prompt_tokens):
+                    messages = self.context_engine.compress(messages, prompt_tokens)
+
+            self.hooks.trigger(HookPoint.MODEL_CALL_STARTED)
+
+            # 流式 LLM 调用 — 收集 text/tool_calls/done
+            text_parts: list[str] = []
+            stream_tool_calls: list[dict] | None = None
+            stream_usage: dict | None = None
+            stream_model = ""
+            stream_error: str | None = None
+
+            async for chunk in self.llm.chat_stream(
+                messages,
+                tools=self.tools.schemas() if self.tools.list() else None,
+            ):
+                if chunk.kind == "text":
+                    yield {"event": "text", "data": chunk.content}
+                    text_parts.append(chunk.content)
+                elif chunk.kind == "tool_calls":
+                    stream_tool_calls = chunk.tool_calls
+                    for tc in (chunk.tool_calls or []):
+                        yield {
+                            "event": "tool_call",
+                            "data": {
+                                "name": tc.get("function", {}).get("name", ""),
+                                "arguments": tc.get("function", {}).get("arguments", "{}"),
+                            },
+                        }
+                elif chunk.kind == "error":
+                    stream_error = chunk.error
+                    yield {"event": "error", "data": chunk.error}
+                elif chunk.kind == "done":
+                    stream_usage = chunk.usage
+                    stream_model = chunk.model or stream_model
+                if chunk.model:
+                    stream_model = chunk.model
+
+            if stream_error:
+                yield {"event": "done", "data": {"error": stream_error}}
+                return
+
+            self.hooks.trigger(HookPoint.MODEL_CALL_ENDED)
+
+            # 构建 assistant 消息
+            assistant_msg: dict[str, Any] = {
+                "role": "assistant",
+                "content": "".join(text_parts) if text_parts else "",
+                "tool_calls": stream_tool_calls,
+            }
+            messages.append(assistant_msg)
+
+            # 无工具调用 → 完成
+            if not stream_tool_calls:
+                hook_result = self.hooks.trigger(
+                    HookPoint.BEFORE_AGENT_REPLY,
+                    response="".join(text_parts),
+                )
+                self._last_conversation = [
+                    {"role": m["role"], "content": str(m.get("content", ""))[:500]}
+                    for m in messages[-6:]
+                ]
+                self.hooks.trigger(HookPoint.AFTER_AGENT_END, messages=messages)
+                yield {
+                    "event": "done",
+                    "data": {
+                        "usage": stream_usage,
+                        "model": stream_model,
+                        "iterations": iteration + 1,
+                    },
+                }
+                return
+
+            # 执行工具
+            tool_context = self._build_tool_context(session_id)
+            tool_context["iteration"] = iteration
+
+            tool_results = await self.dispatcher.execute_async(
+                stream_tool_calls,
+                context=tool_context,
+            )
+            # yield 工具结果
+            for tr in tool_results:
+                yield {
+                    "event": "tool_result",
+                    "data": {
+                        "name": tr.get("name", ""),
+                        "call_id": tr.get("tool_call_id", ""),
+                        "content": tr.get("content", ""),
+                    },
+                }
+            messages.extend(tool_results)
+
+        yield {
+            "event": "done",
+            "data": {"max_iterations": True, "iterations": self.config.max_iterations},
+        }
 
     def interrupt(self):
         self._interrupt.set()

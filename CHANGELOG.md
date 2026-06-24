@@ -2,6 +2,22 @@
 
 ## v0.15.0 (2026-06-23)
 
+### M3.6c Block Streaming — SSE 流式响应
+
+- **新增长 `LLMProvider.chat_stream()`** — litellm 流式封装 + 块缓冲（800-1200 chars）
+  - `StreamChunk` 类型：`text` / `tool_calls` / `error` / `done`
+  - 流式消费 token → 块缓冲 → yield，首字延迟降低 50%+
+  - 工具调用累积后一次性发出
+  - 完整错误处理：RateLimit / Auth / Connection 异常 → `StreamChunk(kind="error")`
+- **新增长 `Agent.chat_stream()`** — 异步迭代器产出 SSE 事件
+  - 事件类型：`text` | `tool_call` | `tool_result` | `error` | `done`
+  - 复用 Agent 的 Hook 体系 + 工具执行器
+- **新增长 `POST /chat/stream` SSE 端点**
+  - `text/event-stream` + `Cache-Control: no-cache` + `X-Accel-Buffering: no`
+  - 复用 `ChatRequest` 输入模型
+- **新增长 `MockProvider.chat_stream()`** — 测试用流式 Mock
+- **测试**：3 个流式测试（纯文本 / 工具调用 / 中断）
+
 渠道配置架构修复 — 死字段激活 + YAML 单一来源
 
 ### 配置架构重构

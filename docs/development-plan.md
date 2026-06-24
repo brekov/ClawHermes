@@ -432,6 +432,7 @@ CI/CD:      GitHub Actions（lint + typecheck + test + build）
 | 里程碑 | 功能 | 优先级 | 工作量 |
 |:---|:---|:---:|:---:|
 | **M3.6c** | **Block Streaming（F17）** — SSE 完成即发送，chunk 800-1200 chars，首字延迟降低 50%+ | 🟡 P1 | 3d |
+| **M3.6c** | ✅ **Block Streaming（F17）** — SSE 完成即发送，chunk 800-1200 chars，首字延迟降低 50%+ | 🟡 P1 | ✅ 完成 |
 | **M3.6d** | **DM 配对安全（F18）** — 配对码生成 + 管理员审批 + 签名挑战 | 🟡 P1 | 3d |
 | **M3.6e** | ✅ **飞书适配器** — 分层架构 lark-oapi + Hermes vendor 消息引擎；WebSocket 长连接 + Token 管理 + send_response/get_user_info | 🔴 P0 | ✅ 完成 | M3.6a |
 | **M3.6f** | ✅ **微信适配器** — clawhermes-weixin 子仓库 + wechatpy SDK；ChannelAdapter + Gateway 集成 | 🔴 P0 | ✅ 完成 | M3.6a |
