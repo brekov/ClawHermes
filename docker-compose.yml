@@ -1,14 +1,20 @@
-version: "3.8"
-
 services:
   clawhermes:
-    build: .
+    build:
+      context: .
+      args:
+        # 渠道：设置非空值启用（如 WITH_LARK=1）
+        WITH_LARK: ${WITH_LARK:-}
+        WITH_WEIXIN: ${WITH_WEIXIN:-}
+        WITH_QQ: ${WITH_QQ:-}
     container_name: clawhermes
     ports:
-      - "18789:18789"
+      - "${CH_GATEWAY_PORT:-18789}:18789"
+    env_file:
+      - .env
     environment:
-      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}
       - CH_GATEWAY_HOST=0.0.0.0
+      - CH_GATEWAY_PORT=${CH_GATEWAY_PORT:-18789}
       - CH_TOOLS_PROFILE=${CH_TOOLS_PROFILE:-standard}
       - CH_DATA_DIR=/data/.clawhermes
     volumes:
