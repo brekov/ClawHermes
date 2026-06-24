@@ -69,6 +69,12 @@ _CHANNEL_DEFAULTS: dict[str, dict[str, Any]] = {
     "wechat": {
         "sub_type": "personal",
     },
+    "qq": {
+        "sandbox": True,
+        "auto_reconnect": True,
+        "max_retries": 3,
+        "retry_delay": 1.0,
+    },
 }
 
 
