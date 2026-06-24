@@ -18,6 +18,7 @@ from clawhermes.channel.adapter import (
     ChannelResponse,
     ChannelType,
 )
+from clawhermes.channel.pairing import DMPairingManager
 
 logger = logging.getLogger(__name__)
 
@@ -115,7 +116,9 @@ class ChannelRouter:
         channel_manager: ChannelManager,
         session_router: SessionRouter | None = None,
         default_queue_mode: QueueMode = QueueMode.STEER,
+        pairing_manager: DMPairingManager | None = None,
     ):
+        self._pairing_manager = pairing_manager
         self._channel_manager = channel_manager
         self._session_router = session_router or SessionRouter()
         self._default_queue_mode = default_queue_mode
@@ -163,6 +166,17 @@ class ChannelRouter:
                 logger.info(
                     "User %s not in allowlist, dropping message",
                     message.user.user_id,
+                )
+                return
+
+        # DM 配对安全检查
+        if self._pairing_manager is not None and message.channel_type not in (
+            ChannelType.CLI, ChannelType.REST
+        ):
+            if not self._pairing_manager.is_paired(message.user.user_id):
+                logger.warning(
+                    "User %s not paired on channel %s, rejecting message",
+                    message.user.user_id, message.channel_type.value,
                 )
                 return
 
