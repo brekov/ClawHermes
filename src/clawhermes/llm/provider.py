@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import logging
 import time
+from collections.abc import AsyncGenerator
 from dataclasses import dataclass
 from threading import Lock
 from typing import Any
@@ -29,6 +30,26 @@ class LLMResponse:
     model: str = ""
     duration_ms: float = 0.0
     raw: Any = None
+
+
+@dataclass
+class StreamChunk:
+    """流式响应块。
+
+    Attrs:
+        kind: 块类型 — "text" | "tool_calls" | "usage" | "error" | "done"
+        content: 文本内容（kind="text" 时）
+        tool_calls: 累积的工具调用列表（kind="tool_calls" 时）
+        usage: token 用量（kind="usage" / "done" 时）
+        model: 实际使用的模型名
+        error: 错误信息（kind="error" 时）
+    """
+    kind: str
+    content: str = ""
+    tool_calls: list[dict] | None = None
+    usage: dict | None = None
+    model: str = ""
+    error: str = ""
 
 
 class CredentialPool:
@@ -205,3 +226,123 @@ class LLMProvider:
                 status = getattr(e, "status_code", None)
                 self.credential_pool.mark_failed(used_key, status)
             raise LLMError(f"LLM 异步调用异常: {e}") from e
+
+    async def chat_stream(
+        self,
+        messages: list[dict],
+        tools: list[dict] | None = None,
+    ) -> AsyncGenerator[StreamChunk, None]:
+        """流式 LLM 调用。
+
+        使用 litellm.acompletion(stream=True) 获取 token 级流，
+        将 token 缓冲至 800-1200 字符块后 yield StreamChunk(kind="text")。
+        工具调用在所有 chunk 完成后一次性发出。
+        最后 yield StreamChunk(kind="done") 含 usage。
+        """
+        start = time.time()
+        kwargs, used_key = self._build_kwargs(messages, tools)
+        kwargs["stream"] = True
+        kwargs["stream_options"] = {"include_usage": True}
+
+        try:
+            response = await litellm.acompletion(**kwargs)
+        except litellm.RateLimitError as e:
+            if self.credential_pool and used_key:
+                self.credential_pool.mark_failed(used_key, 429)
+            yield StreamChunk(kind="error", error=f"速率限制: {e}")
+            return
+        except litellm.AuthenticationError as e:
+            if self.credential_pool and used_key:
+                self.credential_pool.mark_failed(used_key, 401)
+            yield StreamChunk(kind="error", error=f"认证失败: {e}")
+            return
+        except litellm.APIConnectionError as e:
+            yield StreamChunk(kind="error", error=f"连接失败: {e}")
+            return
+        except Exception as e:
+            if self.credential_pool and used_key:
+                status = getattr(e, "status_code", None)
+                self.credential_pool.mark_failed(used_key, status)
+            yield StreamChunk(kind="error", error=f"LLM 流式调用异常: {e}")
+            return
+
+        # 流式消费 token → 块缓冲（800-1200 字符块）
+        buffer: list[str] = []
+        buffer_len = 0
+        final_usage: dict | None = None
+        final_model = ""
+        tool_call_acc: dict[int, dict] = {}  # index → partial tool_call
+
+        async for chunk in response:
+            # usage chunk（stream_options=include_usage 时单独出现）
+            if hasattr(chunk, "usage") and chunk.usage:
+                final_usage = dict(chunk.usage)
+
+            if not chunk.choices:
+                continue
+
+            choice = chunk.choices[0]
+            final_model = chunk.model or final_model
+
+            delta = choice.delta if hasattr(choice, "delta") else None
+            if delta is None:
+                continue
+
+            # 文本内容
+            if delta.content:
+                buffer.append(delta.content)
+                buffer_len += len(delta.content)
+                finish = getattr(choice, "finish_reason", None)
+                # >= 800 chars 或遇到 finish_reason 时 flush
+                if buffer_len >= 800 or finish:
+                    yield StreamChunk(
+                        kind="text",
+                        content="".join(buffer),
+                        model=final_model,
+                    )
+                    buffer.clear()
+                    buffer_len = 0
+
+            # 工具调用（累积）
+            if delta.tool_calls:
+                for tc in delta.tool_calls:
+                    idx = tc.index if hasattr(tc, "index") else 0
+                    if idx not in tool_call_acc:
+                        tool_call_acc[idx] = {
+                            "id": "",
+                            "type": "function",
+                            "function": {"name": "", "arguments": ""},
+                        }
+                    if hasattr(tc, "id") and tc.id:
+                        tool_call_acc[idx]["id"] = tc.id
+                    if hasattr(tc, "function"):
+                        if hasattr(tc.function, "name") and tc.function.name:
+                            tool_call_acc[idx]["function"]["name"] += tc.function.name
+                        if hasattr(tc.function, "arguments") and tc.function.arguments:
+                            tool_call_acc[idx]["function"]["arguments"] += tc.function.arguments
+
+        # flush 残留 buffer
+        if buffer:
+            yield StreamChunk(
+                kind="text",
+                content="".join(buffer),
+                model=final_model,
+            )
+
+        # 发出累积的工具调用
+        if tool_call_acc:
+            accumulated_tool_calls = [
+                tool_call_acc[i] for i in sorted(tool_call_acc)
+            ]
+            yield StreamChunk(
+                kind="tool_calls",
+                tool_calls=accumulated_tool_calls,
+                model=final_model,
+            )
+
+        duration = (time.time() - start) * 1000
+        yield StreamChunk(
+            kind="done",
+            usage=final_usage,
+            model=final_model,
+        )

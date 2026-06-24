@@ -1559,3 +1559,73 @@ class TestNewTools:
         result = _markdown_render(text="# Hello\\n\\nWorld")
         assert "html" in result
         assert "Hello" in result["html"]
+
+
+# ── 流式聊天测试 ──
+
+@pytest.mark.asyncio
+class TestAgentStreaming:
+    """Agent.chat_stream() 端到端测试"""
+
+    async def test_stream_text_only(self):
+        """纯文本响应 — 应产出一或多个 text + done 事件"""
+        from clawhermes.agent.loop import Agent
+        from clawhermes.tools.builtin import register_builtin_tools
+        from tests.mock_provider import MockProvider
+
+        provider = MockProvider(["这是一条长回复，用于测试流式分块功能。"] * 3)
+        agent = Agent(llm_provider=provider)
+
+        events = []
+        async for evt in agent.chat_stream("你好"):
+            events.append(evt)
+
+        assert len(events) >= 2
+        assert events[-1]["event"] == "done"
+        texts = [e for e in events if e["event"] == "text"]
+        assert len(texts) >= 1
+
+    async def test_stream_with_tool_calls(self):
+        """触发工具调用的消息 — 应有 tool_call + tool_result + done"""
+        from clawhermes.agent.loop import Agent, ToolRegistry, ToolDef
+        from tests.mock_provider import MockProvider
+
+        def _get_time():
+            return {"now": "2025-01-01T00:00:00"}
+
+        registry = ToolRegistry()
+        registry.register(ToolDef(
+            name="get_time",
+            description="获取当前时间",
+            parameters={"type": "object", "properties": {}},
+            handler=_get_time,
+        ))
+
+        provider = MockProvider([""] * 2)
+        agent = Agent(llm_provider=provider, tool_registry=registry)
+
+        events = []
+        async for evt in agent.chat_stream("现在几点了"):
+            events.append(evt)
+
+        kinds = {e["event"] for e in events}
+        assert "tool_call" in kinds
+        assert "tool_result" in kinds
+        assert events[-1]["event"] == "done"
+
+    async def test_stream_interrupt(self):
+        """中断的流式调用 — 应返回 interrupted done 事件"""
+        from clawhermes.agent.loop import Agent
+        from tests.mock_provider import MockProvider
+
+        provider = MockProvider(["不会到达"] * 2)
+        agent = Agent(llm_provider=provider)
+        agent.interrupt()
+
+        events = []
+        async for evt in agent.chat_stream("你好"):
+            events.append(evt)
+
+        assert len(events) == 2
+        assert events[1]["event"] == "done"
+        assert events[1]["data"].get("interrupted")
