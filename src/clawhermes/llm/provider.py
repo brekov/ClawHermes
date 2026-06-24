@@ -239,7 +239,6 @@ class LLMProvider:
         工具调用在所有 chunk 完成后一次性发出。
         最后 yield StreamChunk(kind="done") 含 usage。
         """
-        start = time.time()
         kwargs, used_key = self._build_kwargs(messages, tools)
         kwargs["stream"] = True
         kwargs["stream_options"] = {"include_usage": True}
@@ -340,7 +339,6 @@ class LLMProvider:
                 model=final_model,
             )
 
-        duration = (time.time() - start) * 1000
         yield StreamChunk(
             kind="done",
             usage=final_usage,

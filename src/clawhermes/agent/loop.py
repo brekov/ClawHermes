@@ -9,9 +9,9 @@ import json
 import logging
 import threading
 import time
+from collections.abc import AsyncGenerator
 from dataclasses import dataclass
 from typing import Any, Callable, List
-from collections.abc import AsyncGenerator
 
 from clawhermes.agent.exceptions import (
     ClawHermesError,
@@ -20,7 +20,6 @@ from clawhermes.agent.exceptions import (
 )
 from clawhermes.agent.prompt import SystemPrompt
 from clawhermes.llm.provider import LLMProvider, LLMResponse
-from clawhermes.llm.provider import LLMProvider, LLMResponse, StreamChunk
 
 logger = logging.getLogger(__name__)
 
