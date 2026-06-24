@@ -2,7 +2,7 @@
 
 > 版本：v2.1
 > 日期：2026-06-23
-> 基线版本：v0.15.0 (Draft)
+> 基线版本：v0.15.0
 > 状态：已实现 ChannelConfigLoader、飞书 26 字段、微信双模式、YAML ${VAR} 配置分层
 
 ---
@@ -18,7 +18,7 @@
                                │
 ┌──────────────────────────────▼───────────────────────────────────────┐
 │                          Gateway 层                                  │
-│        FastAPI REST 服务（26 个端点 · Cron调度 · Docker沙箱）         │
+│        FastAPI REST 服务（33 个端点 · Cron调度 · Docker沙箱）         │
 │              CLI 接口 / HTTP API / WebSocket                         │
 └──────────────────────────────┬───────────────────────────────────────┘
                                │
@@ -85,7 +85,7 @@
 
 | 模块 | 职责 | 关键类/函数 |
 |------|------|-------------|
-| `gateway/app.py` | FastAPI REST 服务（26 个端点） | `app` (FastAPI instance) |
+| `gateway/app.py` | FastAPI REST 服务（33 个端点） | `app` (FastAPI instance) |
 | `gateway/app.py` | Agent 初始化与组件装配 | `_create_agent_components()` / `_auto_init()` |
 | `gateway/app.py` | Cron 调度端点（6个） | `create_cron_job` / `list_cron_jobs` / `get_cron_job` / `delete_cron_job` / `pause_cron_job` / `resume_cron_job` |
 | `gateway/app.py` | 会话管理端点（3个） | `list_sessions` / `get_session` / `delete_session` |
@@ -184,7 +184,7 @@ ClawHermes 通过 **Channel Adapter SDK** 提供标准化渠道接口，渠道�
 |--------|------|:---:|:---:|
 | `clawhermes-lark` | 飞书 | 1（官方 SDK: lark-oapi） | ✅ |
 | `clawhermes-weixin` | 微信（个人 + 企业） | 1（社区 SDK: wechatpy） | ✅ |
-| `clawhermes-qq` | QQ | 2（社区 SDK: Hermes 集成） | 📋 v0.16.0 |
+| `clawhermes-qq` | QQ | 2（社区 SDK: Hermes 集成） | ✅ |
 | — | Telegram | 3（复刻 Hermes bot_telegram） | 📋 v0.16.0 |
 | — | Discord | 4（社区 SDK: discord.py） | 📋 v0.16.0 |
 | — | Slack | 4（官方 SDK: slack-bolt） | 📋 v0.16.0 |
@@ -369,7 +369,7 @@ ClawHermes 的消息渠道采用**决策树模式**，按优先级选择实现�
   │ 飞书 ✅   │          │ 微信 ✅   │          │ QQ 📋     │
   │clawhermes │          │clawhermes │          │clawhermes │
   │ -lark     │          │ -weixin   │          │ -qq       │
-  │ lark-oapi │          │ wechatpy  │          │ p0.16.0   │
+  │ lark-oapi │          │ wechatpy  │          │ QQ Bot API│
   └───────────┘          └───────────┘          └───────────┘
 ```
 
@@ -700,7 +700,7 @@ ToolProfile
 
 ---
 
-## 附录 A：Gateway 端点清单（26 个）
+## 附录 A：Gateway 端点清单（33 个）
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
@@ -727,9 +727,16 @@ ToolProfile
 | POST | `/mcp/servers` | 注册 MCP Server |
 | GET | `/mcp/servers` | 列出 MCP Server |
 | DELETE | `/mcp/servers/{name}` | 删除 MCP Server |
+| POST | `/chat/stream` | SSE 流式对话 |
+| POST | `/dm/pair/generate` | 生成配对码（需 ADMIN_KEY） |
+| POST | `/dm/pair/verify` | 验证配对挑战 |
+| GET | `/dm/pair/status` | 查询配对状态 |
+| GET | `/dm/pair/list` | 列出已配对用户 |
+| DELETE | `/dm/pair/{user_id}` | 撤销配对 |
 | POST | `/feishu/webhook` | 飞书事件回调（需启用 clawhermes-lark） |
 | POST | `/wechat/webhook` | 微信消息回调（需启用 clawhermes-weixin） |
 | POST | `/wecom/webhook` | 企业微信消息回调（需启用 clawhermes-weixin） |
+| POST | `/qq/webhook` | QQ 消息回调（需启用 clawhermes-qq） |
 
 ---
 

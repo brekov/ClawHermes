@@ -4,10 +4,10 @@
 
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![Tests: 373 passed](https://img.shields.io/badge/tests-373%20passed-brightgreen)](tests/)
+[![Tests: 373 passed](https://img.shields.io/badge/tests-416%20passed-brightgreen)](tests/)
 [![Coverage: 73%](https://img.shields.io/badge/coverage-73%25-yellow)](tests/)
 [![Ruff](https://img.shields.io/badge/ruff-0%20errors-brightgreen)](pyproject.toml)
-[![v0.14.0](https://img.shields.io/badge/version-0.14.0-blue)](CHANGELOG.md)
+[![v0.15.0](https://img.shields.io/badge/version-0.15.0-blue)](CHANGELOG.md)
 
 ---
 
@@ -67,7 +67,7 @@ curl http://127.0.0.1:18789/sessions
 ```
 ┌──────────────────────────────────────────────────────────────┐
 │                      Gateway 层（REST API）                   │
-│  CLI / HTTP（FastAPI · 26 个 REST 端点 · Cron调度 · Docker沙箱 · MCP） │
+│  CLI / HTTP（FastAPI · 33 个 REST 端点 · Cron调度 · Docker沙箱 · MCP） │
 └────────────────────────┬─────────────────────────────────────┘
                          │
 ┌────────────────────────▼─────────────────────────────────────┐
@@ -248,7 +248,7 @@ src/clawhermes/
 │   └── chroma_memory.py    # ChromaDB 向量记忆
 │
 └── gateway/
-    ├── app.py              # FastAPI Gateway（26 个 REST 端点）
+    ├── app.py              # FastAPI Gateway（33 个 REST 端点）
     └── setup.py            # Provider 配置管理
 ```
 
@@ -259,7 +259,13 @@ src/clawhermes/
 > ClawHermes 的最终目标是支持多平台聊天渠道集成（飞书、微信、Discord、Slack、Telegram 等）。
 >
 > 目前已实现 **Channel Adapter SDK**（`src/clawhermes/channel/`），定义了标准化的渠道适配器接口，
-> 并内置 CLI / REST / WebSocket 三个适配器。更多平台适配器将在后续版本中逐步提供。
+> 并内置 CLI / REST / WebSocket 三个适配器。
+>
+> - ✅ **飞书**（clawhermes-lark · lark-oapi 驱动）
+> - ✅ **微信**（clawhermes-weixin · wechatpy 驱动）
+> - ✅ **QQ**（clawhermes-qq · QQ Bot API）
+>
+> 更多平台适配器（Telegram / Discord / Slack）将在 v0.16.0 中提供。
 >
 > - **Phase 2**：Channel Adapter SDK 完善 + 示例适配器（Slack / Discord / 飞书）
 > - **Phase 3**：Federated Skill Hub + 社区适配器生态
@@ -281,7 +287,7 @@ src/clawhermes/
 ## 测试
 
 ```bash
-# 单元测试 + 集成测试（373 个测试，全部通过 ✅）
+# 单元测试 + 集成测试（416 个测试，全部通过 ✅）
 pytest tests/ -v
 
 # 带覆盖率
@@ -319,8 +325,8 @@ mypy src/
 |:------|:-----|:-----|:----:|
 | Phase 1 | v0.11.0 | 代码质量与稳定性 | ✅ |
 | Phase 2 | v0.12.0~v0.13.0 | 功能增强 | ✅（Channel SDK / Cron / Docker Sandbox / ACE） | ✅ |
-| Phase 3 | v0.14.0 | 生态建设 + 异步化 | ✅（MCP / 异步化 / 工具35 / 测试357） | 🔄 |
-| Phase 3 续 | v0.15.0~v0.16.0 | 渠道 + Streaming + 多模态 | 🔄
+| Phase 3 | v0.15.0 | 生态建设 + 异步化 | ✅（MCP / 异步化 / 工具35 / 测试357） | 🔄 |
+| Phase 3 续 | v0.15.0~v0.16.0 | Block Streaming + DM 配对 + 飞书/微信/QQ 渠道 | ✅ / 🔄
 | Phase 4 | v1.0.0 | 体验与差异化（Dashboard / Workflow Builder） | 📋 |
 
 详见 [开发计划](docs/development-plan.md)

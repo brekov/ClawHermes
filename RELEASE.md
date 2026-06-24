@@ -4,10 +4,25 @@
 |:---|:---|
 | 版本号 | v0.15.0 |
 | 发布日期 | 2026-06-24 |
-| 版本类型 | PATCH — 全项目文档审计 + 渠道架构修正 |
-| 语义化版本 | 0.15.0 (开发阶段) |
+| 版本类型 | MINOR — Block Streaming + DM 配对 + QQ 适配器 |
+| 语义化版本 | 0.15.0 |
 
-## 🐛 Bug 修复
+## ✨ 新功能
+
+### Block Streaming SSE（M3.6c）
+- `POST /chat/stream` SSE 端点 — litellm 流式封装 + 块缓冲
+- `Agent.chat_stream()` + `LLMProvider.chat_stream()`
+- 事件类型：`text` | `tool_call` | `tool_result` | `error` | `done`
+- 首字延迟降低 50%+
+
+### DM 配对安全（M3.6d）
+- 5 个新端点：`POST /dm/pair/generate`、`POST /dm/pair/verify`、`GET /dm/pair/status`、`GET /dm/pair/list`、`DELETE /dm/pair/{user_id}`
+- `ADMIN_KEY` 环境变量鉴权，HMAC 挑战验证 + 管理员审批
+
+### QQ Bot 渠道适配器（M3.6g）
+- clawhermes-qq 子仓库：QQ Bot HTTP API + WebSocket 长连接
+- `POST /qq/webhook` 端点
+- 配置：`config/channels/qq.yaml.example`（`QQ_APP_ID` / `QQ_TOKEN` / `QQ_SECRET`）
 
 ### 端点计数修正（23 → 26）
 
@@ -62,10 +77,10 @@
 
 | 指标 | v0.14.2 | v0.15.0 | 变化 |
 |:---|:---|:---|:---|
-| 测试用例 | 373 | 373 | — |
+| 测试用例 | 373 | 416 | +43 |
 | 源文件 | 31 | 31 | — |
 | 内置工具 | 35 | 35 | — |
-| API 端点 | 26 | 26 | ✅ 文档对齐 |
+| API 端点 | 26 | 33 | +7（5 DM 配对 + /chat/stream + /qq/webhook） |
 | 渠道适配器 | 5 | 5 | — |
 | ruff | 0 | 0 | ✅ |
 | mypy | 0 | 0 | ✅ |

@@ -1,14 +1,14 @@
 # ClawHermes
 
 > 融合 **Hermes** 自进化能力与 **OpenClaw** Gateway 体系的 Python AI Agent 框架
-> v0.15.0 · 31 个源文件 + 2 个子仓库 · 373 个测试 · 35 个工具 · 飞书/微信渠道
+> v0.15.0 · 31 个源文件 + 3 个子仓库 · 416 个测试 · 35 个工具 · 飞书/微信/QQ 渠道
 
 ---
 
 <div>
   <a href="https://github.com/brekov/ClawHermes"><img src="https://img.shields.io/badge/python-3.12%2B-blue" alt="Python 3.12+"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="MIT"></a>
-  <img src="https://img.shields.io/badge/tests-373%2F373-brightgreen" alt="tests 373/373">
+  <img src="https://img.shields.io/badge/tests-373%2F373-brightgreen" alt="tests 416/416">
   <img src="https://img.shields.io/badge/coverage-73%25-yellow" alt="coverage 73%">
   <a href="https://github.com/brekov/ClawHermes/releases"><img src="https://img.shields.io/github/v/release/brekov/ClawHermes" alt="release v0.15.0"></a>
 </div>
@@ -31,7 +31,7 @@ clawhermes chat
 | **工具系统** | 35 个内置工具、3 级 Profile、MCP 动态工具发现、MCP 动态工具、钩子系统(async + 超时)、并行/串行调度 |
 | **记忆系统** | JSON + ChromaDB 双存储、语义搜索、跨会话持久化 |
 | **技能系统** | SkillManager + Background Review(自进化) + Curator(维护) + SkillHub(发布) |
-| **基础设施** | Cron 调度器、Docker 沙箱、Channel SDK + 飞书/微信适配器、mypy 严格类型 |
+| **基础设施** | Cron 调度器、Docker 沙箱、Channel SDK + 飞书/微信/QQ 适配器、mypy 严格类型 |
 | **渠道配置** | YAML ${VAR} 单一来源、权限门控、Webhook 签名校验、消息去重 LRU |
 
 ## 三、部署

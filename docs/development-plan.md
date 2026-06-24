@@ -2,8 +2,8 @@
 
 > 版本：v2.1
 > 日期：2026-06-24
-> 基线版本：v0.15.0（Block Streaming ✅，DM 配对 PR #20 + QQ 适配器 PR #21 审查中）
-> 状态：Phase 1 ✅ | Phase 2 ✅ | Phase 3 ✅ v0.13.0 → v0.14.0 | v0.15.0 🔄 | 下一目标 v0.16.0
+> 基线版本：v0.15.0（Block Streaming ✅ + DM 配对 ✅ + QQ 适配器 ✅）
+> 状态：Phase 1 ✅ | Phase 2 ✅ | Phase 3 ✅ v0.15.0 | 下一目标 v0.16.0
 > 方法论：软件工程全流程 — 现状评估 → 竞品研究 → 差距分析 → SMART 目标 → 架构演进 → 分阶段路线图 → 质量保障 → 风险管理
 
 ---
@@ -84,7 +84,7 @@ v1.0.0 时 ClawHermes 应成为：
 | **v0.14.0** | **2026-06-22** | **全链路异步化、MCP 集成、工具扩展至 35、MCP 异步修复、测试覆盖率 73%（373 测试）** | **373** |
 | **v0.14.1** | **2026-06-23** | **渠道配置架构重构（YAML ${VAR} 单一来源）、15 死配置字段激活、LarkConfig 26/26 全部生效、微信双模式** | **373** |
 | **v0.14.2** | **2026-06-23** | **文档审计 — 端点纠错 23→26、项目定位修正、Channel 架构重写、RELEASE.md 对齐 GitHub 格式** | **373** |
-| **v0.15.0** | **2026-06-24** | **Block Streaming SSE（M3.6c）+ DM 配对安全（M3.6d）+ QQ 适配器（M3.6g）** | **376** |
+| **v0.15.0** | **2026-06-24** | **Block Streaming SSE（M3.6c）+ DM 配对安全（M3.6d）+ QQ 适配器（M3.6g）** | **416** |
 
 ### 2.2 已交付功能清单（19 项）
 
@@ -141,7 +141,7 @@ Web 框架:   FastAPI + uvicorn
 CI/CD:      GitHub Actions（lint + typecheck + test + build）
 ```
 
-### 2.5 Gateway 端点现状（27 个）
+### 2.5 Gateway 端点现状（33 个）
 
 | 分类 | 端点 | 方法 |
 |:---|:---|:---:|
@@ -246,7 +246,7 @@ CI/CD:      GitHub Actions（lint + typecheck + test + build）
 | MCP 协议 | ✅ 已集成 MCP 客户端 v0.14.0 | 多 MCP Server 动态工具发现 | ✅ 已达成 |
 | 渠道适配器 | ✅ 飞书 + 微信 已集成 | 8+（QQ/Telegram/Discord/Slack） | 🟡 中 |
 | Block Streaming | ✅ SSE v0.15.0 | ✅ 完成 | ✅ 已达成 |
-| 测试覆盖率 | 71%（376 测试） | >90% | 🟡 中 |
+| 测试覆盖率 | 71%（416 测试） | >90% | 🟡 中 |
 | 内置工具数 | 35 | 45+ | 🟡 中 |
 | 多模态记忆 | ❌ 仅文本 | ✅ 图片/文件 | 🟡 中 |
 | Profile 隔离 | 3 级工具 Profile | 完整隔离（config/memory/sessions） | 🟡 中 |
@@ -254,7 +254,7 @@ CI/CD:      GitHub Actions（lint + typecheck + test + build）
 | Progressive Disclosure | ❌ | ✅ 3 级加载 | 🟢 低 |
 | IDE 集成 | ❌ | ✅ LSP/ACP | 🟢 低 |
 | Dashboard | ❌ | ✅ | 🟢 低 |
-| DM 安全模型 | ❌ | ✅ pairing | 🟢 低 |
+| DM 安全模型 | ✅ | ✅ | ✅ 已达成 |
 
 ### 4.2 差异化创新护城河
 
@@ -279,12 +279,12 @@ CI/CD:      GitHub Actions（lint + typecheck + test + build）
 | 全链路异步化 | 消除全部 threading.Thread 调用，100% asyncio | 1 周 |
 | 测试覆盖率 > 80% | 65% → 80%，重点补充 gateway + tools；⚠️ 实际 ~61%，Phase 3 后期推进 | 1 周 |
 
-### 5.1b v0.15.0 剩余目标（🔄 开发中）
+### 5.1b v0.15.0 全部目标（✅ 已完成）
 
 | 目标 | 衡量标准 | 时限 |
 |:---|:---|:---|
-| DM 配对安全模型 | pairing 码 + 管理员审批 + 签名挑战 | 3d |
-| QQ 适配器 | QQ Bot HTTP API + 子仓库复刻，完成第三渠道 | 2d |
+| DM 配对安全模型 | pairing 码 + 管理员审批 + 签名挑战 | ✅ 已完成 |
+| QQ 适配器 | QQ Bot HTTP API + 子仓库复刻，完成第三渠道 | ✅ 已完成 |
 
 ### 5.2 v0.16.0（Phase 3 后期）
 
@@ -611,7 +611,7 @@ CI/CD:      GitHub Actions（lint + typecheck + test + build）
 
 > **本计划将随项目进展持续迭代。每个里程碑完成后回顾并修订下一阶段计划。**
 >
-> **当前焦点：Phase 3 v0.15.0 — DM 配对安全 + QQ 适配器。**
+> **当前焦点：Phase 3 v0.16.0 — Telegram / Discord / Slack 适配器 + Profile 隔离。**
 
 ---
 

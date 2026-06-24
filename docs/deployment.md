@@ -1,6 +1,6 @@
 # ClawHermes · 部署指南
 
-> 版本：v2.2 | 日期：2026-06-23
+> 版本：v2.3 | 日期：2026-06-24
 
 ---
 
@@ -61,7 +61,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/brekov/ClawHermes/main/scrip
 
 ## Gateway 说明
 
-ClawHermes Gateway 是一个 **REST API** 服务，提供 26 个端点，通过 HTTP API 暴露 Agent 核心能力。
+ClawHermes Gateway 是一个 **REST API** 服务，提供 33 个端点，通过 HTTP API 暴露 Agent 核心能力。
 
 ### 启动
 
@@ -81,7 +81,7 @@ clawhermes chat
 ```bash
 # 健康检查
 curl http://localhost:18789/health
-# {"status":"ok","version":"0.14.1","uptime":3600,"tools":35}
+# {"status":"ok","version":"0.15.0","uptime":3600,"tools":35}
 
 # 初始化 Agent
 curl -X POST http://localhost:18789/init \
@@ -121,6 +121,7 @@ curl -X POST http://localhost:18789/cron/jobs \
 # 1. 安装渠道子仓库
 pip install -e ./clawhermes-lark    # 飞书
 pip install -e ./clawhermes-weixin  # 微信
+pip install -e ./clawhermes-qq      # QQ
 
 # 2. 配置环境变量（敏感值）
 cp config/.env.example .env

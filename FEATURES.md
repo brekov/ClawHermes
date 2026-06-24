@@ -1,6 +1,6 @@
 # ClawHermes · 完整功能介绍
 
-> 版本：v0.15.0 (Draft) | 源文件：31 个 + 2 个子仓库 | 测试：373/373 ✅
+> 版本：v0.15.0 | 源文件：31 个 + 2 个子仓库 | 测试：416/416 ✅
 > GitHub：https://github.com/brekov/ClawHermes
 
 ---
@@ -43,6 +43,20 @@
 - `Agent.chat_async()` + `LLMProvider.chat_async()`
 - 基于 litellm.acompletion
 - **v0.14.0**：全链路 asyncio 原生，消除全部 `threading.Thread`
+
+### 1.8 Block Streaming（M3.6c）✅
+- `LLMProvider.chat_stream()` — litellm 流式封装 + 块缓冲（800-1200 chars）
+- `Agent.chat_stream()` — 异步迭代器产出 SSE 事件
+- `POST /chat/stream` SSE 端点 — `text/event-stream` + 首字延迟降低 50%+
+- 事件类型：`text` | `tool_call` | `tool_result` | `error` | `done`
+
+### 1.9 DM 配对安全（M3.6d）✅
+- `POST /dm/pair/generate` — 生成配对码（8位，1小时有效）
+- `POST /dm/pair/verify` — HMAC 挑战验证
+- `GET /dm/pair/status` — 查询配对状态
+- `GET /dm/pair/list` — 列出已配对用户
+- `DELETE /dm/pair/{user_id}` — 撤销配对
+- `ADMIN_KEY` 环境变量鉴权，管理员审批放行
 
 ---
 
@@ -136,7 +150,7 @@
 
 ---
 
-## 五、Gateway API（26 个端点）
+## 五、Gateway API（33 个端点）
 
 ### Agent 核心（12 个）
 | 端点 | 方法 | 说明 |
@@ -164,12 +178,13 @@
 | `/cron/jobs/{id}/pause` | POST | 暂停 |
 | `/cron/jobs/{id}/resume` | POST | 恢复 |
 
-### Webhook 回调（3 个）
+### Webhook 回调（4 个）
 | 端点 | 方法 | 说明 |
 |:---|:---:|:---|
 | `/feishu/webhook` | POST | 飞书事件回调（需启用 clawhermes-lark） |
 | `/wechat/webhook` | POST | 微信消息回调（需启用 clawhermes-weixin） |
 | `/wecom/webhook` | POST | 企业微信消息回调（需启用 clawhermes-weixin） |
+| `/qq/webhook` | POST | QQ 消息回调（需启用 clawhermes-qq） |
 
 ---
 
@@ -192,6 +207,7 @@
   - CLI / REST / WebSocket — 已实现
   - 飞书（clawhermes-lark，lark-oapi 驱动）— 已实现
   - 微信 / 企业微信（clawhermes-weixin，wechatpy 驱动）— 已实现
+- QQ（clawhermes-qq，QQ Bot API 驱动）— 已实现
 
 ### 6.4 异常体系（F14）
 - `ClawHermesError` → 5 大类 17 子类
@@ -237,7 +253,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/brekov/ClawHermes/main/scrip
 
 ### 9. 测试
 
-- 373 个测试，全部通过 ✅
+- 416 个测试，全部通过 ✅
 - ruff 0 errors | mypy 0 errors（6 strict checks）
 - 覆盖率 73%（核心模块 > 80%）
 - GitHub Actions CI：lint + typecheck + test + build

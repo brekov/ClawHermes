@@ -1,6 +1,23 @@
 # Changelog
 
-## v0.15.0 (2026-06-23)
+## v0.15.0 (2026-06-24)
+
+### M3.6d DM 配对安全模型 — 配对码 + HMAC 挑战 + 管理员审批
+
+- **5 个新 Gateway 端点**：`POST /dm/pair/generate`、`POST /dm/pair/verify`、`GET /dm/pair/status`、`GET /dm/pair/list`、`DELETE /dm/pair/{user_id}`
+  - `generate`：生成 8 位配对码（1 小时 TTL），需 `ADMIN_KEY` 鉴权
+  - `verify`：HMAC 挑战-响应验证，防重放
+  - `status`/`list`/`revoke`：配对生命周期管理
+- **安全模型**：借鉴 OpenClaw DM 配对模式 — 未知用户 → 生成配对码 → 管理员审批 → 加入 allowlist
+
+### M3.6g QQ Bot 渠道适配器 — 第三渠道就绪
+
+- **clawhermes-qq 子仓库**：QQ Bot HTTP API + WebSocket 长连接
+  - 凭证管理：`QQ_APP_ID` / `QQ_TOKEN` / `QQ_SECRET`
+  - 沙箱/正式环境切换：`sandbox: true/false`
+  - 心跳保活：40s 间隔 + 自动重连
+- **Gateway 集成**：`POST /qq/webhook` 端点 + ChannelAdapter 封装
+- **配置示例**：`config/channels/qq.yaml.example`
 
 ### M3.6c Block Streaming — SSE 流式响应
 
@@ -50,8 +67,8 @@
 
 ### 质量
 
-- 373 测试全部通过
-- ruff 0 errors | mypy 0 errors
+- 416 测试全部通过
+- ruff 0 errors | mypy 281 errors（技术债，待清理）
 - 代码行数：~6,900 行（+~150 行 config loader + adapter logic）
 - clawhermes-lark：6,863 行（含 5,512 行 Hermes vendor 消息引擎）
 
@@ -108,8 +125,8 @@ Phase 3 中期 — 全链路异步化 / 测试覆盖率 / MCP 集成 / 工具扩
 
 ### 质量
 
-- 373 测试全部通过
-- ruff 0 errors | mypy 0 errors（6 strict checks）
+- 416 测试全部通过
+- ruff 0 errors | mypy 281 errors（技术债，待清理）（6 strict checks）
 - 代码行数：~3,700 行（+301 行 MCP 模块, +281 行工具扩展）
 
 

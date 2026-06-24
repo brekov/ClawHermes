@@ -267,10 +267,21 @@ DELETE /cron/jobs/{id}  删除定时任务 → { status }
 POST /cron/jobs/{id}/pause   暂停定时任务 → { status }
 POST /cron/jobs/{id}/resume  恢复定时任务 → { status }
 
+POST /chat/stream          SSE 流式对话 { message, session_id? }
+                           → text/event-stream (text|tool_call|tool_result|error|done)
+
+POST /dm/pair/generate     生成配对码 { admin_key } → { code, expires_at }
+POST /dm/pair/verify       验证配对挑战 { code, challenge_response } → { status }
+GET  /dm/pair/status       查询配对状态 ?user_id=xxx → { status, paired_at }
+GET  /dm/pair/list         列出已配对用户 → { users: [...] }
+DELETE /dm/pair/{user_id}  撤销配对 → { status }
+
 POST /mcp/servers      添加 MCP Server { name, transport, command?, args?, url? }
                        → { status, server, tools, count }
 GET  /mcp/servers      列出所有 MCP Server → { servers, count }
 DELETE /mcp/servers/{name}  移除 MCP Server → { status }
+
+POST /qq/webhook            QQ 消息回调（需启用 clawhermes-qq）
 ```
 
 ### 数据模型

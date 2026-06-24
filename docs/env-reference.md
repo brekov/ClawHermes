@@ -114,6 +114,38 @@ YAML 中通过 `${FEISHU_APP_ID}` 语法引用环境变量，程序启动时自�
 
 > 微信 Webhook 由子仓库 `clawhermes-weixin` 管理，路由在 Gateway 外部注册。
 
+### QQ Bot
+
+需先安装子仓库：`pip install -e ./clawhermes-qq`
+
+#### `.env` — 敏感值
+
+| 变量 | 说明 |
+|------|------|
+| `QQ_APP_ID` | QQ Bot AppID（uint64 string） |
+| `QQ_TOKEN` | QQ Bot Token |
+| `QQ_SECRET` | QQ Bot Secret（签名校验，可选） |
+
+#### `channels/qq.yaml` — 操作配置
+
+完整示例见 `config/channels/qq.yaml.example`。
+
+| 字段 | 说明 | 默认值 |
+|------|------|--------|
+| `sandbox` | 沙箱环境（true=沙箱, false=正式） | `true` |
+| `auto_reconnect` | 断线自动重连 | `true` |
+| `heartbeat_interval` | 心跳间隔（毫秒） | `40000` |
+| `max_retries` | API 重试次数 | `3` |
+| `retry_delay` | 重试基础延迟 | `1.0` |
+
+#### DM 配对安全
+
+| 变量 | 说明 |
+|------|------|
+| `ADMIN_KEY` | 管理员密钥，用于 DM 配对鉴权（必填，启用 DM 配对时） |
+
+> QQ Webhook 由子仓库 `clawhermes-qq` 管理，路由在 Gateway 外部注册。
+
 ## 模型命名规则
 
 通过 litellm 接入 132 个 provider，格式为 `provider/model`：

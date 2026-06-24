@@ -347,7 +347,7 @@ ClawHermes 采用 **git 子仓库 + ChannelAdapter ABC** 模式，渠道适配�
 | Block Streaming | ✅ 完成即发送 | ❌ | 📋 Phase 3 暂未实现 |
 | DM 安全 | ✅ 签名挑战 v3 | allowlist | 📋 Phase 3 暂未实现 |
 | Channel SDK 抽象 | ❌ 无 | ❌ 无 | ✅ **ChannelAdapter ABC（三者唯一）** |
-| 渠道配置 | 代码内嵌 | 环境变量 | ✅ **YAML + ${VAR}（v0.14.1）** |
+| 渠道配置 | 代码内嵌 | 环境变量 | ✅ **YAML + ${VAR}（v0.15.0）** |
 | 渠道隔离 | ✅ | ❌ 单进程 | ✅ **子仓库独立维护** |
 
 **多级实现策略详情**：
@@ -395,7 +395,7 @@ ClawHermes 采用 **git 子仓库 + ChannelAdapter ABC** 模式，渠道适配�
 |:---|:---|:---|:---|
 | 类型安全 | TypeScript (编译期) | ❌ 无mypy | ✅ **mypy 0 errors (6项严格检查)** |
 | Lint | ESLint | ❌ | ✅ **ruff 0 errors** |
-| 测试数量 | - | - | ✅ **373测试全通过** |
+| 测试数量 | - | - | ✅ **416测试全通过** |
 | 测试覆盖率 | - | - | ✅ **73%** |
 | 配置验证 | ✅ fail-fast | ❌ 运行时暴露 | ✅ **Pydantic Settings** |
 | Schema生成 | ✅ TypeBox → JSON Schema → Swift | ❌ | ✅ Pydantic → JSON Schema |
@@ -464,7 +464,7 @@ ClawHermes:  Python开发者生态 → 纯Python + 类型安全 + 向量记忆 +
 | **3级工具Profile** | minimal(5)/standard(9)/full(26)，借鉴 OpenClaw 和 Hermes 的 Profile 隔离 |
 | **ACE自适应压缩** | 对话类型检测+策略自动切换，Hermes 的 ContextEngine 是ABC但无自适应 |
 | **Channel Adapter SDK** | 标准化渠道适配器，OpenClaw 和 Hermes 都没有SDK抽象 |
-| **代码质量** | ruff 0 errors, mypy 0 errors (6项严格检查), 373测试全通过, 73%覆盖率 |
+| **代码质量** | ruff 0 errors, mypy 0 errors (6项严格检查), 416测试全通过, 73%覆盖率 |
 | **Docker支持** | Dockerfile + compose + sandbox，Hermes 没有 |
 | **Cron调度** | 借鉴 Hermes，OpenClaw 没有 |
 | **Federated Skill Hub** | 去中心化技能共享（M3.1 ✅），区别于 OpenClaw 的 ClawHub 和 Hermes 的 agentskills.io |
@@ -541,7 +541,7 @@ ClawHermes:  融合两者设计 + Python 纯原生 → 轻量级生产级 Agent 
 
 ### 8.2 关键差距与追赶计划
 
-| 差距 | 当前 (v0.14.1) | Phase 3 目标 | v1.0 目标 |
+| 差距 | 当前 (v0.15.0) | Phase 3 目标 | v1.0 目标 |
 |------|------|-------------|----------|
 | 内置工具数 | 35 | 45+ | 50+ |
 | 并行执行 | ⚠️ 串行 | ✅ 真并行 | ✅ 真并行 |

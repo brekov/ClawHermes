@@ -1,6 +1,6 @@
 # ClawHermes · 开发指南
 
-> 版本：v2.1 | 日期：2026-06-23
+> 版本：v2.2 | 日期：2026-06-24
 
 ## 环境准备
 
@@ -43,7 +43,7 @@ src/clawhermes/
 │   ├── manager.py      # F6/F7: 技能系统 + Background Review + Curator
 │   └── hub.py          # F19: Federated Skill Hub
 ├── storage/            # ChromaDB 向量记忆
-├── gateway/            # FastAPI Gateway（26 个端点）
+├── gateway/            # FastAPI Gateway（33 个端点）
 ├── cli.py              # CLI 入口
 ├── config.py           # 配置管理
 └── types.py            # 核心类型

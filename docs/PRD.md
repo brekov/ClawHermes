@@ -2,7 +2,7 @@
 
 > 版本：v3.0
 > 日期：2026-06-17
-> 状态：Phase 1 ✅ | Phase 2 ✅ | Phase 3 ✅ (v0.15.0) | Phase 3 续 🔄 (v0.16.0+)
+> 状态：Phase 1 ✅ | Phase 2 ✅ | Phase 3 ✅ (v0.15.0) | v0.16.0 📋
 
 > **v0.10.0 重要决策**：ClawHermes 移除旧消息渠道代码（飞书、微信、QQ、Telegram），集中精力重构 Agent 核心能力。
 > ClawHermes 提供 **Channel Adapter SDK** 抽象层 + 标准化适配器接口，消息渠道由部署者按需集成，项目不内嵌任何平台特定代码。
@@ -58,7 +58,7 @@
 | F2 | 对话主循环（思考-行动） | P0 | 两者共有 | ✅ |
 | F3 | 工具系统（注册/调度/执行） | P0 | 两者共有 | ✅ |
 | F4 | 持久化记忆（跨会话） | P0 | Hermes | ✅ |
-| F5 | 消息渠道系统 | P0 | OpenClaw + Hermes 融合设计 | 🔄 v0.10.0 移除旧实现，v0.14.0 SDK+Router 就绪，v0.14.1+ 子仓库接入飞书/微信 |
+| F5 | 消息渠道系统 | P0 | OpenClaw + Hermes 融合设计 | ✅ v0.15.0（飞书/微信/QQ 全部就绪） |
 | F6 | 技能系统（Skills） | P1 | Hermes | ✅ |
 | F7 | 自进化机制（Background Review） | P1 | Hermes | ✅ |
 | F8 | 工具钩子系统（before/after tool call） | P1 | OpenClaw | ✅ |
@@ -66,12 +66,12 @@
 | F10 | 上下文压缩 | P2 | 两者共有 | ✅ |
 | F11 | 多凭证池与故障转移 | P2 | Hermes | ✅ |
 | F12 | 子 Agent 委派 | P2 | Hermes | ✅ |
-| F13 | MCP 集成（MCP 客户端，动态工具发现） | P1 | Hermes | ✅ v0.14.1 |
+| F13 | MCP 集成（MCP 客户端，动态工具发现） | P1 | Hermes | ✅ v0.14.0 |
 | F14 | Progressive Disclosure 技能加载（3 级加载模式） | P2 | Hermes | 📋 |
 | F15 | 条件激活技能（fallback_for_toolsets/requires_toolsets） | P2 | Hermes | 📋 |
-| F16 | 消息队列模式（steer/followup/collect/interrupt） | P1 | OpenClaw | 📋 |
-| F17 | Block Streaming（完成即发送模式） | P1 | OpenClaw | 📋 |
-| F18 | 设备配对安全模型（DM 配对 + 签名挑战） | P2 | OpenClaw | 📋 |
+| F16 | 消息队列模式（steer/followup/collect/interrupt） | P1 | OpenClaw | ✅ v0.14.0 |
+| F17 | Block Streaming（完成即发送模式） | P1 | OpenClaw | ✅ v0.15.0 |
+| F18 | 设备配对安全模型（DM 配对 + 签名挑战） | P2 | OpenClaw | ✅ v0.15.0 |
 | F19 | Profile 隔离（多 Profile 并发运行） | P1 | Hermes | 📋 |
 | F20 | ACP/IDE 集成（VS Code/Zed/JetBrains） | P2 | Hermes | 📋 |
 | F21 | Canvas 可视化工作区（A2UI） | P3 | OpenClaw | 📋 |
@@ -105,7 +105,7 @@
 | WebSocket | P0 | 内置 | — | WS 双向 | ✅ 已实现 |
 | 飞书 | P0 | 1（官方 SDK） | `clawhermes-lark` | lark-oapi WebSocket | ✅ v0.14.1 |
 | 微信 | P0 | 1（官方/社区 SDK） | `clawhermes-weixin` | 个人微信 + 企微 | ✅ v0.14.1 |
-| QQ | P1 | 3（子仓库复刻） | `clawhermes-qq` | QQ Bot HTTP API | 📋 v0.16.0 |
+| QQ | P1 | 3（子仓库复刻） | `clawhermes-qq` | QQ Bot HTTP API | ✅ v0.15.0 |
 | Telegram | P2 | 1（社区 SDK） | — | python-telegram-bot | 📋 v0.16.0 |
 | Discord | P2 | 1（社区 SDK） | — | discord.py | 📋 v0.16.0 |
 | Slack | P2 | 1（官方 SDK） | — | slack-bolt | 📋 v0.16.0 |
@@ -195,7 +195,7 @@ Agent 提供 REST API，上层应用（飞书/微信/网页等）通过 Channel 
 | Curator | 技能库自动维护 | 已实现，SkillManager | ✅ |
 | ContextEngine 可插拔 | 压缩策略可替换 | 已实现，ACE 自适应引擎 | ✅ |
 | 多凭证池 | 高可用 | 已实现，故障自动转移 | ✅ |
-| MCP 集成 | MCP 客户端，动态工具发现 | 待实现，F13 | 📋 |
+| MCP 集成 | MCP 客户端，动态工具发现 | 已实现，F13 | ✅ v0.14.0 |
 | Progressive Disclosure | 3 级技能加载（core/standard/extended） | 待实现，F14 | 📋 |
 | 条件激活技能 | fallback_for_toolsets/requires_toolsets | 待实现，F15 | 📋 |
 | Profile 隔离 | 多 Profile 并发运行 | 待实现，F19 | 📋 |
@@ -210,9 +210,9 @@ Agent 提供 REST API，上层应用（飞书/微信/网页等）通过 Channel 
 | 工具策略引擎 | 精细权限控制 | 已实现，profile + allow/deny | ✅ |
 | 双层持久化 | 树形 transcript | 已实现，SessionManager (SQLite WAL) | ✅ |
 | 配置校验 fail-fast | 不带病运行 | 已实现，Pydantic Settings | ✅ |
-| 消息队列模式 | steer/followup/collect/interrupt | 待实现，F16 | 📋 |
-| Block Streaming | 完成即发送模式 | 待实现，F17 | 📋 |
-| 设备配对安全 | DM 配对 + 签名挑战 | 待实现，F18 | 📋 |
+| 消息队列模式 | steer/followup/collect/interrupt | 已实现，F16 | ✅ v0.14.0 |
+| Block Streaming | 完成即发送模式 | 已实现，F17 | ✅ v0.15.0 |
+| 设备配对安全 | DM 配对 + 签名挑战 | 已实现，F18 | ✅ v0.15.0 |
 | Dashboard | 实时监控 Agent 状态 | 待实现，N11 | 📋 |
 | Canvas/A2UI | 可视化工作区 | 待实现，F21 | 📋 |
 
@@ -226,7 +226,7 @@ Agent 提供 REST API，上层应用（飞书/微信/网页等）通过 Channel 
 | TypeScript 编译链 | OpenClaw | 纯 Python，零编译，pip install | ✅ |
 | 钩子同步阻塞 | OpenClaw | 钩子异步执行 + 超时保护 | ✅ |
 | 配置爆炸 | OpenClaw | 分组配置，preset，Pydantic 校验 | ✅ |
-| 无 MCP 支持 | OpenClaw | F13 MCP 集成（借鉴 Hermes） | 📋 |
+| 无 MCP 支持 | OpenClaw | F13 MCP 集成（借鉴 Hermes） | ✅ |
 | 无自进化 | OpenClaw | Background Review + Curator（借鉴 Hermes） | ✅ |
 | 无性能基准 | 两者 | N6-N10 性能指标体系 | 📋 |
 | 无可观测性 Dashboard | Hermes | N11 Dashboard + N12 结构化日志 | 📋 |
@@ -306,23 +306,23 @@ Agent 提供 REST API，上层应用（飞书/微信/网页等）通过 Channel 
 | M3.3 | Multi-Modal Memory | P1 | 支持图片/文件/代码片段等多模态记忆存储 | 📋 |
 | M3.4 | 用户画像持久化 | P1 | 长期用户偏好建模，跨会话用户理解 | 📋 |
 | M3.5 | 技能审核流 | P2 | 技能发布前的安全审核 + 依赖检查 + 兼容性验证 | 📋 |
-| M3.6a | Channel Router | P0 | 统一消息路由层，Gateway-Channel 集成 | 📋 |
-| M3.6b | 消息队列模式 | P0 | steer/followup/collect/interrupt | 📋 |
-| M3.6c | Block Streaming | P1 | 完成即发送模式 | 📋 |
-| M3.6d | DM 配对安全 | P1 | 配对码 + 管理员审批 | 📋 |
+| M3.6a | Channel Router | P0 | 统一消息路由层，Gateway-Channel 集成 | ✅ v0.14.0 |
+| M3.6b | 消息队列模式 | P0 | steer/followup/collect/interrupt | ✅ v0.14.0 |
+| M3.6c | Block Streaming | P1 | 完成即发送模式 | ✅ v0.15.0 |
+| M3.6d | DM 配对安全 | P1 | 配对码 + 管理员审批 | ✅ v0.15.0 |
 | M3.6e | 飞书适配器 | P0 | lark-oapi，26 字段全部生效，WebSocket + Webhook 双协议 | ✅ |
 | M3.6f | 微信适配器 | P0 | clawhermes-weixin，个人微信长轮询 + 企微 Webhook 双模式 | ✅ |
-| M3.6g | QQ 适配器 | P1 | QQ Bot API，年轻用户主力 | 📋 |
+| M3.6g | QQ 适配器 | P1 | QQ Bot API，年轻用户主力 | ✅ v0.15.0 |
 | M3.6h | Telegram 适配器 | P1 | Bot API | 📋 |
 | M3.6i | Discord 适配器 | P2 | Bot API + Gateway | 📋 |
 | M3.6j | Slack 适配器 | P2 | Bolt SDK | 📋 |
 | M3.6k | WebChat 适配器 | P2 | 基于 WebSocket 的 Web 聊天 | 📋 |
 | M3.6l | 渠道配置分层 | P0 | YAML + ${VAR} 插值 + ChannelConfigLoader | ✅ |
 | M3.6m | 媒体处理 | P2 | 图片/文件/语音消息 | 📋 |
-| M3.7 | MCP 集成 | P1 | F13: MCP 客户端，动态工具发现与注册 | 📋 |
+| M3.7 | MCP 集成 | P1 | F13: MCP 客户端，动态工具发现与注册 | ✅ v0.14.0 |
 | M3.8 | Profile 隔离 | P1 | F19: 多 Profile 并发运行，配置/工具/记忆隔离 | 📋 |
-| M3.9 | Block Streaming | P1 | F17: 完成即发送模式，降低首字延迟 | 📋 |
-| M3.10 | 消息队列模式 | P1 | F16: steer/followup/collect/interrupt 工作流编排 | 📋 |
+| M3.9 | Block Streaming | P1 | F17: 完成即发送模式，降低首字延迟 | ✅ v0.15.0 |
+| M3.10 | 消息队列模式 | P1 | F16: steer/followup/collect/interrupt 工作流编排 | ✅ v0.14.0 |
 
 ---
 
