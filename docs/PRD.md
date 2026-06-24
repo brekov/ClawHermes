@@ -2,10 +2,11 @@
 
 > 版本：v3.0
 > 日期：2026-06-17
-> 状态：Phase 1 ✅ | Phase 2 ✅ | Phase 3 ✅ (v0.14.1) | Phase 3 续 🔄 (v0.15.0+)
+> 状态：Phase 1 ✅ | Phase 2 ✅ | Phase 3 ✅ (v0.15.0) | Phase 3 续 🔄 (v0.16.0+)
 
-> **v0.10.0 重要决策**：ClawHermes 移除全部消息渠道代码（飞书、微信、QQ、Telegram），回归纯 AI Agent 框架定位。
-> ClawHermes 专注 Agent 核心能力，消息渠道由部署者自行集成。
+> **v0.10.0 重要决策**：ClawHermes 移除旧消息渠道代码（飞书、微信、QQ、Telegram），集中精力重构 Agent 核心能力。
+> ClawHermes 提供 **Channel Adapter SDK** 抽象层 + 标准化适配器接口，消息渠道由部署者按需集成，项目不内嵌任何平台特定代码。
+> 渠道适配器通过 git 子仓库形式独立维护（如 `clawhermes-lark`），遵循**多级实现策略**（官方 Agent SDK → 社区 Agent SDK → 复刻 → 官方其他 SDK → 裸 API）。
 
 ---
 
@@ -57,7 +58,7 @@
 | F2 | 对话主循环（思考-行动） | P0 | 两者共有 | ✅ |
 | F3 | 工具系统（注册/调度/执行） | P0 | 两者共有 | ✅ |
 | F4 | 持久化记忆（跨会话） | P0 | Hermes | ✅ |
-| F5 | 消息渠道系统（重构版） | P0 | OpenClaw + Hermes 融合设计 | 🔄 v0.10.0 移除旧实现，v0.13.0~v0.14.1 重构重新引入 |
+| F5 | 消息渠道系统 | P0 | OpenClaw + Hermes 融合设计 | 🔄 v0.10.0 移除旧实现，v0.14.0 SDK+Router 就绪，v0.14.1+ 子仓库接入飞书/微信 |
 | F6 | 技能系统（Skills） | P1 | Hermes | ✅ |
 | F7 | 自进化机制（Background Review） | P1 | Hermes | ✅ |
 | F8 | 工具钩子系统（before/after tool call） | P1 | OpenClaw | ✅ |
@@ -97,18 +98,18 @@
 
 **渠道适配器优先级**：
 
-| 适配器 | 优先级 | 实现方式 | 说明 |
-|--------|--------|---------|------|
-| CLI | P0 | 内置 | 已实现，命令行交互 |
-| REST | P0 | 内置 | 已实现，HTTP API |
-| WebSocket | P0 | 内置 | 已实现，实时双向 |
-| 飞书 | P0 | 内置 | lark-oapi，WebSocket 事件订阅，国内办公首选 |
-| 微信 | P0 | 内置 | 公众号/企业微信，覆盖最广用户群 |
-| QQ | P1 | 内置 | QQ Bot API，年轻用户主力 |
-| Telegram | P1 | 内置 | python-telegram-bot，Bot API |
-| Discord | P2 | 内置 | discord.py，Bot API + Gateway |
-| Slack | P2 | 内置 | slack-bolt，Bolt SDK |
-| WebChat | P2 | 内置 | 基于 WebSocket 的 Web 聊天界面 |
+| 适配器 | 优先级 | 实现级别 | 子仓库 | 通道 | 状态 |
+|--------|--------|---------|--------|------|:---:|
+| CLI | P0 | 内置 | — | stdin/stdout | ✅ 已实现 |
+| REST | P0 | 内置 | — | HTTP API | ✅ 已实现 |
+| WebSocket | P0 | 内置 | — | WS 双向 | ✅ 已实现 |
+| 飞书 | P0 | 1（官方 SDK） | `clawhermes-lark` | lark-oapi WebSocket | ✅ v0.14.1 |
+| 微信 | P0 | 1（官方/社区 SDK） | `clawhermes-weixin` | 个人微信 + 企微 | ✅ v0.14.1 |
+| QQ | P1 | 3（子仓库复刻） | `clawhermes-qq` | QQ Bot HTTP API | 📋 v0.16.0 |
+| Telegram | P2 | 1（社区 SDK） | — | python-telegram-bot | 📋 v0.16.0 |
+| Discord | P2 | 1（社区 SDK） | — | discord.py | 📋 v0.16.0 |
+| Slack | P2 | 1（官方 SDK） | — | slack-bolt | 📋 v0.16.0 |
+| WebChat | P2 | 3（子仓库复刻） | `clawhermes-webchat` | WebSocket Web UI | 📋 v0.16.0 |
 
 ### 2.2 已实现的扩展能力（Phase 1-2）
 
@@ -164,7 +165,7 @@
 ### 场景三：团队机器人 ✅
 Agent 提供 REST API，上层应用（飞书/微信/网页等）通过 Channel Adapter SDK 接入 Agent 能力，成员可以通过任意前端与 Agent 交互。Cron 调度器支持定时任务。
 
-**已实现**：Channel Adapter SDK（ABC + CLI/REST/WebSocket）、Cron 调度器、Federated Skill Hub。
+**已实现**：Channel Adapter SDK（ABC + CLI/REST/WebSocket）、飞书/微信渠道适配器（子仓库）、Cron 调度器、Federated Skill Hub。
 
 ### 场景四：IDE 集成开发 📋
 开发者在 VS Code/Zed/JetBrains 中通过 ACP（Agent Communication Protocol）与 ClawHermes 交互，Agent 能理解项目上下文、执行重构、运行测试、提交代码。Profile 隔离确保不同项目使用不同配置和工具集。
@@ -295,8 +296,8 @@ Agent 提供 REST API，上层应用（飞书/微信/网页等）通过 Channel 
 
 ## 8. Phase 3 进行中（v0.13.0~v0.14.1 ✅ | v0.15.0+ 🔄）
 
-> 状态：v0.14.1 已交付 ✅
-> 目标：生态建设 — 联邦技能中心、MCP 集成、全链路异步化、工具扩展
+> 状态：v0.15.0 已交付 ✅
+> 目标：生态建设 — 联邦技能中心、MCP 集成、异步化、工具扩展、渠道适配器
 
 | 里程碑 | 功能 | 优先级 | 说明 | 状态 |
 |--------|------|--------|------|:----:|
@@ -309,14 +310,14 @@ Agent 提供 REST API，上层应用（飞书/微信/网页等）通过 Channel 
 | M3.6b | 消息队列模式 | P0 | steer/followup/collect/interrupt | 📋 |
 | M3.6c | Block Streaming | P1 | 完成即发送模式 | 📋 |
 | M3.6d | DM 配对安全 | P1 | 配对码 + 管理员审批 | 📋 |
-| M3.6e | 飞书适配器 | P0 | WebSocket 事件订阅，国内办公首选 | 📋 |
-| M3.6f | 微信适配器 | P0 | 公众号/企业微信，覆盖最广用户群 | 📋 |
+| M3.6e | 飞书适配器 | P0 | lark-oapi，26 字段全部生效，WebSocket + Webhook 双协议 | ✅ |
+| M3.6f | 微信适配器 | P0 | clawhermes-weixin，个人微信长轮询 + 企微 Webhook 双模式 | ✅ |
 | M3.6g | QQ 适配器 | P1 | QQ Bot API，年轻用户主力 | 📋 |
 | M3.6h | Telegram 适配器 | P1 | Bot API | 📋 |
 | M3.6i | Discord 适配器 | P2 | Bot API + Gateway | 📋 |
 | M3.6j | Slack 适配器 | P2 | Bolt SDK | 📋 |
 | M3.6k | WebChat 适配器 | P2 | 基于 WebSocket 的 Web 聊天 | 📋 |
-| M3.6l | 渠道配置热加载 | P2 | YAML 配置变更无需重启 | 📋 |
+| M3.6l | 渠道配置分层 | P0 | YAML + ${VAR} 插值 + ChannelConfigLoader | ✅ |
 | M3.6m | 媒体处理 | P2 | 图片/文件/语音消息 | 📋 |
 | M3.7 | MCP 集成 | P1 | F13: MCP 客户端，动态工具发现与注册 | 📋 |
 | M3.8 | Profile 隔离 | P1 | F19: 多 Profile 并发运行，配置/工具/记忆隔离 | 📋 |
@@ -367,6 +368,6 @@ Agent 提供 REST API，上层应用（飞书/微信/网页等）通过 Channel 
 |-------|------|---------|---------|
 | Phase 1 | v0.11.0 | 代码质量与稳定性 | 异常层次 / 会话持久化 / CI / 工具扩展 |
 | Phase 2 | v0.12.0 | 功能增强与扩展 | Channel Adapter / Cron / Sandbox / ACE / 异步钩子 |
-| Phase 3 | v0.13.0-v0.15.0 | 生态建设 | Skill Hub / MCP / Profile 隔离 / 消息队列 / Streaming |
+| Phase 3 | v0.13.0-v0.15.0 | 生态建设 | Skill Hub / MCP / 渠道适配器(飞书/微信) / 消息队列 / Streaming |
 | Phase 4 | v1.0.0 | 体验与差异化 | Dashboard / IDE 集成 / 安全增强 / 性能基准 |
 | Phase 5 | v1.1.0+ | 平台化 | 多租户 / 技能市场 / Agent 编排 / 企业安全 |

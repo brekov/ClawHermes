@@ -91,7 +91,7 @@ YAML 中通过 `${FEISHU_APP_ID}` 语法引用环境变量，程序启动时自�
 | `reactions_enabled` | "正在输入"状态 | `true` |
 
 > 环境变量可覆盖 YAML 配置（优先级：环境变量 > YAML > 默认值）
-> Gateway Webhook 端点：`POST /feishu/webhook`
+> 飞书 Webhook 由子仓库 `clawhermes-lark` 管理，路由在 Gateway 外部注册。
 
 ### 微信（WeChat / WeCom）
 
@@ -112,7 +112,7 @@ YAML 中通过 `${FEISHU_APP_ID}` 语法引用环境变量，程序启动时自�
 |------|------|--------|
 | `sub_type` | personal / enterprise | `personal` |
 
-> Webhook 端点：`POST /wechat/webhook`、`POST /wecom/webhook`
+> 微信 Webhook 由子仓库 `clawhermes-weixin` 管理，路由在 Gateway 外部注册。
 
 ## 模型命名规则
 

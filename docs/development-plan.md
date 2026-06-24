@@ -2,8 +2,8 @@
 
 > 版本：v2.1
 > 日期：2026-06-23
-> 基线版本：v0.14.1（373 测试通过）
-> 状态：Phase 1 ✅ | Phase 2 ✅ | Phase 3 ✅ v0.14.0 → v0.14.1 | Phase 3 续 🔄 v0.15.0+
+> 基线版本：v0.15.0 Draft（373 测试通过）
+> 状态：Phase 1 ✅ | Phase 2 ✅ | Phase 3 ✅ v0.14.0 → v0.15.0 | Phase 3 续 🔄 v0.16.0+
 > 方法论：软件工程全流程 — 现状评估 → 竞品研究 → 差距分析 → SMART 目标 → 架构演进 → 分阶段路线图 → 质量保障 → 风险管理
 
 ---
@@ -82,7 +82,7 @@ v1.0.0 时 ClawHermes 应成为：
 | v0.12.2 | 2026-06-17 | P0-P3 评审修复、版本动态化、README 与架构文档同步 | 165 |
 | **v0.13.0** | **2026-06-17** | **并行执行、web_search 重构、Gateway 状态重构、线程安全、Channel Router、消息队列 4 模式** | **203** |
 | **v0.14.0** | **2026-06-22** | **全链路异步化、MCP 集成、工具扩展至 35、MCP 异步修复、测试覆盖率 73%（373 测试）** | **373** |
-| **v0.14.1** | **2026-06-23** | **渠道配置架构重构（YAML ${VAR} 单一来源）、15 死配置字段激活、LarkConfig 26/26 全部生效** | **373** |
+| **v0.14.1** | **2026-06-23** | **渠道配置架构重构（YAML ${VAR} 单一来源）、15 死配置字段激活、LarkConfig 26/26 全部生效、微信双模式** | **373** |
 
 ### 2.2 已交付功能清单（19 项）
 
@@ -139,7 +139,7 @@ Web 框架:   FastAPI + uvicorn
 CI/CD:      GitHub Actions（lint + typecheck + test + build）
 ```
 
-### 2.5 Gateway 端点现状（26 个）
+### 2.5 Gateway 端点现状（23 个）
 
 | 分类 | 端点 | 方法 |
 |:---|:---|:---:|
@@ -149,8 +149,6 @@ CI/CD:      GitHub Actions（lint + typecheck + test + build）
 | 会话 | `/sessions` `/sessions/{id}` | GET/DELETE |
 | 调度 | `/cron/jobs` `/cron/jobs/{id}` `/cron/jobs/{id}/pause` `/cron/jobs/{id}/resume` | CRUD |
 | 渠道 | `/channels` `/channels/sessions` | GET |
-| 微信 | `/wechat/webhook` `/wecom/webhook` | POST |
-| 飞书 | `/feishu/webhook` | POST |
 | MCP | `/mcp/servers` `/mcp/servers/{name}` | POST/GET/DELETE |
 
 ---
@@ -279,7 +277,7 @@ CI/CD:      GitHub Actions（lint + typecheck + test + build）
 | 全链路异步化 | 消除全部 threading.Thread 调用，100% asyncio | 1 周 |
 | 测试覆盖率 > 80% | 65% → 80%，重点补充 gateway + tools | 1 周 |
 
-### 5.2 v0.15.0（Phase 3 后期）
+### 5.2 v0.16.0（Phase 3 后期）
 
 | 目标 | 衡量标准 | 时限 |
 |:---|:---|:---|
@@ -288,7 +286,7 @@ CI/CD:      GitHub Actions（lint + typecheck + test + build）
 | 3 平台渠道适配器 | 飞书 + 微信 + QQ 可用 | 2 周 |
 | Profile 隔离 | 独立 config/memory/sessions per profile | 1 周 |
 
-### 5.3 v0.16.0（Phase 3 收尾）
+### 5.3 v0.17.0（Phase 3 收尾）
 
 | 目标 | 衡量标准 | 时限 |
 |:---|:---|:---|
@@ -322,7 +320,7 @@ CI/CD:      GitHub Actions（lint + typecheck + test + build）
 │                                                                      │
 │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐  │
 │  │ REST API │ │ WebSocket│ │ Telegram │ │ Discord  │ │ Slack    │  │
-│  │ (26端点) │ │ (实时推送)│ │ Bot API  │ │ Bot API  │ │ Bolt SDK │  │
+│  │ (23端点) │ │ (实时推送)│ │ Bot API  │ │ Bot API  │ │ Bolt SDK │  │
 │  └────┬─────┘ └────┬─────┘ └────┬─────┘ └────┬─────┘ └────┬─────┘  │
 │       └────────────┴────────────┴────────────┴────────────┘         │
 │                                │                                     │
@@ -339,7 +337,7 @@ CI/CD:      GitHub Actions（lint + typecheck + test + build）
 ┌────────────────────────────────▼────────────────────────────────────┐
 │                       Gateway 层（v0.14.0 ✅）                       │
 │                                                                      │
-│  FastAPI · GatewayState 类 · 26 REST 端点 · Cron 调度 · Docker 沙箱 │
+│  FastAPI · GatewayState 类 · 23 REST 端点 · Cron 调度 · Docker 沙箱 │
 └────────────────────────────────┬────────────────────────────────────┘
                                    │
 ┌─────────────────────────────────▼───────────────────────────────────┐
@@ -573,7 +571,7 @@ CI/CD:      GitHub Actions（lint + typecheck + test + build）
 
 | 指标 | v0.14.0 | v0.15.0 目标 | v0.15.0 目标 | v0.16.0 目标 | v1.0.0 目标 |
 |:---|:---:|:---:|:---:|:---:|:---:|
-| 内置工具数 | 26 | 35 | 35 | 45 | 50+ |
+| 内置工具数 | 35 | 35 | 45 | 50+ |
 | MCP 工具 | 0 | ✅ | ✅ | ✅ | ✅ |
 | 渠道适配器 | 3 | 3 | 6 | 8 | 8+ |
 | 测试用例 | 203 | 260 | 320 | 380 | 500+ |
@@ -604,7 +602,7 @@ CI/CD:      GitHub Actions（lint + typecheck + test + build）
 
 > **本计划将随项目进展持续迭代。每个里程碑完成后回顾并修订下一阶段计划。**
 >
-> **当前焦点：Phase 3 v0.15.0 — 渠道适配器（飞书 P0）+ Block Streaming + DM 配对安全。**
+> **当前焦点：Phase 3 v0.16.0 — QQ 适配器 + Streaming + DM 配对安全。**
 
 ---
 
@@ -613,9 +611,9 @@ CI/CD:      GitHub Actions（lint + typecheck + test + build）
 > ClawHermes 的消息网关定位：**SDK 驱动的可嵌入消息路由层**，而非 OpenClaw 式的全渠道平台。
 > 核心策略：Channel Adapter SDK 标准化 → 少量高质量适配器 → 社区贡献长尾渠道。
 
-### A.0 渠道适配器实现策略（四级优先级）
+### A.0 渠道适配器实现策略（多级优先级）
 
-消息渠道适配器遵循**四级实现策略**，从复用已有实现到自主实现逐级降级，
+消息渠道适配器遵循**多级实现策略**，从复用已有实现到自主实现逐级降级，
 优先利用现有生态，降低维护成本：
 
 | 级别 | 策略 | 说明 | 示例 |
@@ -656,8 +654,8 @@ CI/CD:      GitHub Actions（lint + typecheck + test + build）
 
 | 渠道 | 实现级别 | SDK 来源 | Git 子仓库 | 备注 |
 |:---|:---:|:---|:---|:---|
-| **飞书** | ✅ 1 | `lark-oapi`（官方 SDK） | `clawhermes-lark` | ✅ 26 字段全部生效，权限门控 + Webhook 签名 + WS 可配 + 去重 LRU |
-| **微信** | ✅ 1 | iLink Bot API + 企微 Webhook | `clawhermes-weixin` | ✅ 个人微信长轮询 + 企微 Webhook 双模式 |
+| **飞书** | ✅ 1 | `lark-oapi`（官方 SDK） | `clawhermes-lark` | ✅ v0.14.1 26 字段全部生效，权限门控 + Webhook 签名 + WS 可配 + 去重 LRU |
+| **微信** | ✅ 1 | `wechatpy`（社区 SDK）+ 企微 Webhook | `clawhermes-weixin` | ✅ v0.14.1 个人微信长轮询 + 企微 Webhook 双模式 |
 | **QQ** | 1 → 3 | QQ Bot 官方 API | `clawhermes-qq` | 官方仅提供 HTTP API，复用 Hermes QQ SDK 逻辑 |
 | **Telegram** | 1 | `python-telegram-bot`（社区） | — | 社区 SDK 成熟稳定 |
 | **Discord** | 1 | `discord.py`（社区） | — | 社区 SDK 成熟稳定 |
@@ -701,7 +699,7 @@ CI/CD:      GitHub Actions（lint + typecheck + test + build）
 
 ### A.3 消息网关分阶段计划
 
-#### Phase 3 中期（v0.14.0）— 夯实基础
+#### Phase 3 中期（v0.14.0~v0.15.0）— 夯实地基 ✅ 已达成
 
 | 任务 | 说明 | 优先级 |
 |:---|:---|:---:|
@@ -709,7 +707,7 @@ CI/CD:      GitHub Actions（lint + typecheck + test + build）
 | 消息可靠性 | 消息持久化到 SQLite（防丢失）+ 重试机制 | P0 |
 | Gateway WebSocket 端点 | `/ws` 端点，真正双向实时推送 | P1 |
 
-#### Phase 3 后期（v0.15.0）— 渠道接入
+#### Phase 3 后期（v0.16.0）— 渠道扩展
 
 | 任务 | 说明 | 优先级 | 实现级别 |
 |:---|:---|:---:|:---:|
@@ -723,7 +721,7 @@ CI/CD:      GitHub Actions（lint + typecheck + test + build）
 | **Slack 适配器** | 官方 `slack-bolt` → ChannelAdapter 封装，Socket Mode | P2 | 1 (官方 SDK) |
 | 渠道连接健康检查 | `health()` 方法，断线自动重连 | P2 | — |
 
-#### Phase 3 收尾（v0.16.0）— 完善体验
+#### Phase 3 收尾（v0.17.0）— 完善体验
 
 | 任务 | 说明 | 优先级 |
 |:---|:---|:---:|
