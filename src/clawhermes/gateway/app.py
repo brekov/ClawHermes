@@ -32,6 +32,7 @@ from clawhermes.channel.adapter import ChannelManager, ChannelType, RESTAdapter
 from clawhermes.channel.adapters.feishu import FeishuAdapter
 from clawhermes.channel.adapters.wechat import WeChatAdapter, WeComAdapter
 from clawhermes.channel.config import build_adapter_config
+from clawhermes.channel.pairing import DMPairingManager
 from clawhermes.channel.router import ChannelRouter, SessionRouter
 from clawhermes.llm.provider import LLMProvider
 from clawhermes.tools.builtin import register_builtin_tools
@@ -48,6 +49,7 @@ class GatewayState:
         self.session_mgr: SessionManager | None = None
         self.scheduler: CronScheduler | None = None
         self.channel_router: ChannelRouter | None = None
+        self.pairing_manager: DMPairingManager | None = None
         self.feishu_adapter: Any = None  # FeishuAdapter | None
         self.start_time = time.time()
         self.wechat_adapter: Any = None  # WeChatAdapter | None
@@ -203,9 +205,11 @@ class GatewayState:
                 channel_manager.register("feishu", self.feishu_adapter)
                 logger.info("Feishu Adapter 已启用（clawhermes-lark）")
         session_router = SessionRouter()
+        pairing_manager = DMPairingManager()
         channel_router = ChannelRouter(
             channel_manager=channel_manager,
             session_router=session_router,
+            pairing_manager=pairing_manager,
         )
         channel_router.set_agent_handler(lambda msg, session_id="": agent.chat(msg, session_id=session_id))
         channel_router.set_session_creator(lambda: session_mgr.create_session())
@@ -217,6 +221,7 @@ class GatewayState:
         self.session_mgr = session_mgr
         self.scheduler = scheduler
         self.channel_router = channel_router
+        self.pairing_manager = pairing_manager
 
         logger.info("Agent 初始化完成: %s (%d tools, profile=%s)", model, len(registry.list()), profile)
 
@@ -698,3 +703,86 @@ async def remove_mcp_server(name: str):
     if await _state._mcp_registry.remove_server(name):
         return {"status": "ok"}
     raise HTTPException(404, f"MCP Server 未找到: {name}")
+
+
+# ════════════════════════════════════════════════════════
+# DM 配对安全 (M3.6d)
+# ════════════════════════════════════════════════════════
+
+
+@app.post("/dm/pair/generate")
+def dm_pair_generate(user_id: str, platform: str, device_family: str = "", admin_key: str = ""):
+    """管理员生成 DM 配对码"""
+    _require_admin(admin_key)
+    if _state.pairing_manager is None:
+        raise HTTPException(500, "Pairing Manager 未初始化")
+    try:
+        req = _state.pairing_manager.generate_code(user_id, platform, device_family)
+        return {
+            "code": req.code,
+            "challenge": req.challenge,
+            "user_id": req.user_id,
+            "platform": req.platform,
+            "expires_in": int(req.expires_at - time.time()),
+        }
+    except Exception as e:
+        raise HTTPException(400, f"生成配对码失败: {e}")
+
+
+@app.post("/dm/pair/verify")
+def dm_pair_verify(code: str, response: str, user_id: str | None = None):
+    """用户提交配对码 + 挑战响应进行验证"""
+    if _state.pairing_manager is None:
+        raise HTTPException(500, "Pairing Manager 未初始化")
+    try:
+        req = _state.pairing_manager.verify_code(code, response, user_id)
+        return {
+            "status": req.status.value,
+            "user_id": req.user_id,
+            "platform": req.platform,
+        }
+    except ClawHermesError as e:
+        raise HTTPException(400, str(e)) from e
+
+
+@app.get("/dm/pair/status")
+def dm_pair_status(user_id: str):
+    """查询配对状态"""
+    if _state.pairing_manager is None:
+        raise HTTPException(500, "Pairing Manager 未初始化")
+    result = _state.pairing_manager.get_pairing_status(user_id)
+    if result is None:
+        raise HTTPException(404, f"未找到配对状态: {user_id}")
+    return result
+
+
+@app.get("/dm/pair/list")
+def dm_pair_list(admin_key: str = ""):
+    """列出全部已配对用户和 pending 配对请求"""
+    _require_admin(admin_key)
+    if _state.pairing_manager is None:
+        raise HTTPException(500, "Pairing Manager 未初始化")
+    return {
+        "paired": _state.pairing_manager.list_paired_users(),
+        "pending": _state.pairing_manager.list_pending_requests(),
+    }
+
+
+@app.delete("/dm/pair/{user_id}")
+async def dm_pair_revoke(user_id: str, admin_key: str = ""):
+    """撤销配对"""
+    _require_admin(admin_key)
+    if _state.pairing_manager is None:
+        raise HTTPException(500, "Pairing Manager 未初始化")
+    if _state.pairing_manager.revoke_pairing(user_id):
+        return {"status": "ok", "user_id": user_id}
+    raise HTTPException(404, f"配对用户未找到: {user_id}")
+
+
+def _require_admin(admin_key: str):
+    """管理员权限校验（通过 ADMIN_KEY 环境变量）"""
+    _admin = os.getenv("ADMIN_KEY", "")
+    if not _admin:
+        raise HTTPException(501, "ADMIN_KEY 未配置")
+    if admin_key != _admin:
+        raise HTTPException(403, "需要管理员权限")
