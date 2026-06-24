@@ -6,7 +6,7 @@
 
 > **v0.10.0 重要决策**：ClawHermes 移除旧消息渠道代码（飞书、微信、QQ、Telegram），集中精力重构 Agent 核心能力。
 > ClawHermes 提供 **Channel Adapter SDK** 抽象层 + 标准化适配器接口，消息渠道由部署者按需集成，项目不内嵌任何平台特定代码。
-> 渠道适配器通过 git 子仓库形式独立维护（如 `clawhermes-lark`），遵循**四级实现策略**（官方 SDK → 社区实现 → 复刻 → 裸 API）。
+> 渠道适配器通过 git 子仓库形式独立维护（如 `clawhermes-lark`），遵循**多级实现策略**（官方 Agent SDK → 社区 Agent SDK → 复刻 → 官方其他 SDK → 裸 API）。
 
 ---
 

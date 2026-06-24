@@ -18,7 +18,7 @@
                                │
 ┌──────────────────────────────▼───────────────────────────────────────┐
 │                          Gateway 层                                  │
-│        FastAPI REST 服务（23 个端点 · Cron调度 · Docker沙箱）         │
+│        FastAPI REST 服务（26 个端点 · Cron调度 · Docker沙箱）         │
 │              CLI 接口 / HTTP API / WebSocket                         │
 └──────────────────────────────┬───────────────────────────────────────┘
                                │
@@ -85,7 +85,7 @@
 
 | 模块 | 职责 | 关键类/函数 |
 |------|------|-------------|
-| `gateway/app.py` | FastAPI REST 服务（23 个端点） | `app` (FastAPI instance) |
+| `gateway/app.py` | FastAPI REST 服务（26 个端点） | `app` (FastAPI instance) |
 | `gateway/app.py` | Agent 初始化与组件装配 | `_create_agent_components()` / `_auto_init()` |
 | `gateway/app.py` | Cron 调度端点（6个） | `create_cron_job` / `list_cron_jobs` / `get_cron_job` / `delete_cron_job` / `pause_cron_job` / `resume_cron_job` |
 | `gateway/app.py` | 会话管理端点（3个） | `list_sessions` / `get_session` / `delete_session` |
@@ -143,7 +143,7 @@
 ### 2.6 Channel 层
 
 ClawHermes 通过 **Channel Adapter SDK** 提供标准化渠道接口，渠道适配器以 **git 子仓库** 形式独立维护，
-遵循**四级实现策略**：
+遵循**多级实现策略**：
 
 ```
 新渠道需求
@@ -184,10 +184,10 @@ ClawHermes 通过 **Channel Adapter SDK** 提供标准化渠道接口，渠道�
 |--------|------|:---:|:---:|
 | `clawhermes-lark` | 飞书 | 1（官方 SDK: lark-oapi） | ✅ |
 | `clawhermes-weixin` | 微信（个人 + 企业） | 1（社区 SDK: wechatpy） | ✅ |
-| `clawhermes-qq` | QQ | 3（复刻 Hermes QQ SDK） | 📋 v0.16.0 |
-| — | Telegram | 1（社区 SDK: python-telegram-bot） | 📋 v0.16.0 |
-| — | Discord | 1（社区 SDK: discord.py） | 📋 v0.16.0 |
-| — | Slack | 1（官方 SDK: slack-bolt） | 📋 v0.16.0 |
+| `clawhermes-qq` | QQ | 2（社区 SDK: Hermes 集成） | 📋 v0.16.0 |
+| — | Telegram | 3（复刻 Hermes bot_telegram） | 📋 v0.16.0 |
+| — | Discord | 4（社区 SDK: discord.py） | 📋 v0.16.0 |
+| — | Slack | 4（官方 SDK: slack-bolt） | 📋 v0.16.0 |
 
 ### 2.7 Skill Hub 层
 
@@ -315,7 +315,7 @@ SkillManager 自动发现新技能
 
 ### 3.6 消息渠道架构
 
-#### 3.6.1 渠道决策流程（四级策略）
+#### 3.6.1 渠道决策流程（多级策略）
 
 ClawHermes 的消息渠道采用**决策树模式**，按优先级选择实现方式：
 
@@ -323,35 +323,28 @@ ClawHermes 的消息渠道采用**决策树模式**，按优先级选择实现�
 新渠道需求
     │
     ▼
-┌─────────────────────────┐    有    ┌──────────────────────────┐
-│ 1. 有官方 Agent SDK？    │────────►│ git submodule 引入       │
-│    例：lark-oapi         │         │ + ChannelAdapter 适配    │  ← 首选
-└────────┬────────────────┘         └──────────────────────────┘
-         │ 无
-         ▼
-┌─────────────────────────┐    有    ┌──────────────────────────┐
-│ 2. 有社区 Agent SDK？    │────────►│ git submodule 引入       │
-│    例：wechatpy          │         │ + ChannelAdapter 适配    │  ← 次选
-└────────┬────────────────┘         └──────────────────────────┘
-         │ 无
-         ▼
-┌─────────────────────────┐    可    ┌──────────────────────────┐
-│ 3. 可复刻官方 Agent SDK？│────────►│ git submodule +          │
-│    例：QQ Bot (参考Hermes)│         │ 复刻核心逻辑 + 适配      │  ← 三选
-└────────┬────────────────┘         └──────────────────────────┘
-         │ 不可
-         ▼
-┌─────────────────────────┐    可    ┌──────────────────────────┐
-│ 4. 有官方其他 SDK？      │────────►│ git submodule 引入       │
-│    例：slack-bolt        │         │ + ChannelAdapter 适配    │  ← 四选
-└────────┬────────────────┘         └──────────────────────────┘
-         │ 不可
-         ▼
-┌─────────────────────────┐         ┌──────────────────────────┐
-│ 5. 裸 API 实现           │────────►│ git submodule +          │
-│    极少新平台/冷门渠道    │         │ HTTP/WS 客户端 + 适配     │  ← 末选
-└─────────────────────────┘         └──────────────────────────┘
+
 ```
+新渠道需求
+    │
+    ▼
+1. 有官方为Agent 开发的 SDK？ → git submodule 引入依赖 + 适配 ChannelAdapter     ← 首选
+    │ 无                         例：飞书 lark-oapi / larksuite-openclaw-lark
+    ▼
+2. 有社区为Agent 开发的 SDK？ → git submodule 引入依赖 + 适配 ChannelAdapter        ← 次选
+    │ 无                         例：微信 wechatpy / QQ Bot（Hermes 集成）
+    ▼
+3. 可复刻官方Agent 开发的 SDK？ → git submodule + 复刻核心逻辑 + 适配 ChannelAdapter          ← 三选
+    │ 不可                       例：Telegram Bot API（参考 Hermes bot_telegram）
+    ▼
+4. 有官方其他SDK  → git submodule 引入依赖 + 适配 ChannelAdapter         ← 四选
+    │ 不可             例：Slack slack-bolt / Discord discord.py
+    ▼
+5. 裸 API 实现  → git submodule + HTTP/WS 客户端 + 适配 ChannelAdapter        ← 最后
+                      极少新平台/冷门渠道
+```
+
+**渠道优先级**：飞书 > 微信 > QQ（P0 国内生态优先）→ Telegram > Discord > Slack（P1 国际生态后续）
 
 #### 3.6.2 当前渠道状态
 
@@ -381,6 +374,8 @@ ClawHermes 的消息渠道采用**决策树模式**，按优先级选择实现�
 ```
 
 #### 3.6.3 消息渠道系统总览
+
+**P1 国际渠道（后续规划）**：Telegram（裸 API，末选策略）| Discord（discord.py，四选策略）| Slack（slack-bolt，四选策略）
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────────┐
@@ -705,7 +700,7 @@ ToolProfile
 
 ---
 
-## 附录 A：Gateway 端点清单（23 个）
+## 附录 A：Gateway 端点清单（26 个）
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
@@ -732,6 +727,9 @@ ToolProfile
 | POST | `/mcp/servers` | 注册 MCP Server |
 | GET | `/mcp/servers` | 列出 MCP Server |
 | DELETE | `/mcp/servers/{name}` | 删除 MCP Server |
+| POST | `/feishu/webhook` | 飞书事件回调（需启用 clawhermes-lark） |
+| POST | `/wechat/webhook` | 微信消息回调（需启用 clawhermes-weixin） |
+| POST | `/wecom/webhook` | 企业微信消息回调（需启用 clawhermes-weixin） |
 
 ---
 

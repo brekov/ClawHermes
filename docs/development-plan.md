@@ -38,7 +38,7 @@
 |:---|:---|:---|
 | **越用越聪明** | Background Review + Curator 自进化闭环 + 向量记忆语义搜索 | 借鉴 Hermes，OpenClaw 无此能力 |
 | **工程可靠** | Pydantic 类型化配置 / asyncio 异步 / fail-fast 校验 / 7 钩子点 / 工具策略引擎 | 借鉴 OpenClaw 工程实践 |
-| **即插即用** | `pip install` / REST API 23 端点 / Channel Adapter SDK / Docker 一键 | 规避 Hermes 60+ 参数与 OpenClaw TS 编译链 |
+| **即插即用** | `pip install` / REST API 26 端点 / Channel Adapter SDK / Docker 一键 | 规避 Hermes 60+ 参数与 OpenClaw TS 编译链 |
 
 ### 1.3 差异化定位矩阵
 
@@ -611,9 +611,9 @@ CI/CD:      GitHub Actions（lint + typecheck + test + build）
 > ClawHermes 的消息网关定位：**SDK 驱动的可嵌入消息路由层**，而非 OpenClaw 式的全渠道平台。
 > 核心策略：Channel Adapter SDK 标准化 → 少量高质量适配器 → 社区贡献长尾渠道。
 
-### A.0 渠道适配器实现策略（四级优先级）
+### A.0 渠道适配器实现策略（多级优先级）
 
-消息渠道适配器遵循**四级实现策略**，从复用已有实现到自主实现逐级降级，
+消息渠道适配器遵循**多级实现策略**，从复用已有实现到自主实现逐级降级，
 优先利用现有生态，降低维护成本：
 
 | 级别 | 策略 | 说明 | 示例 |

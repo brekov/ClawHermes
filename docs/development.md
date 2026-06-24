@@ -43,7 +43,7 @@ src/clawhermes/
 │   ├── manager.py      # F6/F7: 技能系统 + Background Review + Curator
 │   └── hub.py          # F19: Federated Skill Hub
 ├── storage/            # ChromaDB 向量记忆
-├── gateway/            # FastAPI Gateway（23 个端点）
+├── gateway/            # FastAPI Gateway（26 个端点）
 ├── cli.py              # CLI 入口
 ├── config.py           # 配置管理
 └── types.py            # 核心类型

@@ -136,7 +136,7 @@
 
 ---
 
-## 五、Gateway API（23 个端点）
+## 五、Gateway API（26 个端点）
 
 ### Agent 核心（12 个）
 | 端点 | 方法 | 说明 |
@@ -164,6 +164,13 @@
 | `/cron/jobs/{id}/pause` | POST | 暂停 |
 | `/cron/jobs/{id}/resume` | POST | 恢复 |
 
+### Webhook 回调（3 个）
+| 端点 | 方法 | 说明 |
+|:---|:---:|:---|
+| `/feishu/webhook` | POST | 飞书事件回调（需启用 clawhermes-lark） |
+| `/wechat/webhook` | POST | 微信消息回调（需启用 clawhermes-weixin） |
+| `/wecom/webhook` | POST | 企业微信消息回调（需启用 clawhermes-weixin） |
+
 ---
 
 ## 六、基础设施
@@ -183,7 +190,8 @@
 - `ChannelManager` 统一管理，消息处理器注入
 - 支持的渠道类型（配置模板见 `config/channels/`）：
   - CLI / REST / WebSocket — 已实现
-  - Slack / Discord / 飞书 / 微信 / Telegram — Phase 3/4 规划
+  - 飞书（clawhermes-lark，lark-oapi 驱动）— 已实现
+  - 微信 / 企业微信（clawhermes-weixin，wechatpy 驱动）— 已实现
 
 ### 6.4 异常体系（F14）
 - `ClawHermesError` → 5 大类 17 子类
