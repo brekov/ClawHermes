@@ -1,9 +1,9 @@
 # ClawHermes · 项目推进计划
 
 > 版本：v2.1
-> 日期：2026-06-23
-> 基线版本：v0.15.0（376 测试通过，Block Streaming 开发中）
-> 状态：Phase 1 ✅ | Phase 2 ✅ | Phase 3 ✅ v0.13.0 → v0.14.0 | v0.15.0 🔄 | 下一目标 v0.16.0
+> 日期：2026-06-24
+> 基线版本：v0.15.0（376 测试通过，Block Streaming ✅）
+> 状态：Phase 1 ✅ | Phase 2 ✅ | Phase 3 ✅ v0.13.0 → v0.14.0 | v0.15.0 ✅ | 下一目标 v0.16.0
 > 方法论：软件工程全流程 — 现状评估 → 竞品研究 → 差距分析 → SMART 目标 → 架构演进 → 分阶段路线图 → 质量保障 → 风险管理
 
 ---
@@ -141,16 +141,16 @@ Web 框架:   FastAPI + uvicorn
 CI/CD:      GitHub Actions（lint + typecheck + test + build）
 ```
 
-### 2.5 Gateway 端点现状（23 个）
+### 2.5 Gateway 端点现状（27 个）
 
 | 分类 | 端点 | 方法 |
 |:---|:---|:---:|
-| 核心 | `/init` `/chat` `/health` `/tools` | POST/GET |
+| 核心 | `/init` `/chat` `/chat/stream` `/health` `/tools` | POST/GET |
 | 记忆 | `/memory/save` `/memory/search` | POST/GET |
 | 技能 | `/skills` `/skills/create` `/curator/run` | GET/POST |
 | 会话 | `/sessions` `/sessions/{id}` | GET/DELETE |
 | 调度 | `/cron/jobs` `/cron/jobs/{id}` `/cron/jobs/{id}/pause` `/cron/jobs/{id}/resume` | CRUD |
-| 渠道 | `/channels` `/channels/sessions` | GET |
+| 渠道 | `/channels` `/channels/sessions` `/wechat/webhook` `/wecom/webhook` `/feishu/webhook` | GET/POST |
 | MCP | `/mcp/servers` `/mcp/servers/{name}` | POST/GET/DELETE |
 
 ---
@@ -196,9 +196,9 @@ CI/CD:      GitHub Actions（lint + typecheck + test + build）
 |:---|:---|:---|
 | 钩子体系 | before/after tool_call 工具级拦截 | ✅ 已实现并增强（异步+超时） |
 | 工具策略引擎 | Profile + allow/deny 精细权限 | ✅ 已实现 |
-| Block Streaming | 完成即发送，chunk/coalesce 可配 | ❌ **Phase 3 优先级 P1** |
+| Block Streaming | 完成即发送，chunk/coalesce 可配 | ✅ SSE v0.15.0 |
 | 消息队列 4 模式 | steer/followup/collect/interrupt | ✅ v0.14.0 已实现 |
-| 22+ 消息渠道 | 覆盖所有主流平台 | ⚠️ SDK 就绪，适配器待实现 |
+| 22+ 消息渠道 | 覆盖所有主流平台 | ⚠️ SDK 就绪，飞书+微信 ✅，QQ 待实现 |
 | Dashboard | 实时监控 Agent 状态 | ❌ **Phase 4 优先级 P0** |
 | Canvas/A2UI | 可编辑 HTML/CSS/JS 可视化工作区 | ❌ **远期** |
 | 设备配对安全 | DM 配对 + 签名挑战 v3 | ❌ **Phase 3** |
@@ -243,11 +243,11 @@ CI/CD:      GitHub Actions（lint + typecheck + test + build）
 
 | 差距领域 | 当前 | 目标 | 严重程度 |
 |:---|:---|:---|:---:|
-| MCP 协议 | ❌ 不支持 | ✅ MCP 客户端 | 🔴 高 |
+| MCP 协议 | ✅ 已集成 MCP 客户端 v0.14.0 | 多 MCP Server 动态工具发现 | ✅ 已达成 |
+| 渠道适配器 | ✅ 飞书 + 微信 已集成 | 8+（QQ/Telegram/Discord/Slack） | 🟡 中 |
+| Block Streaming | ✅ SSE v0.15.0 | ✅ 完成 | ✅ 已达成 |
+| 测试覆盖率 | 71%（376 测试） | >90% | 🟡 中 |
 | 内置工具数 | 35 | 45+ | 🟡 中 |
-| 渠道适配器 | 5（CLI/REST/WS/飞书/微信） | 8+ | 🟢 低 |
-| Block Streaming | ❌ 不支持 | ✅ | 🟡 中 |
-| 测试覆盖率 | 73% | >90% | 🟡 中 |
 | 多模态记忆 | ❌ 仅文本 | ✅ 图片/文件 | 🟡 中 |
 | Profile 隔离 | 3 级工具 Profile | 完整隔离（config/memory/sessions） | 🟡 中 |
 | 条件激活技能 | ❌ | ✅ | 🟢 低 |
@@ -277,15 +277,14 @@ CI/CD:      GitHub Actions（lint + typecheck + test + build）
 | MCP 客户端集成（F13） | 支持 3+ MCP Server 动态工具发现 | 2 周 |
 | 内置工具扩展至 35+ | +9 工具（浏览器/数据库/图片/代码等） | 2 周 |
 | 全链路异步化 | 消除全部 threading.Thread 调用，100% asyncio | 1 周 |
-| 测试覆盖率 > 80% | 65% → 80%，重点补充 gateway + tools | 1 周 |
+| 测试覆盖率 > 80% | 65% → 80%，重点补充 gateway + tools；⚠️ 实际 ~61%，Phase 3 后期推进 | 1 周 |
 
 ### 5.2 v0.16.0（Phase 3 后期）
 
 | 目标 | 衡量标准 | 时限 |
 |:---|:---|:---|
-| Block Streaming | SSE 完成即发送，首字延迟降低 50%+ | 2 周 |
 | DM 配对安全模型 | pairing 码 + 管理员审批 + 签名挑战 | 2 周 |
-| 3 平台渠道适配器 | 飞书 + 微信 + QQ 可用 | 2 周 |
+| QQ 适配器 | QQ Bot HTTP API + 子仓库复刻，完成第三渠道 | 2 周 |
 | Profile 隔离 | 独立 config/memory/sessions per profile | 1 周 |
 
 ### 5.3 v0.17.0（Phase 3 收尾）
@@ -322,7 +321,7 @@ CI/CD:      GitHub Actions（lint + typecheck + test + build）
 │                                                                      │
 │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐  │
 │  │ REST API │ │ WebSocket│ │ Telegram │ │ Discord  │ │ Slack    │  │
-│  │ (23端点) │ │ (实时推送)│ │ Bot API  │ │ Bot API  │ │ Bolt SDK │  │
+│  │ (27端点) │ │ (实时推送)│ │ Bot API  │ │ Bot API  │ │ Bolt SDK │  │
 │  └────┬─────┘ └────┬─────┘ └────┬─────┘ └────┬─────┘ └────┬─────┘  │
 │       └────────────┴────────────┴────────────┴────────────┘         │
 │                                │                                     │
@@ -337,9 +336,9 @@ CI/CD:      GitHub Actions（lint + typecheck + test + build）
 └────────────────────────────────┼────────────────────────────────────┘
                                   │
 ┌────────────────────────────────▼────────────────────────────────────┐
-│                       Gateway 层（v0.14.0 ✅）                       │
+│                       Gateway 层（v0.15.0 ✅）                       │
 │                                                                      │
-│  FastAPI · GatewayState 类 · 23 REST 端点 · Cron 调度 · Docker 沙箱 │
+│  FastAPI · GatewayState 类 · 27 REST 端点 · Cron 调度 · Docker 沙箱 │
 └────────────────────────────────┬────────────────────────────────────┘
                                    │
 ┌─────────────────────────────────▼───────────────────────────────────┐
@@ -388,7 +387,7 @@ CI/CD:      GitHub Actions（lint + typecheck + test + build）
 |:---|:---|:---|
 | 异步模型 | 全链路 asyncio（含 1 处可控 threading.Thread 用于 MCP 嵌套协程兼容） | 连接池 + 多实例部署就绪 |
 | Gateway 状态 | GatewayState 类（单实例） | 连接池 + 多实例部署就绪 |
-| 渠道集成 | Channel Router 就绪，适配器待实现 | 6+ 渠道适配器 + 配置热加载 |
+| 渠道集成 | Channel Router + 飞书 + 微信 ✅；QQ 待实现 | 6+ 渠道适配器 + 配置热加载 |
 | 技能加载 | 全量加载（浪费 token） | Progressive Disclosure 3 级 + 6 级优先级 + 条件激活 |
 | 工具系统 | 35 内置 + MCP 动态工具 | 45+ 内置 + MCP 动态工具 |
 | 记忆系统 | 文本向量 | 多模态（图片/文件/代码）+ 用户画像 |
@@ -406,7 +405,7 @@ CI/CD:      GitHub Actions（lint + typecheck + test + build）
 | Phase 1 | v0.1.0 → v0.11.0 | 核心框架、异常层次、会话持久化、CI、工具 profiles |
 | Phase 2 | v0.12.0 → v0.12.2 | Channel SDK、Cron、Docker Sandbox、ACE、异步钩子、26 工具 |
 
-### 7.2 Phase 3（🔄 进行中 — 生态建设）
+### 7.2 Phase 3（🔄 进行中 — v0.15.0 ✅，推进 v0.16.0）
 
 #### 7.2.1 已完成（v0.13.0~v0.14.0）
 
@@ -427,7 +426,7 @@ CI/CD:      GitHub Actions（lint + typecheck + test + build）
 | **M3.7 ✅** | **MCP 客户端集成（F13）** — MCP 协议客户端，动态工具发现与注册，支持 3+ MCP Server | 🔴 P0 | 3d | litellm |
 | **M3.10 ✅** | **内置工具扩展至 35+** — 浏览器工具(playwright)、数据库工具(sqlite)、图片处理(Pillow)、代码分析(AST) | 🔴 P0 | 4d | — |
 | **M3.11 ✅** | **全链路异步化** — BackgroundReview → asyncio，消除全部 threading.Thread，零阻塞调用 | 🔴 P0 | 2d | M3.2 |
-| **M3.12 ✅** | **测试覆盖率 > 80%** — 重点补充 gateway/app.py (62%→85%) 和 tools/builtin.py (58%→80%) | 🟡 P1 | 2d | — |
+| **M3.12 ⚠️** | **测试覆盖率 > 80%** — 重点补充 gateway/app.py 和 tools/builtin.py；⚠️ 实际 ~61%，持续追赶 | 🟡 P1 | 2d | — |
 
 #### 7.2.3 Phase 3 中期（v0.15.0）
 
@@ -560,9 +559,9 @@ CI/CD:      GitHub Actions（lint + typecheck + test + build）
 
 | 版本 | 测试 | 覆盖率 | 新功能 | 文档 |
 |:---|:---:|:---:|:---|:---:|
-| v0.14.0 | 260+ | >80% | MCP + 35 工具 + 全链路异步 | CHANGELOG + MCP 文档 |
-| v0.15.0 | 320+ | >83% | Streaming + DM + 3 渠道 + Profile 隔离 | 渠道适配器指南 |
-| v0.16.0 | 380+ | >85% | 多模态记忆 + 45 工具 + 飞书/WebChat | 多模态记忆文档 |
+| v0.14.0 | 373 | 61% | MCP + 35 工具 + 全链路异步 | CHANGELOG + MCP 文档 |
+| v0.15.0 | 376 | 61% | Block Streaming SSE + 飞书 + 微信渠道 | CHANGELOG + 渠道指南 |
+| v0.16.0 | 450+ | >75% | QQ 适配器 + DM 配对 + Profile 隔离 | QQ 适配器文档 |
 | v1.0.0 | 500+ | >90% | 全部 Phase 4 功能 | 完整文档集 |
 
 ---
@@ -571,14 +570,14 @@ CI/CD:      GitHub Actions（lint + typecheck + test + build）
 
 ### 11.1 能力指标
 
-| 指标 | v0.14.0 | v0.15.0 目标 | v0.15.0 目标 | v0.16.0 目标 | v1.0.0 目标 |
-|:---|:---:|:---:|:---:|:---:|:---:|
+| 指标 | v0.14.0 | v0.15.0 实际 | v0.16.0 目标 | v1.0.0 目标 |
+|:---|:---:|:---:|:---:|:---:|
 | 内置工具数 | 35 | 35 | 45 | 50+ |
 | MCP 工具 | 0 | ✅ | ✅ | ✅ | ✅ |
-| 渠道适配器 | 3 | 3 | 6 | 8 | 8+ |
-| 测试用例 | 203 | 260 | 320 | 380 | 500+ |
-| 测试覆盖率 | 65% | 80% | 83% | 85% | 90%+ |
-| Block Streaming | ❌ | ❌ | ✅ | ✅ | ✅ |
+| 渠道适配器 | 3 | 5（CLI/REST/WS/飞书/微信） | 6 | 8+ |
+| 测试用例 | 203 | 376 | 450 | 500+ |
+| 测试覆盖率 | 65% | 61% | 75% | 90%+ |
+| Block Streaming | ❌ | ✅ | ✅ | ✅ |
 | MCP 集成 | ❌ | ✅ | ✅ | ✅ | ✅ |
 | Profile 隔离 | 3 级工具 | 3 级工具 | ✅ 完整 | ✅ 完整 | ✅ 完整 |
 | Progressive Disclosure | ❌ | ❌ | ❌ | ❌ | ✅ |
@@ -598,13 +597,13 @@ CI/CD:      GitHub Actions（lint + typecheck + test + build）
 | Federated Skill Hub | ✅ Git 联邦 + SHA-256（去中心化） | + 审核流 | 社区市场 |
 | Channel Adapter SDK | ✅ 标准化 ABC（三者唯一） | +6 适配器 | +8 适配器 |
 | 纯 Python 零编译 | ✅ 核心优势 | 保持 | 保持 |
-| asyncio 原生异步 | 🔄 部分（chat_async ✅, 并行 ✅） | 全链路 | 全链路 |
+| asyncio 原生异步 | ✅ 全链路（chat_async + 并行全部 asyncio） | 保持 | 保持 |
 
 ---
 
 > **本计划将随项目进展持续迭代。每个里程碑完成后回顾并修订下一阶段计划。**
 >
-> **当前焦点：Phase 3 v0.16.0 — QQ 适配器 + Streaming + DM 配对安全。**
+> **当前焦点：Phase 3 v0.16.0 — QQ 适配器 + DM 配对安全。**
 
 ---
 
@@ -691,7 +690,7 @@ CI/CD:      GitHub Actions（lint + typecheck + test + build）
 | 渠道数 | 22+ 生产可用 | 3（CLI/REST/WS） | 8+ |
 | 协议 | 自研 WebSocket（3 帧类型） | REST + WebSocket | REST + WebSocket + SSE |
 | 消息队列 | steer/followup/collect/interrupt | ✅ 4 模式完整 | ✅ |
-| Block Streaming | ✅ 完成即发送 | ❌ | ✅ v0.15.0 |
+| Block Streaming | ✅ 完成即发送 | ✅ SSE v0.15.0 | ✅ |
 | DM 配对安全 | ✅ 签名挑战 v3 | ❌ | ✅ v0.15.0 |
 | 渠道热加载 | ✅ | ❌ | ✅ v0.16.0 |
 | 媒体处理 | ✅ | ❌ | ✅ v0.16.0 |
@@ -708,12 +707,12 @@ CI/CD:      GitHub Actions（lint + typecheck + test + build）
 | Channel Router 异步全链路 | `_on_message` 同步回调 → 完整 async/await 链路 | P0 |
 | 消息可靠性 | 消息持久化到 SQLite（防丢失）+ 重试机制 | P0 |
 | Gateway WebSocket 端点 | `/ws` 端点，真正双向实时推送 | P1 |
+| **Block Streaming（SSE）** | ✅ `/chat/stream` SSE 端点，完成即发送，首字延迟 < 500ms（v0.15.0 已完成） | P1 |
 
 #### Phase 3 后期（v0.16.0）— 渠道扩展
 
 | 任务 | 说明 | 优先级 | 实现级别 |
 |:---|:---|:---:|:---:|
-| **Block Streaming（SSE）** | `/chat/stream` SSE 端点，完成即发送，首字延迟 < 500ms | P1 | — |
 | **DM 配对安全模型** | 配对码 6 位数字 + TTL 5min + 管理员审批 | P1 | — |
 | ✅ **飞书适配器** | 分层架构 lark-oapi + Hermes vendor 消息引擎；WebSocket 长连接 + Token管理 + 媒体消息；clawhermes-lark 子仓库 | P0 | ✅ 完成 |
 | ✅ **微信适配器** | clawhermes-weixin 子仓库 + wechatpy；ChannelAdapter + Gateway 集成 | P0 | ✅ 完成 |
