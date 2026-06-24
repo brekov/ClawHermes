@@ -2,9 +2,9 @@
 ClawHermes - 集成测试（用 MockProvider，不依赖真实 API）
 """
 import tempfile
-import pytest
-from unittest.mock import MagicMock
 from pathlib import Path
+
+import pytest
 
 from clawhermes.agent.loop import Agent, AgentConfig, ToolRegistry
 from clawhermes.agent.memory import JSONMemoryProvider, MemoryManager
@@ -318,7 +318,7 @@ class TestGatewayEndpoints:
         """Helper: initialize a mock agent state"""
         import clawhermes.gateway.app as gw
         from clawhermes.agent.loop import Agent, AgentConfig, ToolRegistry
-        from clawhermes.agent.memory import MemoryManager, JSONMemoryProvider
+        from clawhermes.agent.memory import JSONMemoryProvider, MemoryManager
         from clawhermes.agent.session import SessionManager
         from clawhermes.llm.provider import LLMProvider
 
@@ -364,8 +364,9 @@ class TestGatewayEndpoints:
         return gw._state
 
     def test_health_uninitialized(self):
-        from clawhermes.gateway.app import app
         from starlette.testclient import TestClient
+
+        from clawhermes.gateway.app import app
         client = TestClient(app)
         resp = client.get("/health")
         assert resp.status_code == 200
@@ -375,8 +376,9 @@ class TestGatewayEndpoints:
 
     def test_health_initialized(self):
         self._init_agent()
-        from clawhermes.gateway.app import app
         from starlette.testclient import TestClient
+
+        from clawhermes.gateway.app import app
         client = TestClient(app)
         resp = client.get("/health")
         assert resp.status_code == 200
@@ -386,8 +388,9 @@ class TestGatewayEndpoints:
 
     def test_tools_endpoint(self):
         self._init_agent()
-        from clawhermes.gateway.app import app
         from starlette.testclient import TestClient
+
+        from clawhermes.gateway.app import app
         client = TestClient(app)
         resp = client.get("/tools")
         assert resp.status_code == 200
@@ -397,8 +400,9 @@ class TestGatewayEndpoints:
 
     def test_memory_save_and_search(self):
         self._init_agent()
-        from clawhermes.gateway.app import app
         from starlette.testclient import TestClient
+
+        from clawhermes.gateway.app import app
         client = TestClient(app)
 
         resp = client.post("/memory/save?content=hello+world&importance=0.8")
@@ -413,8 +417,9 @@ class TestGatewayEndpoints:
 
     def test_skills_list_and_create(self):
         self._init_agent()
-        from clawhermes.gateway.app import app
         from starlette.testclient import TestClient
+
+        from clawhermes.gateway.app import app
         client = TestClient(app)
 
         resp = client.get("/skills")
@@ -427,8 +432,9 @@ class TestGatewayEndpoints:
 
     def test_curator_run(self):
         self._init_agent()
-        from clawhermes.gateway.app import app
         from starlette.testclient import TestClient
+
+        from clawhermes.gateway.app import app
         client = TestClient(app)
         resp = client.post("/curator/run?dry_run=true")
         assert resp.status_code == 200
@@ -436,24 +442,27 @@ class TestGatewayEndpoints:
 
     def test_sessions_list(self):
         self._init_agent()
-        from clawhermes.gateway.app import app
         from starlette.testclient import TestClient
+
+        from clawhermes.gateway.app import app
         client = TestClient(app)
         resp = client.get("/sessions")
         assert resp.status_code == 200
 
     def test_delete_nonexistent_session(self):
         self._init_agent()
-        from clawhermes.gateway.app import app
         from starlette.testclient import TestClient
+
+        from clawhermes.gateway.app import app
         client = TestClient(app)
         resp = client.delete("/sessions/nonexistent-id")
         assert resp.status_code == 404
 
     def test_channels_endpoints(self):
         self._init_agent()
-        from clawhermes.gateway.app import app
         from starlette.testclient import TestClient
+
+        from clawhermes.gateway.app import app
         client = TestClient(app)
 
         resp = client.get("/channels")
@@ -466,8 +475,9 @@ class TestGatewayEndpoints:
 
     def test_cron_jobs_crud(self):
         self._init_agent()
-        from clawhermes.gateway.app import app
         from starlette.testclient import TestClient
+
+        from clawhermes.gateway.app import app
         client = TestClient(app)
 
         resp = client.post("/cron/jobs", json={
@@ -506,12 +516,12 @@ class TestGatewayEndpoints:
 
     def test_chat_requires_initialization(self, monkeypatch):
         import clawhermes.gateway.app as gw
-        from clawhermes.agent.exceptions import SessionNotFoundError
         gw._state = gw.GatewayState()  # fresh uninitialized state
         monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
         monkeypatch.delenv("CH_GW_API_KEY", raising=False)
-        from clawhermes.gateway.app import app
         from starlette.testclient import TestClient
+
+        from clawhermes.gateway.app import app
         client = TestClient(app)
         # Uninitialized agent raises SessionNotFoundError → 500 via TestClient exception
         with pytest.raises(Exception):
@@ -589,7 +599,7 @@ class TestToolHandlers:
         assert isinstance(result, dict)
 
     def test_url_encode_decode(self):
-        from clawhermes.tools.builtin import _url_encode, _url_decode
+        from clawhermes.tools.builtin import _url_decode, _url_encode
         encoded = _url_encode(text="hello world")
         assert isinstance(encoded, dict)
         decoded = _url_decode(text="hello%20world")
@@ -635,7 +645,7 @@ class TestDelegateManager:
     def test_delegate_manager_creation(self, tmp_path):
         from clawhermes.agent.delegate import DelegateManager
         from clawhermes.agent.loop import ToolRegistry
-        from clawhermes.agent.memory import MemoryManager, JSONMemoryProvider
+        from clawhermes.agent.memory import JSONMemoryProvider, MemoryManager
         from clawhermes.llm.provider import LLMProvider
 
         provider = LLMProvider(model="deepseek/deepseek-chat", api_key="test")
@@ -653,7 +663,7 @@ class TestDelegateManager:
     def test_delegate_returns_result(self, tmp_path):
         from clawhermes.agent.delegate import DelegateManager
         from clawhermes.agent.loop import ToolRegistry
-        from clawhermes.agent.memory import MemoryManager, JSONMemoryProvider
+        from clawhermes.agent.memory import JSONMemoryProvider, MemoryManager
         from clawhermes.llm.provider import LLMProvider
 
         provider = LLMProvider(model="deepseek/deepseek-chat", api_key="test")
@@ -670,9 +680,9 @@ class TestDelegateManager:
         assert isinstance(result, list)
 
     def test_delegate_exceeds_max_depth(self, tmp_path):
-        from clawhermes.agent.delegate import DelegateManager, MAX_DEPTH
+        from clawhermes.agent.delegate import MAX_DEPTH, DelegateManager
         from clawhermes.agent.loop import ToolRegistry
-        from clawhermes.agent.memory import MemoryManager, JSONMemoryProvider
+        from clawhermes.agent.memory import JSONMemoryProvider, MemoryManager
         from clawhermes.llm.provider import LLMProvider
 
         provider = LLMProvider(model="deepseek/deepseek-chat", api_key="test")
@@ -727,15 +737,15 @@ class TestMCPClient:
         assert client.is_connected is False
 
     def test_mcp_registry_creation(self):
-        from clawhermes.mcp.client import MCPRegistry
         from clawhermes.agent.loop import ToolRegistry
+        from clawhermes.mcp.client import MCPRegistry
         registry = ToolRegistry()
         mcp_reg = MCPRegistry(registry)
         assert mcp_reg.list_servers() == []
 
     def test_mcp_registry_remove_nonexistent(self):
-        from clawhermes.mcp.client import MCPRegistry
         from clawhermes.agent.loop import ToolRegistry
+        from clawhermes.mcp.client import MCPRegistry
         registry = ToolRegistry()
         mcp_reg = MCPRegistry(registry)
         import asyncio
@@ -743,16 +753,17 @@ class TestMCPClient:
         assert result is False
 
     def test_mcp_registry_get_server_tools_empty(self):
-        from clawhermes.mcp.client import MCPRegistry
         from clawhermes.agent.loop import ToolRegistry
+        from clawhermes.mcp.client import MCPRegistry
         registry = ToolRegistry()
         mcp_reg = MCPRegistry(registry)
         assert mcp_reg.get_server_tools("nonexistent") == []
 
     def test_mcp_gateway_endpoints(self):
         """Test MCP Gateway endpoints without connecting"""
-        from clawhermes.gateway.app import app
         from starlette.testclient import TestClient
+
+        from clawhermes.gateway.app import app
         client = TestClient(app)
 
         # List servers (empty before init)

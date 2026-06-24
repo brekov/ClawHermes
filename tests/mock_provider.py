@@ -3,7 +3,6 @@ Mock LLM Provider - 用于测试，不依赖真实 API
 """
 import asyncio
 
-from clawhermes.llm.provider import LLMProvider, LLMResponse
 from clawhermes.llm.provider import LLMProvider, LLMResponse, StreamChunk
 
 

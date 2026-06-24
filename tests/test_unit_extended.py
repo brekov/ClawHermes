@@ -3,14 +3,14 @@ ClawHermes - 扩展单元测试
 覆盖 builtin tools、session、exceptions、delegate 等模块
 """
 from __future__ import annotations
-import pytest
-from unittest.mock import MagicMock
 
 import json
 import os
 import tempfile
 import time
 from pathlib import Path
+
+import pytest
 
 from clawhermes.agent.exceptions import (
     ClawHermesError,
@@ -631,7 +631,7 @@ class TestAgentLoop:
 
 class TestParallelToolExecution:
     def test_parallel_safe_tools_execute(self):
-        from clawhermes.agent.loop import ToolDispatcher, ToolDef
+        from clawhermes.agent.loop import ToolDef, ToolDispatcher
 
         registry = ToolRegistry()
 
@@ -666,7 +666,8 @@ class TestParallelToolExecution:
 
     def test_execute_async_parallel(self):
         import asyncio
-        from clawhermes.agent.loop import ToolDispatcher, ToolDef
+
+        from clawhermes.agent.loop import ToolDef, ToolDispatcher
 
         registry = ToolRegistry()
 
@@ -725,7 +726,7 @@ class TestParallelToolExecution:
         assert len(results) == 2
 
     def test_duration_tracking(self):
-        from clawhermes.agent.loop import ToolDispatcher, HookPoint
+        from clawhermes.agent.loop import HookPoint, ToolDispatcher
 
         registry = ToolRegistry()
         register_builtin_tools(registry, profile="minimal")
@@ -782,6 +783,7 @@ class TestWebSearchRefactor:
 
     def test_search_engine_env_var(self):
         import os
+
         from clawhermes.tools.builtin import _web_search
         original = os.environ.get("CH_SEARCH_ENGINE")
         try:
@@ -1023,9 +1025,9 @@ class TestBackgroundReview:
     """Test BackgroundReview parsing"""
 
     def test_review_parse_valid_json(self, tmp_path):
-        from clawhermes.skills.manager import BackgroundReview, SkillManager
-        from clawhermes.agent.memory import MemoryManager, JSONMemoryProvider
+        from clawhermes.agent.memory import JSONMemoryProvider, MemoryManager
         from clawhermes.llm.provider import LLMProvider
+        from clawhermes.skills.manager import BackgroundReview, SkillManager
 
         provider = LLMProvider(model="deepseek/deepseek-chat", api_key="test")
         memory = MemoryManager()
@@ -1040,9 +1042,9 @@ class TestBackgroundReview:
         assert result["memories"][0]["content"] == "test"
 
     def test_review_parse_invalid(self, tmp_path):
-        from clawhermes.skills.manager import BackgroundReview, SkillManager
-        from clawhermes.agent.memory import MemoryManager, JSONMemoryProvider
+        from clawhermes.agent.memory import JSONMemoryProvider, MemoryManager
         from clawhermes.llm.provider import LLMProvider
+        from clawhermes.skills.manager import BackgroundReview, SkillManager
 
         provider = LLMProvider(model="deepseek/deepseek-chat", api_key="test")
         memory = MemoryManager()
@@ -1054,9 +1056,9 @@ class TestBackgroundReview:
         assert result == {"memories": [], "skills": []}
 
     def test_review_build_prompt(self, tmp_path):
-        from clawhermes.skills.manager import BackgroundReview, SkillManager
-        from clawhermes.agent.memory import MemoryManager, JSONMemoryProvider
+        from clawhermes.agent.memory import JSONMemoryProvider, MemoryManager
         from clawhermes.llm.provider import LLMProvider
+        from clawhermes.skills.manager import BackgroundReview, SkillManager
 
         provider = LLMProvider(model="deepseek/deepseek-chat", api_key="test")
         memory = MemoryManager()
@@ -1084,7 +1086,6 @@ class TestCurator:
 
     def test_curator_with_skills(self, tmp_path):
         from clawhermes.skills.manager import Curator, SkillManager
-        import time
         sm = SkillManager(tmp_path)
         sm.create("fresh-skill", "content", "desc")
 
@@ -1137,7 +1138,7 @@ class TestMemoryProviders:
         assert len(results) >= 1
 
 
-class TestSessionManager:
+class TestSessionManager2:
     """Test session manager"""
 
     def test_create_and_get_session(self, tmp_path):
@@ -1249,8 +1250,8 @@ class TestSessionRouter:
     """Test SessionRouter"""
 
     def test_create_and_resolve(self):
-        from clawhermes.channel.router import SessionRouter
         from clawhermes.channel.adapter import ChannelType
+        from clawhermes.channel.router import SessionRouter
         router = SessionRouter()
         sid = router.create(ChannelType.REST, "chat-1")
         assert sid is not None
@@ -1258,16 +1259,16 @@ class TestSessionRouter:
         assert resolved == sid
 
     def test_remove(self):
-        from clawhermes.channel.router import SessionRouter
         from clawhermes.channel.adapter import ChannelType
+        from clawhermes.channel.router import SessionRouter
         router = SessionRouter()
         router.create(ChannelType.REST, "chat-1")
         assert router.remove(ChannelType.REST, "chat-1") is True
         assert router.remove(ChannelType.REST, "chat-1") is False
 
     def test_list_mappings(self):
-        from clawhermes.channel.router import SessionRouter
         from clawhermes.channel.adapter import ChannelType
+        from clawhermes.channel.router import SessionRouter
         router = SessionRouter()
         router.create(ChannelType.REST, "chat-1")
         mappings = router.list_mappings()
@@ -1278,8 +1279,9 @@ class TestConfig:
     """Test config module"""
 
     def test_config_validation_min_context(self):
-        from clawhermes.config import ClawHermesConfig
         from pydantic import ValidationError
+
+        from clawhermes.config import ClawHermesConfig
         with pytest.raises((ValueError, ValidationError)):
             ClawHermesConfig(llm_default_max_tokens=100)
 
@@ -1324,7 +1326,7 @@ class TestTypes:
         assert skill.version == 1
 
 
-class TestGatewayState:
+class TestGatewayState2:
     """Test GatewayState class"""
 
     def test_initial_state(self):
@@ -1391,7 +1393,7 @@ class TestRemainingTools:
         assert isinstance(result, dict)
 
 
-class TestAgentLoop:
+class TestAgentLoop2:
     """Test agent loop components"""
 
     def test_hook_point_enum(self):
@@ -1481,8 +1483,9 @@ class TestNewTools:
     """Test the 9 new tools added in M3.10"""
 
     def test_sqlite_query(self, tmp_path):
-        from clawhermes.tools.builtin import _sqlite_query
         import sqlite3
+
+        from clawhermes.tools.builtin import _sqlite_query
         db = tmp_path / "test.db"
         conn = sqlite3.connect(str(db))
         conn.execute("CREATE TABLE t (id INT, name TEXT)")
@@ -1528,9 +1531,11 @@ class TestNewTools:
         # May fail in sandboxed environments
 
     def test_image_info(self, tmp_path):
-        from clawhermes.tools.builtin import _image_info
         # Create a minimal valid PNG
-        import struct, zlib
+        import struct
+        import zlib
+
+        from clawhermes.tools.builtin import _image_info
         def create_png(path, w=1, h=1):
             sig = b'\\x89PNG\\r\\n\\x1a\\n'
             ihdr = struct.pack('>IIBBBBB', w, h, 8, 2, 0, 0, 0)
@@ -1570,7 +1575,6 @@ class TestAgentStreaming:
     async def test_stream_text_only(self):
         """纯文本响应 — 应产出一或多个 text + done 事件"""
         from clawhermes.agent.loop import Agent
-        from clawhermes.tools.builtin import register_builtin_tools
         from tests.mock_provider import MockProvider
 
         provider = MockProvider(["这是一条长回复，用于测试流式分块功能。"] * 3)
@@ -1587,7 +1591,7 @@ class TestAgentStreaming:
 
     async def test_stream_with_tool_calls(self):
         """触发工具调用的消息 — 应有 tool_call + tool_result + done"""
-        from clawhermes.agent.loop import Agent, ToolRegistry, ToolDef
+        from clawhermes.agent.loop import Agent, ToolDef, ToolRegistry
         from tests.mock_provider import MockProvider
 
         def _get_time():

@@ -7,8 +7,6 @@ import asyncio
 import tempfile
 import time
 
-import pytest
-
 from clawhermes.agent.scheduler import (
     CronScheduler,
     JobStatus,
