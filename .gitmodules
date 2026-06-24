@@ -4,3 +4,6 @@
 [submodule "clawhermes-lark"]
 	path = clawhermes-lark
 	url = https://github.com/brekov/clawhermes-lark.git
+[submodule "clawhermes-qq"]
+	path = clawhermes-qq
+	url = https://github.com/brekov/clawhermes-qq.git
