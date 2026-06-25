@@ -212,64 +212,114 @@ def cmd_agent_set(name):
 @main.command()
 @click.option("--non-interactive", is_flag=True, help="非交互模式, 使用默认值")
 def setup(non_interactive=False):
-    """交互式初始化向导 — 一步步配置 LLM、渠道、Gateway"""
+    """初始化 — 键盘导航 + 搜索筛选 LLM/渠道/Gateway"""
     if not non_interactive and not sys.stdin.isatty():
         non_interactive = True
-    from rich.prompt import Confirm, IntPrompt
 
     # ══════════════════════════════════════════
     # 欢迎
     # ══════════════════════════════════════════
-    welcome = Panel.fit(
-        Text("ClawHermes · 初始化向导", style="bold cyan", justify="center")
-        + Text("\n\n一步步完成 LLM 提供商、消息渠道和 Gateway 的配置", style="dim", justify="center"),
+    console.print(Panel.fit(
+        Text("ClawHermes · 初始化向导", style="bold cyan", justify="center"),
         border_style="cyan",
-    )
-    console.print(welcome)
+    ))
 
     env_vars: dict[str, str] = {}
     channels_enabled: list[str] = []
 
+    if non_interactive:
+        _setup_noninteractive()
+        return
+
+    import questionary
+
     # ══════════════════════════════════════════
-    # Step 1: LLM 提供商
+    # Step 1: LLM
     # ══════════════════════════════════════════
     console.print("\n[bold cyan]▶ Step 1/4[/]  [bold]LLM 提供商[/]\n")
 
-    providers = {
-        "1": ("DeepSeek", "deepseek/deepseek-chat", "DEEPSEEK_API_KEY"),
-        "2": ("OpenAI", "gpt-4o", "OPENAI_API_KEY"),
-        "3": ("Google Gemini", "gemini/gemini-2.5-flash", "GOOGLE_API_KEY"),
-        "4": ("Ollama (本地)", "qwen2.5", None),
-    }
+    # 动态提供商列表 (litellm 兼容)
+    _PROVIDERS = [
+        {"name": "DeepSeek",        "prefix": "deepseek/deepseek-chat",           "key": "DEEPSEEK_API_KEY",  "url": "https://platform.deepseek.com/api_keys"},
+        {"name": "OpenAI",          "prefix": "openai/gpt-4o",                     "key": "OPENAI_API_KEY",    "url": "https://platform.openai.com/api-keys"},
+        {"name": "Anthropic",       "prefix": "anthropic/claude-sonnet-4-20250514","key": "ANTHROPIC_API_KEY",  "url": "https://console.anthropic.com/keys"},
+        {"name": "Google Gemini",   "prefix": "gemini/gemini-2.5-flash",           "key": "GOOGLE_API_KEY",    "url": "https://aistudio.google.com/apikey"},
+        {"name": "Groq",            "prefix": "groq/llama-4-scout-17b-16e",        "key": "GROQ_API_KEY",      "url": "https://console.groq.com/keys"},
+        {"name": "Together AI",     "prefix": "together_ai/meta-llama/Llama-4",   "key": "TOGETHERAI_API_KEY","url": "https://api.together.xyz/settings/api-keys"},
+        {"name": "Fireworks AI",    "prefix": "fireworks_ai/llama-v3p1-405b",      "key": "FIREWORKS_API_KEY", "url": "https://fireworks.ai/account/api-keys"},
+        {"name": "Mistral",         "prefix": "mistral/mistral-large-latest",      "key": "MISTRAL_API_KEY",   "url": "https://console.mistral.ai/api-keys/"},
+        {"name": "Cohere",          "prefix": "command-r-plus",                    "key": "COHERE_API_KEY",    "url": "https://dashboard.cohere.com/api-keys"},
+        {"name": "xAI / Grok",      "prefix": "xai/grok-3",                        "key": "XAI_API_KEY",       "url": "https://x.ai/api"},
+        {"name": "Ollama (本地)",    "prefix": "ollama/qwen2.5",                    "key": None,                "url": None},
+        {"name": "OpenRouter",      "prefix": "openrouter/openai/gpt-4o",          "key": "OPENROUTER_API_KEY","url": "https://openrouter.ai/keys"},
+        {"name": "vLLM (自部署)",    "prefix": "openai/hosted_vllm/MODEL_NAME",     "key": "VLLM_API_KEY",      "url": None},
+        {"name": "自定义 (litellm)", "prefix": "",                                  "key": None,                "url": None},
+    ]
 
-    table = Table(box=box.SIMPLE, show_header=True, header_style="bold")
-    table.add_column("#", width=4)
-    table.add_column("提供商", width=18)
-    table.add_column("默认模型", width=28)
-    for k, (name, model, _) in providers.items():
-        table.add_row(k, name, model)
-    console.print(table)
+    choices = [f"{p['name']:20s} {p['prefix']}" for p in _PROVIDERS]
+    selection = questionary.select(
+        "选择 LLM 提供商 (↑↓ 移动, / 搜索):",
+        choices=choices,
+        use_indicator=True,
+        style=questionary.Style([
+            ('qmark', 'fg:cyan bold'),
+            ('selected', 'fg:green bold'),
+        ]),
+    ).ask()
+    if not selection:
+        console.print("  ⚠️  已取消")
+        return
 
-    if non_interactive:
-        choice = "1"
-    else:
-        choice = Prompt.ask("选择 LLM 提供商", choices=["1", "2", "3", "4"], default="1")
-    name, model, key_var = providers[choice]
-    env_vars["CH_LLM_DEFAULT_MODEL"] = model
-    console.print(f"  ✅ 提供商: {name} ({model})")
+    idx = choices.index(selection)
+    provider = _PROVIDERS[idx]
+    pfx = provider["prefix"]
 
-    if key_var:
-        if non_interactive:
-            console.print(f"  ⚠️  非交互模式, 请手动设置 {key_var}")
-        else:
-            api_key = Prompt.ask(f"  {key_var}", password=True)
+    # 模型配置
+    if provider["name"] == "自定义 (litellm)":
+        pfx = questionary.text(
+            "输入 litellm 模型标识 (如 openai/gpt-4o):",
+            validate=lambda v: bool(v.strip()),
+        ).ask()
+        if not pfx:
+            return
+
+    default_model = pfx if pfx else ""
+    model = questionary.text(
+        f"模型名称 (Enter 确认 = {default_model}):",
+        default=default_model,
+    ).ask()
+    if model is None:
+        return
+    env_vars["CH_LLM_DEFAULT_MODEL"] = model.strip()
+
+    # API Key
+    if provider["key"]:
+        if provider["url"]:
+            console.print(f"  🔗 获取 Key: [link={provider['url']}]{provider['url']}[/]")
+        api_key = questionary.password(f"{provider['key']} (输入隐藏):").ask()
+        if api_key:
+            env_vars[provider["key"]] = api_key
+            console.print("  ✅ API Key 已设置")
+    elif provider["name"] == "Ollama (本地)":
+        base_url = questionary.text("Ollama 地址:", default="http://localhost:11434").ask()
+        if base_url:
+            env_vars["OLLAMA_BASE_URL"] = base_url
+    elif provider["name"] == "vLLM (自部署)":
+        vllm_url = questionary.text("vLLM API Base:", default="http://localhost:8000/v1").ask()
+        if vllm_url:
+            env_vars["OPENAI_BASE_URL"] = vllm_url
+            api_key = questionary.password("vLLM API Key (可选):").ask()
             if api_key:
-                env_vars[key_var] = api_key
-                console.print("  ✅ API Key 已设置")
-            else:
-                console.print(f"  ⚠️  跳过 — 可稍后在 .env 中手动设置 {key_var}")
-    else:
-        env_vars["OLLAMA_BASE_URL"] = Prompt.ask("  Ollama 地址", default="http://localhost:11434") if not non_interactive else "http://localhost:11434"
+                env_vars["OPENAI_API_KEY"] = api_key
+    elif provider["name"] == "自定义 (litellm)":
+        base_url = questionary.text("API Base URL (可选):", default="").ask()
+        if base_url:
+            env_vars["CUSTOM_LLM_BASE_URL"] = base_url
+        custom_key = questionary.password("API Key (可选):").ask()
+        if custom_key:
+            env_vars["CUSTOM_LLM_API_KEY"] = custom_key
+
+    console.print(f"  ✅ LLM: {model}")
 
     # ══════════════════════════════════════════
     # Step 2: 消息渠道
@@ -279,50 +329,84 @@ def setup(non_interactive=False):
     channel_defs = {
         "lark": {
             "name": "飞书 (Feishu/Lark)",
-            "vars": [("FEISHU_APP_ID", "App ID"), ("FEISHU_APP_SECRET", "App Secret"),
-                     ("FEISHU_VERIFY_TOKEN", "Verify Token"), ("FEISHU_ENCRYPT_KEY", "Encrypt Key")],
-            "example_yaml": "config/channels/feishu.yaml.example",
+            "bot_url": "https://open.feishu.cn/app",
+            "guide": "创建企业自建应用 → 添加「机器人」能力 → 获取 App ID / Secret",
+            "vars": [
+                ("FEISHU_APP_ID", "App ID"),
+                ("FEISHU_APP_SECRET", "App Secret"),
+                ("FEISHU_VERIFY_TOKEN", "Verify Token"),
+                ("FEISHU_ENCRYPT_KEY", "Encrypt Key"),
+            ],
         },
         "weixin": {
             "name": "微信 (WeChat)",
-            "vars": [("WECHAT_APP_ID", "App ID"), ("WECHAT_APP_SECRET", "App Secret"),
-                     ("WECHAT_TOKEN", "Token"), ("WECHAT_ENCODING_AES_KEY", "Encoding AES Key")],
-            "example_yaml": "config/channels/wechat.yaml.example",
+            "bot_url": "https://mp.weixin.qq.com/",
+            "guide": "公众号后台 → 开发 → 基本配置 → 获取 AppID / AppSecret",
+            "vars": [
+                ("WECHAT_APP_ID", "App ID"),
+                ("WECHAT_APP_SECRET", "App Secret"),
+                ("WECHAT_TOKEN", "Token"),
+                ("WECHAT_ENCODING_AES_KEY", "Encoding AES Key"),
+            ],
         },
         "qq": {
             "name": "QQ Bot",
-            "vars": [("QQ_APP_ID", "Bot App ID"), ("QQ_TOKEN", "Bot Token"),
-                     ("QQ_SECRET", "Bot Secret")],
-            "example_yaml": "config/channels/qq.yaml.example",
+            "bot_url": "https://q.qq.com/qqbot/",
+            "guide": "QQ 开放平台 → 创建机器人 → 获取 BotAppID / Token / Secret",
+            "vars": [
+                ("QQ_APP_ID", "Bot App ID"),
+                ("QQ_TOKEN", "Bot Token"),
+                ("QQ_SECRET", "Bot Secret"),
+            ],
         },
     }
 
-    if non_interactive:
-        console.print("  ⚠️  非交互模式, 跳过渠道配置")
+    ch_choices = [
+        questionary.Choice(
+            title=f"{v['name']:25s} {v['guide'][:40]}...",
+            value=k,
+        )
+        for k, v in channel_defs.items()
+    ]
+    selected = questionary.checkbox(
+        "选择要启用的消息渠道 (Space 选中/取消, ↑↓ 移动):",
+        choices=ch_choices,
+        style=questionary.Style([('selected', 'fg:green bold')]),
+    ).ask()
+    if selected is None:
+        console.print("  ⚠️  渠道配置已跳过")
     else:
-        for ch_id, ch_def in channel_defs.items():
+        channels_enabled = list(selected)
+        for ch_id in channels_enabled:
+            ch_def = channel_defs[ch_id]
             console.print(f"\n  [bold]{ch_def['name']}[/]")
-            if Confirm.ask(f"  启用 {ch_def['name']}?", default=False):
-                channels_enabled.append(ch_id)
-                console.print(f"  📋 {ch_def['name']} 需要以下凭证:")
-                for var_name, desc in ch_def["vars"]:
-                    val = Prompt.ask(f"    {desc} ({var_name})", password=False)
-                    if val:
-                        env_vars[var_name] = val
-                console.print(f"  ✅ {ch_def['name']} 已配置")
+            if ch_def.get("bot_url"):
+                console.print(f"  🔗 创建 Bot: [link={ch_def['bot_url']}]{ch_def['bot_url']}[/]")
+            console.print(f"  📋 {ch_def['guide']}")
+            for var_name, desc in ch_def["vars"]:
+                val = questionary.password(f"    {desc} ({var_name}):").ask()
+                if val:
+                    env_vars[var_name] = val
+            console.print(f"  ✅ {ch_def['name']} 已配置")
 
     # ══════════════════════════════════════════
     # Step 3: Gateway
     # ══════════════════════════════════════════
     console.print("\n[bold cyan]▶ Step 3/4[/]  [bold]Gateway 服务[/]\n")
-
-    if non_interactive:
-        gw_host, gw_port, gw_secret = "127.0.0.1", 18789, None
+    gw_host = questionary.text("监听地址:", default="127.0.0.1").ask()
+    if gw_host is None:
+        return
+    gw_port_str = questionary.text("监听端口:", default="18789", validate=lambda v: v.isdigit()).ask()
+    if gw_port_str is None:
+        return
+    gw_port = int(gw_port_str)
+    if gw_host not in ("127.0.0.1", "localhost"):
+        gw_secret = questionary.password("Gateway Secret (非本地监听必须):").ask()
+        if not gw_secret:
+            console.print("  ⚠️  非本地监听必须设置 Gateway Secret, 已取消")
+            return
     else:
-        gw_host = Prompt.ask("  监听地址", default="127.0.0.1")
-        gw_port = IntPrompt.ask("  监听端口", default=18789)
-        gw_secret = Prompt.ask("  Gateway Secret (可选, 非 127.0.0.1 监听时必须)", password=True, default="")
-
+        gw_secret = questionary.password("Gateway Secret (可选):").ask()
     env_vars["CH_GATEWAY_HOST"] = gw_host
     env_vars["CH_GATEWAY_PORT"] = str(gw_port)
     if gw_secret:
@@ -333,25 +417,38 @@ def setup(non_interactive=False):
     # Step 4: 确认 + 生成
     # ══════════════════════════════════════════
     console.print("\n[bold cyan]▶ Step 4/4[/]  [bold]确认配置[/]\n")
-
     summary = Table(box=box.SIMPLE, show_header=False)
     summary.add_column("项", style="bold", width=16)
     summary.add_column("值")
     summary.add_row("LLM 模型", model)
-    summary.add_row("渠道", ", ".join(str(channel_defs[c]["name"]) for c in channels_enabled) if channels_enabled else "(无)")
+    summary.add_row("渠道", ", ".join(channel_defs[c]["name"] for c in channels_enabled) if channels_enabled else "(无)")
     summary.add_row("Gateway", f"{gw_host}:{gw_port}")
-    summary.add_row("数据目录", os.getenv("CH_DATA_DIR", str(Path.home() / ".clawhermes")))
+    data_dir = Path(os.getenv("CH_DATA_DIR", str(Path.home() / ".clawhermes")))
+    summary.add_row("数据目录", str(data_dir))
     console.print(summary)
-
-    if not non_interactive and not Confirm.ask("\n确认生成配置?", default=True):
+    if not questionary.confirm("\n确认生成配置?", default=True).ask():
         console.print("  ⚠️  已取消")
         return
+    _apply_setup(env_vars, channels_enabled, channel_defs, model, gw_host, gw_port)
 
-    # 生成 .env
+
+def _setup_noninteractive():
+    """CI/Docker 静默初始化"""
+    env_vars: dict[str, str] = {
+        "CH_LLM_DEFAULT_MODEL": "deepseek/deepseek-chat",
+        "CH_GATEWAY_HOST": "127.0.0.1",
+        "CH_GATEWAY_PORT": "18789",
+    }
+    console.print("  ⚠️  非交互模式 — 使用默认值")
+    console.print("  LLM: deepseek/deepseek-chat (请手动设置 DEEPSEEK_API_KEY)")
+    console.print("  Gateway: 127.0.0.1:18789")
+    _apply_setup(env_vars, [], {}, "deepseek/deepseek-chat", "127.0.0.1", 18789)
+
+
+def _apply_setup(env_vars, channels_enabled, channel_defs, model, gw_host, gw_port):
+    """执行配置生成"""
     _write_env(env_vars)
     console.print("  ✅ .env 已生成")
-
-    # 生成 config.yaml
     from clawhermes.config import default_yaml, save_yaml
     cfg = default_yaml()
     cfg["llm"]["model"] = model
@@ -359,31 +456,29 @@ def setup(non_interactive=False):
     cfg["gateway"]["port"] = gw_port
     save_yaml(cfg)
     console.print("  ✅ config.yaml 已生成")
-
-    # 生成渠道 YAML
     data_dir = Path(os.getenv("CH_DATA_DIR", str(Path.home() / ".clawhermes")))
     channels_dir = data_dir / "channels"
     channels_dir.mkdir(parents=True, exist_ok=True)
     for ch_id in channels_enabled:
         ch_def = channel_defs[ch_id]
-        _copy_channel_example(str(ch_def["example_yaml"]), channels_dir, ch_id)
-        console.print(f"  ✅ channels/{ch_id}.yaml 已生成")
-
-    # 初始化 Agent
+        example_path = {
+            "lark": "config/channels/feishu.yaml.example",
+            "weixin": "config/channels/wechat.yaml.example",
+            "qq": "config/channels/qq.yaml.example",
+        }.get(ch_id, "")
+        if example_path:
+            _copy_channel_example(example_path, channels_dir, ch_id)
+            console.print(f"  ✅ channels/{ch_id}.yaml 已生成")
     from clawhermes.agent.agent_mgr import create_agent
     create_agent("default")
     console.print("  ✅ Agent 已初始化")
-
-    # 创建子目录
     for sub in ["skills", "providers"]:
         (data_dir / sub).mkdir(parents=True, exist_ok=True)
-    # ══════════════════════════════════════════
     # 自检
-    # ══════════════════════════════════════════
     console.print("\n[bold cyan]▶ 自检[/]\n")
     ok = True
     console.print(f"  ✅ Python {sys.version_info.major}.{sys.version_info.minor}")
-    for pkg in ["litellm", "fastapi", "rich", "yaml"]:
+    for pkg in ["litellm", "fastapi", "rich", "yaml", "questionary"]:
         try:
             __import__(pkg)
             console.print(f"  ✅ {pkg}")
@@ -395,14 +490,14 @@ def setup(non_interactive=False):
             __import__(f"clawhermes_{ch_id}")
             console.print(f"  ✅ clawhermes-{ch_id}")
         except ImportError:
-            console.print(f"  ⚠️  clawhermes-{ch_id} 未安装 (pip install -e ./clawhermes-{ch_id})")
-
+            console.print(f"  ⚠️  clawhermes-{ch_id} 未安装")
     if ok:
         console.print("\n[bold green]🎉 ClawHermes 初始化完成![/]")
         console.print(f"  📁 配置文件: {data_dir}")
         console.print("  🚀 启动: clawhermes gateway start")
     else:
         console.print("\n[bold yellow]⚠️  部分依赖缺失, 请运行 pip install -e . 后重试[/]")
+
 
 
 def _write_env(vars_dict: dict[str, str]):
@@ -417,8 +512,7 @@ def _write_env(vars_dict: dict[str, str]):
             if line and not line.startswith("#") and "=" in line:
                 k, _, v = line.partition("=")
                 existing[k.strip()] = v.strip()
-
-    lines = [
+    lines_out = [
         "# ============================================================",
         "# ClawHermes · 环境变量配置",
         "# 由 clawhermes setup 生成",
@@ -427,22 +521,22 @@ def _write_env(vars_dict: dict[str, str]):
     ]
     for k, v in vars_dict.items():
         if k in existing and existing[k] and ("KEY" in k or "SECRET" in k or "TOKEN" in k):
-            lines.append(f"{k}={existing[k]}  # (保留已有)")
+            lines_out.append(f"{k}={existing[k]}  # (保留已有)")
         else:
-            lines.append(f"{k}={v}")
-
-    env_path.write_text("\n".join(lines) + "\n")
+            lines_out.append(f"{k}={v}")
+    env_path.write_text("\n".join(lines_out) + "\n")
 
 
 def _copy_channel_example(example_path: str, dest_dir: Path, ch_id: str):
     """复制渠道 YAML 示例到配置目录"""
     import shutil
-    repo_root = Path(__file__).resolve().parent.parent.parent  # src/clawhermes → repo root
+    repo_root = Path(__file__).resolve().parent.parent.parent
     src = repo_root / example_path
     dst = dest_dir / f"{ch_id}.yaml"
     if src.exists():
         if not dst.exists():
             shutil.copy(src, dst)
+
 
 @main.command()
 def doctor():

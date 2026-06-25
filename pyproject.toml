@@ -26,6 +26,7 @@ dependencies = [
 
     # === CLI ===
     "rich>=13.0",
+    "questionary>=2.0",
     "click>=8.1",
 ]
 
