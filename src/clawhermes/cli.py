@@ -19,6 +19,20 @@ console = Console()
 logging.basicConfig(level=logging.WARNING)
 
 
+
+def _load_dotenv():
+    """加载 $CH_DATA_DIR/.env 到 os.environ（不覆盖已有环境变量）"""
+    env_path = Path(os.getenv("CH_DATA_DIR", str(Path.home() / ".clawhermes"))) / ".env"
+    if not env_path.exists():
+        return
+    for line in env_path.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, val = line.partition("=")
+        key = key.strip()
+        if key not in os.environ:
+            os.environ[key] = val.strip()
 def _create_agent(api_key=None, model=None):
     from clawhermes.agent.loop import Agent, AgentConfig, ToolRegistry
     from clawhermes.agent.memory import JSONMemoryProvider, MemoryManager
@@ -101,6 +115,7 @@ def gateway():
 @click.option("--model", default=None)
 def start(port, host, api_key, model):
     """启动 Gateway"""
+    _load_dotenv()
     api_key = api_key or os.getenv("DEEPSEEK_API_KEY")
     if not api_key:
         console.print("❌ 请设置 DEEPSEEK_API_KEY", style="red")
