@@ -239,7 +239,7 @@ def setup(non_interactive=False):
     console.print("\n[bold cyan]▶ Step 1/4[/]  [bold]LLM 提供商[/]\n")
 
     # 动态提供商列表 (litellm 兼容)
-    _PROVIDERS = [
+    _providers = [
         {"name": "DeepSeek",        "prefix": "deepseek/deepseek-chat",           "key": "DEEPSEEK_API_KEY",  "url": "https://platform.deepseek.com/api_keys"},
         {"name": "OpenAI",          "prefix": "openai/gpt-4o",                     "key": "OPENAI_API_KEY",    "url": "https://platform.openai.com/api-keys"},
         {"name": "Anthropic",       "prefix": "anthropic/claude-sonnet-4-20250514","key": "ANTHROPIC_API_KEY",  "url": "https://console.anthropic.com/keys"},
@@ -271,7 +271,7 @@ def setup(non_interactive=False):
         return
 
     idx = choices.index(selection)
-    provider = _PROVIDERS[idx]
+    provider = _providers[idx]
     pfx = provider["prefix"]  # type: ignore[index]
 
     # API Key
@@ -304,7 +304,7 @@ def setup(non_interactive=False):
 
     # ══════════════════════════════════════════
     # 该提供商的常用模型列表
-    _MODELS_BY_PROVIDER: dict[str, list[tuple[str, str]]] = {
+    _models_by_provider: dict[str, list[tuple[str, str]]] = {
         "deepseek": [
             ("deepseek/deepseek-chat", "旗舰通用"),
             ("deepseek/deepseek-reasoner", "深度推理 (R1)"),
@@ -365,20 +365,20 @@ def setup(non_interactive=False):
     # 提取 provider 的 key (如 "openai", "deepseek")
     prov_key = provider["name"].lower().replace(" ", "_").replace("(", "").replace(")", "")  # type: ignore[index]
     # 映射到模型 key
-    _PROV_TO_MODEL_KEY = {
+    _prov_to_model_key = {
         "deepseek": "deepseek", "openai": "openai", "anthropic": "anthropic",
         "google_gemini": "gemini", "groq": "groq", "together_ai": "together_ai",
         "fireworks_ai": "fireworks_ai", "mistral": "mistral", "cohere": "cohere",
         "xai_/_grok": "xai", "ollama_本地": "ollama", "openrouter": "openrouter",
         "vllm_自部署": None, "自定义_litellm": None,
     }
-    model_key = _PROV_TO_MODEL_KEY.get(prov_key)
+    model_key = _prov_to_model_key.get(prov_key)
 
     model = None
-    if model_key and model_key in _MODELS_BY_PROVIDER:
+    if model_key and model_key in _models_by_provider:
         model_choices = [
             questionary.Choice(title=f"{m[0]:50s} {m[1]}", value=m[0])
-            for m in _MODELS_BY_PROVIDER[model_key]
+            for m in _models_by_provider[model_key]
         ]
         model_choices.append(questionary.Choice(title="🔄 从 API 获取模型列表 (需要已设置 API Key)", value="__fetch__"))
         model_choices.append(questionary.Choice(title="✎ 自定义 litellm 模型标识 ...", value="__custom__"))
