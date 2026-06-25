@@ -256,7 +256,7 @@ def setup(non_interactive=False):
         {"name": "自定义 (litellm)", "prefix": "",                                  "key": None,                "url": None},
     ]
 
-    choices = [f"{p['name']:20s} {p['prefix']}" for p in _PROVIDERS]  # type: ignore[index]
+    choices = [f"{p['name']:20s} {p['prefix']}" for p in _providers]  # type: ignore[index]
     selection = questionary.select(
         "选择 LLM 提供商 (↑↓ 移动, / 搜索):",
         choices=choices,
