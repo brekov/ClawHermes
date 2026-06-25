@@ -358,6 +358,9 @@ def init(non_interactive=False):
     create_agent("default")
     console.print("  ✅ Agent 已初始化")
 
+    # 创建子目录
+    for sub in ["skills", "providers"]:
+        (data_dir / sub).mkdir(parents=True, exist_ok=True)
     # ══════════════════════════════════════════
     # 自检
     # ══════════════════════════════════════════
@@ -427,12 +430,10 @@ def _copy_channel_example(example_path: str, dest_dir: Path, ch_id: str):
 @main.command()
 def setup():
     """初始化"""
-    data_dir = Path(os.getenv("CH_DATA_DIR", "~/.clawhermes")).expanduser()
-    data_dir.mkdir(parents=True, exist_ok=True)
-    (data_dir / "skills").mkdir(parents=True, exist_ok=True)
-    from clawhermes.agent.agent_mgr import create_agent
-    create_agent("default")
-    console.print(f"✅ 已初始化: {data_dir}")
+    """初始化 (init --non-interactive 的别名)"""
+    import click as _click
+    ctx = _click.get_current_context()
+    init.callback(non_interactive=True)
 
 
 @main.command()
