@@ -501,7 +501,7 @@ def setup(non_interactive=False):
     summary.add_column("项", style="bold", width=16)
     summary.add_column("值")
     summary.add_row("LLM 模型", model)
-    summary.add_row("渠道", ", ".join(channel_defs[c]["name"] for c in channels_enabled) if channels_enabled else "(无)")
+    summary.add_row("渠道", ", ".join(str(channel_defs[c]["name"]) for c in channels_enabled) if channels_enabled else "(无)")
     summary.add_row("Gateway", f"{gw_host}:{gw_port}")
     data_dir = Path(os.getenv("CH_DATA_DIR", str(Path.home() / ".clawhermes")))
     summary.add_row("数据目录", str(data_dir))
@@ -710,4 +710,3 @@ def doctor():
 
 if __name__ == "__main__":
     main()
-
