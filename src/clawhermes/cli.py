@@ -274,6 +274,35 @@ def setup(non_interactive=False):
     provider = _PROVIDERS[idx]
     pfx = provider["prefix"]
 
+    # API Key
+    if provider["key"]:
+        if provider["url"]:
+            console.print(f"  🔗 获取 Key: [link={provider['url']}]{provider['url']}[/]")
+        api_key = questionary.password(f"{provider['key']} (输入隐藏):").ask()
+        if api_key:
+            env_vars[provider["key"]] = api_key
+            console.print("  ✅ API Key 已设置")
+    elif provider["name"] == "Ollama (本地)":
+        base_url = questionary.text("Ollama 地址:", default="http://localhost:11434").ask()
+        if base_url:
+            env_vars["OLLAMA_BASE_URL"] = base_url
+    elif provider["name"] == "vLLM (自部署)":
+        vllm_url = questionary.text("vLLM API Base:", default="http://localhost:8000/v1").ask()
+        if vllm_url:
+            env_vars["OPENAI_BASE_URL"] = vllm_url
+            api_key = questionary.password("vLLM API Key (可选):").ask()
+            if api_key:
+                env_vars["OPENAI_API_KEY"] = api_key
+    elif provider["name"] == "自定义 (litellm)":
+        base_url = questionary.text("API Base URL (可选):", default="").ask()
+        if base_url:
+            env_vars["CUSTOM_LLM_BASE_URL"] = base_url
+        custom_key = questionary.password("API Key (可选):").ask()
+        if custom_key:
+            env_vars["CUSTOM_LLM_API_KEY"] = custom_key
+
+
+    # ══════════════════════════════════════════
     # 该提供商的常用模型列表
     _MODELS_BY_PROVIDER: dict[str, list[tuple[str, str]]] = {
         "deepseek": [
@@ -371,37 +400,8 @@ def setup(non_interactive=False):
             default=pfx,
         ).ask()
     env_vars["CH_LLM_DEFAULT_MODEL"] = model.strip()
+    console.print(f"  ✅ LLM: {model.strip()}")
 
-    # API Key
-    if provider["key"]:
-        if provider["url"]:
-            console.print(f"  🔗 获取 Key: [link={provider['url']}]{provider['url']}[/]")
-        api_key = questionary.password(f"{provider['key']} (输入隐藏):").ask()
-        if api_key:
-            env_vars[provider["key"]] = api_key
-            console.print("  ✅ API Key 已设置")
-    elif provider["name"] == "Ollama (本地)":
-        base_url = questionary.text("Ollama 地址:", default="http://localhost:11434").ask()
-        if base_url:
-            env_vars["OLLAMA_BASE_URL"] = base_url
-    elif provider["name"] == "vLLM (自部署)":
-        vllm_url = questionary.text("vLLM API Base:", default="http://localhost:8000/v1").ask()
-        if vllm_url:
-            env_vars["OPENAI_BASE_URL"] = vllm_url
-            api_key = questionary.password("vLLM API Key (可选):").ask()
-            if api_key:
-                env_vars["OPENAI_API_KEY"] = api_key
-    elif provider["name"] == "自定义 (litellm)":
-        base_url = questionary.text("API Base URL (可选):", default="").ask()
-        if base_url:
-            env_vars["CUSTOM_LLM_BASE_URL"] = base_url
-        custom_key = questionary.password("API Key (可选):").ask()
-        if custom_key:
-            env_vars["CUSTOM_LLM_API_KEY"] = custom_key
-
-    console.print(f"  ✅ LLM: {model}")
-
-    # ══════════════════════════════════════════
     # Step 2: 消息渠道
     # ══════════════════════════════════════════
     console.print("\n[bold cyan]▶ Step 2/4[/]  [bold]消息渠道[/]\n")
