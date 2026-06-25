@@ -210,8 +210,8 @@ class TestSetup:
             runner = CliRunner()
             result = runner.invoke(main, ["setup"])
         assert result.exit_code == 0
-        assert "已初始化" in result.output
-        assert (tmp_path / "clawhome" / "skills").is_dir()
+        assert "初始化完成" in result.output
+        assert ".env 已生成" in result.output
 
 
 # ---------------------------------------------------------------------------

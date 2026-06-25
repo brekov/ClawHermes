@@ -3,17 +3,17 @@ from __future__ import annotations
 
 import logging
 import os
+import sys
 from pathlib import Path
 
 import click
+from rich import box
 from rich.console import Console
 from rich.markdown import Markdown
-from rich.prompt import Prompt
-
 from rich.panel import Panel
+from rich.prompt import Prompt
 from rich.table import Table
 from rich.text import Text
-from rich import box
 
 console = Console()
 logging.basicConfig(level=logging.WARNING)
@@ -198,6 +198,8 @@ def cmd_agent_set(name):
 @click.option("--non-interactive", is_flag=True, help="非交互模式, 使用默认值")
 def setup(non_interactive=False):
     """交互式初始化向导 — 一步步配置 LLM、渠道、Gateway"""
+    if not non_interactive and not sys.stdin.isatty():
+        non_interactive = True
     from rich.prompt import Confirm, IntPrompt
 
     # ══════════════════════════════════════════
@@ -211,7 +213,6 @@ def setup(non_interactive=False):
     console.print(welcome)
 
     env_vars: dict[str, str] = {}
-    yaml_sections: dict[str, dict] = {}
     channels_enabled: list[str] = []
 
     # ══════════════════════════════════════════
@@ -322,7 +323,7 @@ def setup(non_interactive=False):
     summary.add_column("项", style="bold", width=16)
     summary.add_column("值")
     summary.add_row("LLM 模型", model)
-    summary.add_row("渠道", ", ".join(channel_defs[c]["name"] for c in channels_enabled) if channels_enabled else "(无)")
+    summary.add_row("渠道", ", ".join(str(channel_defs[c]["name"]) for c in channels_enabled) if channels_enabled else "(无)")
     summary.add_row("Gateway", f"{gw_host}:{gw_port}")
     summary.add_row("数据目录", os.getenv("CH_DATA_DIR", str(Path.home() / ".clawhermes")))
     console.print(summary)
@@ -350,7 +351,7 @@ def setup(non_interactive=False):
     channels_dir.mkdir(parents=True, exist_ok=True)
     for ch_id in channels_enabled:
         ch_def = channel_defs[ch_id]
-        _copy_channel_example(ch_def["example_yaml"], channels_dir, ch_id)
+        _copy_channel_example(str(ch_def["example_yaml"]), channels_dir, ch_id)
         console.print(f"  ✅ channels/{ch_id}.yaml 已生成")
 
     # 初始化 Agent
@@ -365,7 +366,6 @@ def setup(non_interactive=False):
     # 自检
     # ══════════════════════════════════════════
     console.print("\n[bold cyan]▶ 自检[/]\n")
-    import sys
     ok = True
     console.print(f"  ✅ Python {sys.version_info.major}.{sys.version_info.minor}")
     for pkg in ["litellm", "fastapi", "rich", "yaml"]:
@@ -430,7 +430,6 @@ def _copy_channel_example(example_path: str, dest_dir: Path, ch_id: str):
 @main.command()
 def doctor():
     """诊断"""
-    import sys
     console.print(f"✅ Python {sys.version_info.major}.{sys.version_info.minor}")
     for pkg, role in [("litellm", "llm"), ("fastapi", "web"), ("chromadb", "vector"), ("rich", "cli")]:
         try:

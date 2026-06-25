@@ -61,17 +61,26 @@ for ch in "${CHANNELS[@]}"; do
 done
 
 # ── 安装核心 ──
-$PIP install -e . -q
+echo -n "  📦 安装 clawhermes 核心 ... "
+if $PIP install -e . > /tmp/clawhermes-pip.log 2>&1; then
+    echo "✅"
+else
+    echo "❌"
+    tail -30 /tmp/clawhermes-pip.log
+    echo "安装失败, 查看完整日志: /tmp/clawhermes-pip.log"
+    exit 1
+fi
 
 # ── 安装渠道子仓库 ──
 for ch in "${CHANNELS[@]}"; do
     CH_DIR="$INSTALL_DIR/clawhermes-${ch}"
     if [ -d "$CH_DIR" ] && [ -f "$CH_DIR/pyproject.toml" ]; then
-        echo "  📦 安装 clawhermes-${ch} ..."
-        if $PIP install -e "$CH_DIR"; then
-            echo "  ✅ clawhermes-${ch}"
+        echo -n "  📦 安装 clawhermes-${ch} ... "
+        if $PIP install -e "$CH_DIR" > /tmp/clawhermes-pip-${ch}.log 2>&1; then
+            echo "✅"
         else
-            echo "  ❌ clawhermes-${ch} 安装失败"
+            echo "❌"
+            tail -20 /tmp/clawhermes-pip-${ch}.log
         fi
     else
         echo "  ⚠️  clawhermes-${ch} 未找到，跳过"
