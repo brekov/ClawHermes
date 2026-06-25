@@ -79,8 +79,9 @@ for ch in "${CHANNELS[@]}"; do
 done
 
 # ── 初始化 ──
-mkdir -p "$HOME"/.clawhermes/{channels,providers,skills}
-python3 -m clawhermes.cli setup
+echo ""
+echo "==> 交互式配置"
+echo "  运行 clawhermes init 完成 LLM/渠道/Gateway 配置"
 
 # ── 验证 ──
 echo ""
