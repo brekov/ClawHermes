@@ -67,7 +67,12 @@ $PIP install -e . -q
 for ch in "${CHANNELS[@]}"; do
     CH_DIR="$INSTALL_DIR/clawhermes-${ch}"
     if [ -d "$CH_DIR" ] && [ -f "$CH_DIR/pyproject.toml" ]; then
-        $PIP install -e "$CH_DIR" -q && echo "  ✅ clawhermes-${ch}"
+        echo "  📦 安装 clawhermes-${ch} ..."
+        if $PIP install -e "$CH_DIR"; then
+            echo "  ✅ clawhermes-${ch}"
+        else
+            echo "  ❌ clawhermes-${ch} 安装失败"
+        fi
     else
         echo "  ⚠️  clawhermes-${ch} 未找到，跳过"
     fi
@@ -85,7 +90,12 @@ import litellm, fastapi, rich, yaml
 print('  ✅ 核心依赖')
 "
 for ch in "${CHANNELS[@]}"; do
-    python3 -c "import clawhermes_${ch}" 2>/dev/null && echo "  ✅ clawhermes-${ch}" || echo "  ⚠️  clawhermes-${ch} 未安装"
+    IMPORT_ERR=$(python3 -c "import clawhermes_${ch}" 2>&1)
+    if [ $? -eq 0 ]; then
+        echo "  ✅ clawhermes-${ch}"
+    else
+        echo "  ⚠️  clawhermes-${ch} 导入失败: ${IMPORT_ERR}"
+    fi
 done
 
 echo ""
