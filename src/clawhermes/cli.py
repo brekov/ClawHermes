@@ -15,6 +15,8 @@ from rich.prompt import Prompt
 from rich.table import Table
 from rich.text import Text
 
+console = Console()
+logging.basicConfig(level=logging.WARNING)
 
 
 def _create_agent(api_key=None, model=None):
