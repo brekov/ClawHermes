@@ -271,29 +271,29 @@ def setup(non_interactive=False):
         return
 
     idx = choices.index(selection)
-    provider = _PROVIDERS[idx]
-    pfx = provider["prefix"]  # type: ignore[index]
+    provider: dict[str, object] = _PROVIDERS[idx]  # type: ignore[arg-type]
+    pfx = provider["prefix"]
 
     # API Key
-    if provider["key"]:  # type: ignore[index]
-        if provider["url"]:  # type: ignore[index]
-            console.print(f"  🔗 获取 Key: [link={provider['url']}]{provider['url']}[/]")  # type: ignore[index]
-        api_key = questionary.password(f"{provider['key']} (输入隐藏):").ask()  # type: ignore[index]
+    if provider["key"]:
+        if provider["url"]:
+            console.print(f"  🔗 获取 Key: [link={provider['url']}]{provider['url']}[/]")
+        api_key = questionary.password(f"{provider['key']} (输入隐藏):").ask()
         if api_key:
-            env_vars[provider["key"]] = api_key  # type: ignore[index]
+            env_vars[provider["key"]] = api_key
             console.print("  ✅ API Key 已设置")
-    elif provider["name"] == "Ollama (本地)":  # type: ignore[index]
+    elif provider["name"] == "Ollama (本地)":
         base_url = questionary.text("Ollama 地址:", default="http://localhost:11434").ask()
         if base_url:
             env_vars["OLLAMA_BASE_URL"] = base_url
-    elif provider["name"] == "vLLM (自部署)":  # type: ignore[index]
+    elif provider["name"] == "vLLM (自部署)":
         vllm_url = questionary.text("vLLM API Base:", default="http://localhost:8000/v1").ask()
         if vllm_url:
             env_vars["OPENAI_BASE_URL"] = vllm_url
             api_key = questionary.password("vLLM API Key (可选):").ask()
             if api_key:
                 env_vars["OPENAI_API_KEY"] = api_key
-    elif provider["name"] == "自定义 (litellm)":  # type: ignore[index]
+    elif provider["name"] == "自定义 (litellm)":
         base_url = questionary.text("API Base URL (可选):", default="").ask()
         if base_url:
             env_vars["CUSTOM_LLM_BASE_URL"] = base_url
@@ -363,7 +363,7 @@ def setup(non_interactive=False):
     }
 
     # 提取 provider 的 key (如 "openai", "deepseek")
-    prov_key = provider["name"].lower().replace(" ", "_").replace("(", "").replace(")", "")  # type: ignore[index]
+    prov_key = provider["name"].lower().replace(" ", "_").replace("(", "").replace(")", "")
     # 映射到模型 key
     _PROV_TO_MODEL_KEY = {
         "deepseek": "deepseek", "openai": "openai", "anthropic": "anthropic",
@@ -383,7 +383,7 @@ def setup(non_interactive=False):
         model_choices.append(questionary.Choice(title="🔄 从 API 获取模型列表 (需要已设置 API Key)", value="__fetch__"))
         model_choices.append(questionary.Choice(title="✎ 自定义 litellm 模型标识 ...", value="__custom__"))
         model = questionary.select(
-            f"选择 {provider['name']} 模型 (↑↓ 移动, / 搜索):",  # type: ignore[index]
+            f"选择 {provider['name']} 模型 (↑↓ 移动, / 搜索):",
             choices=model_choices,
             use_indicator=True,
         ).ask()
@@ -458,6 +458,7 @@ def setup(non_interactive=False):
     else:
         channels_enabled = list(selected)
         for ch_id in channels_enabled:
+            ch_def = channel_defs[ch_id]
             console.print(f"\n  [bold]{ch_def['name']}[/]")
             if ch_def.get("bot_url"):
                 console.print(f"  🔗 创建 Bot: [link={ch_def['bot_url']}]{ch_def['bot_url']}[/]")
@@ -500,7 +501,7 @@ def setup(non_interactive=False):
     summary.add_column("项", style="bold", width=16)
     summary.add_column("值")
     summary.add_row("LLM 模型", model)
-    summary.add_row("渠道", ", ".join(str(channel_defs[c]["name"]) for c in channels_enabled) if channels_enabled else "(无)")
+    summary.add_row("渠道", ", ".join(channel_defs[c]["name"] for c in channels_enabled) if channels_enabled else "(无)")
     summary.add_row("Gateway", f"{gw_host}:{gw_port}")
     data_dir = Path(os.getenv("CH_DATA_DIR", str(Path.home() / ".clawhermes")))
     summary.add_row("数据目录", str(data_dir))
@@ -534,7 +535,7 @@ def _fetch_models_from_api(provider, default_model):
 
     models: list[tuple[str, str]] = []
 
-    provider_name = provider["name"]  # type: ignore[index]
+    provider_name = provider["name"]
     try:
         if provider_name == "Ollama (本地)":
             base = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
@@ -574,7 +575,7 @@ def _fetch_models_from_api(provider, default_model):
         if len(models) > 50:
             model_choices.append(questionary.Choice(
                 title=f"... 还有 {len(models)-50} 个模型, 请用自定义输入",
-                value=None, disabled="true"))
+                value=None, disabled=True))
         model_choices.append(questionary.Choice(title="✎ 自定义 litellm 模型标识 ...", value="__custom__"))
         model = questionary.select(
             f"{provider_name} 在线模型 ({len(models)} 个, ↑↓ 移动, / 搜索):",
@@ -611,7 +612,7 @@ def _apply_setup(env_vars, channels_enabled, channel_defs, model, gw_host, gw_po
     channels_dir = data_dir / "channels"
     channels_dir.mkdir(parents=True, exist_ok=True)
     for ch_id in channels_enabled:
-        ch_def = channel_defs[ch_id]
+
         example_path = {
             "lark": "config/channels/feishu.yaml.example",
             "weixin": "config/channels/wechat.yaml.example",
