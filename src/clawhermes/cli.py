@@ -3,17 +3,18 @@ from __future__ import annotations
 
 import logging
 import os
+import sys
 from pathlib import Path
 
 import click
+from rich import box
 from rich.console import Console
 from rich.markdown import Markdown
-from rich.prompt import Prompt
-
 from rich.panel import Panel
+from rich.prompt import Prompt
 from rich.table import Table
 from rich.text import Text
-from rich import box
+
 
 console = Console()
 logging.basicConfig(level=logging.WARNING)
@@ -198,6 +199,8 @@ def cmd_agent_set(name):
 @click.option("--non-interactive", is_flag=True, help="非交互模式, 使用默认值")
 def setup(non_interactive=False):
     """交互式初始化向导 — 一步步配置 LLM、渠道、Gateway"""
+    if not non_interactive and not sys.stdin.isatty():
+        non_interactive = True
     from rich.prompt import Confirm, IntPrompt
 
     # ══════════════════════════════════════════
@@ -211,7 +214,6 @@ def setup(non_interactive=False):
     console.print(welcome)
 
     env_vars: dict[str, str] = {}
-    yaml_sections: dict[str, dict] = {}
     channels_enabled: list[str] = []
 
     # ══════════════════════════════════════════
@@ -322,7 +324,7 @@ def setup(non_interactive=False):
     summary.add_column("项", style="bold", width=16)
     summary.add_column("值")
     summary.add_row("LLM 模型", model)
-    summary.add_row("渠道", ", ".join(channel_defs[c]["name"] for c in channels_enabled) if channels_enabled else "(无)")
+    summary.add_row("渠道", ", ".join(str(channel_defs[c]["name"]) for c in channels_enabled) if channels_enabled else "(无)")  # type: ignore[arg-type]
     summary.add_row("Gateway", f"{gw_host}:{gw_port}")
     summary.add_row("数据目录", os.getenv("CH_DATA_DIR", str(Path.home() / ".clawhermes")))
     console.print(summary)
