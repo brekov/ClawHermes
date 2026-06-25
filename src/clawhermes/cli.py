@@ -271,7 +271,8 @@ def setup(non_interactive=False):
         return
 
     idx = choices.index(selection)
-    provider: dict[str, object] = _PROVIDERS[idx]  # type: ignore[arg-type]
+    from typing import Any
+    provider: dict[str, Any] = _PROVIDERS[idx]
     pfx = provider["prefix"]
 
     # API Key
@@ -501,7 +502,8 @@ def setup(non_interactive=False):
     summary.add_column("项", style="bold", width=16)
     summary.add_column("值")
     summary.add_row("LLM 模型", model)
-    summary.add_row("渠道", ", ".join(channel_defs[c]["name"] for c in channels_enabled) if channels_enabled else "(无)")
+    summary.add_row("渠道", ", ".join(str(channel_defs[c]["name"]) for c in channels_enabled) if channels_enabled else "(无)")
+  # type: ignore[arg-type]
     summary.add_row("Gateway", f"{gw_host}:{gw_port}")
     data_dir = Path(os.getenv("CH_DATA_DIR", str(Path.home() / ".clawhermes")))
     summary.add_row("数据目录", str(data_dir))
@@ -528,7 +530,9 @@ def _setup_noninteractive():
 
 def _fetch_models_from_api(provider, default_model):
     """尝试从 API 动态获取模型列表, 失败则回退到自定义输入"""
-    import json, urllib.error, urllib.request
+    import json
+    import urllib.error
+    import urllib.request
 
     key_var = provider.get("key")
     api_key = os.environ.get(key_var, "") if key_var else ""
