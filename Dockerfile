@@ -41,7 +41,7 @@ RUN if [ -n "$WITH_LARK" ] && [ -d clawhermes-lark ]; then \
     fi
 
 # 初始化
-RUN clawhermes init --non-interactive
+RUN clawhermes setup --non-interactive
 
 # 健康检查
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \

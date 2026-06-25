@@ -81,7 +81,7 @@ done
 # ── 初始化 ──
 echo ""
 echo "==> 交互式配置"
-echo "  运行 clawhermes init 完成 LLM/渠道/Gateway 配置"
+echo "  运行 clawhermes setup 完成 LLM/渠道/Gateway 配置"
 
 # ── 验证 ──
 echo ""

@@ -196,7 +196,7 @@ def cmd_agent_set(name):
 
 @main.command()
 @click.option("--non-interactive", is_flag=True, help="非交互模式, 使用默认值")
-def init(non_interactive=False):
+def setup(non_interactive=False):
     """交互式初始化向导 — 一步步配置 LLM、渠道、Gateway"""
     from rich.prompt import Confirm, IntPrompt
 
@@ -404,7 +404,7 @@ def _write_env(vars_dict: dict[str, str]):
     lines = [
         "# ============================================================",
         "# ClawHermes · 环境变量配置",
-        "# 由 clawhermes init 生成",
+        "# 由 clawhermes setup 生成",
         "# ============================================================",
         "",
     ]
@@ -426,15 +426,6 @@ def _copy_channel_example(example_path: str, dest_dir: Path, ch_id: str):
     if src.exists():
         if not dst.exists():
             shutil.copy(src, dst)
-
-@main.command()
-def setup():
-    """初始化"""
-    """初始化 (init --non-interactive 的别名)"""
-    import click as _click
-    ctx = _click.get_current_context()
-    init.callback(non_interactive=True)
-
 
 @main.command()
 def doctor():
