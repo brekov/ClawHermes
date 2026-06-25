@@ -274,22 +274,103 @@ def setup(non_interactive=False):
     provider = _PROVIDERS[idx]
     pfx = provider["prefix"]
 
-    # 模型配置
-    if provider["name"] == "自定义 (litellm)":
-        pfx = questionary.text(
-            "输入 litellm 模型标识 (如 openai/gpt-4o):",
-            validate=lambda v: bool(v.strip()),
-        ).ask()
-        if not pfx:
-            return
+    # 该提供商的常用模型列表
+    _MODELS_BY_PROVIDER: dict[str, list[tuple[str, str]]] = {
+        "deepseek": [
+            ("deepseek/deepseek-chat", "旗舰通用"),
+            ("deepseek/deepseek-reasoner", "深度推理 (R1)"),
+        ],
+        "openai": [
+            ("openai/gpt-4o", "旗舰多模态"),
+            ("openai/gpt-4o-mini", "轻量快速"),
+            ("openai/gpt-4-turbo", "Turbo"),
+            ("openai/o3-mini", "推理"),
+        ],
+        "anthropic": [
+            ("anthropic/claude-sonnet-4-20250514", "Sonnet 4"),
+            ("anthropic/claude-3-5-haiku-20241022", "Haiku 3.5"),
+        ],
+        "gemini": [
+            ("gemini/gemini-2.5-flash", "Flash 2.5"),
+            ("gemini/gemini-2.5-pro", "Pro 2.5"),
+            ("gemini/gemini-2.0-flash", "Flash 2.0"),
+        ],
+        "groq": [
+            ("groq/llama-4-scout-17b-16e", "Llama 4 Scout"),
+            ("groq/llama-3.3-70b-versatile", "Llama 3.3 70B"),
+            ("groq/mixtral-8x7b-32768", "Mixtral 8x7B"),
+        ],
+        "together_ai": [
+            ("together_ai/meta-llama/Llama-4-Maverick-17B-128E", "Llama 4 Maverick"),
+            ("together_ai/deepseek-ai/DeepSeek-R1", "DeepSeek R1"),
+        ],
+        "fireworks_ai": [
+            ("fireworks_ai/llama-v3p1-405b-instruct", "Llama 3.1 405B"),
+            ("fireworks_ai/llama-v3p1-70b-instruct", "Llama 3.1 70B"),
+        ],
+        "mistral": [
+            ("mistral/mistral-large-latest", "Large"),
+            ("mistral/mistral-small-latest", "Small"),
+            ("mistral/codestral-latest", "Codestral"),
+        ],
+        "cohere": [
+            ("command-r-plus", "Command R+"),
+            ("command-r", "Command R"),
+        ],
+        "xai": [
+            ("xai/grok-3", "Grok 3"),
+        ],
+        "ollama": [
+            ("ollama/qwen2.5", "Qwen 2.5"),
+            ("ollama/llama3.2", "Llama 3.2"),
+            ("ollama/mistral", "Mistral"),
+            ("ollama/deepseek-r1", "DeepSeek R1"),
+        ],
+        "openrouter": [
+            ("openrouter/openai/gpt-4o", "GPT-4o"),
+            ("openrouter/anthropic/claude-sonnet-4-20250514", "Claude Sonnet 4"),
+            ("openrouter/google/gemini-2.5-pro", "Gemini 2.5 Pro"),
+        ],
+    }
 
-    default_model = pfx if pfx else ""
-    model = questionary.text(
-        f"模型名称 (Enter 确认 = {default_model}):",
-        default=default_model,
-    ).ask()
-    if model is None:
+    # 提取 provider 的 key (如 "openai", "deepseek")
+    prov_key = provider["name"].lower().replace(" ", "_").replace("(", "").replace(")", "")
+    # 映射到模型 key
+    _PROV_TO_MODEL_KEY = {
+        "deepseek": "deepseek", "openai": "openai", "anthropic": "anthropic",
+        "google_gemini": "gemini", "groq": "groq", "together_ai": "together_ai",
+        "fireworks_ai": "fireworks_ai", "mistral": "mistral", "cohere": "cohere",
+        "xai_/_grok": "xai", "ollama_本地": "ollama", "openrouter": "openrouter",
+        "vllm_自部署": None, "自定义_litellm": None,
+    }
+    model_key = _PROV_TO_MODEL_KEY.get(prov_key)
+
+    model = None
+    if model_key and model_key in _MODELS_BY_PROVIDER:
+        model_choices = [
+            questionary.Choice(title=f"{m[0]:50s} {m[1]}", value=m[0])
+            for m in _MODELS_BY_PROVIDER[model_key]
+        ]
+        model_choices.append(questionary.Choice(title="✎ 自定义输入 ...", value="__custom__"))
+        model = questionary.select(
+            f"选择 {provider['name']} 模型 (↑↓ 移动, / 搜索):",
+            choices=model_choices,
+            use_indicator=True,
+        ).ask()
+        if model == "__custom__":
+            model = questionary.text(
+                "自定义 litellm 模型标识:",
+                default=pfx,
+            ).ask()
+    else:
+        model = questionary.text(
+            f"自定义模型标识 (Enter 确认 = {pfx}):",
+            default=pfx,
+        ).ask()
+
+    if not model:
         return
+    env_vars["CH_LLM_DEFAULT_MODEL"] = model.strip()
     env_vars["CH_LLM_DEFAULT_MODEL"] = model.strip()
 
     # API Key
