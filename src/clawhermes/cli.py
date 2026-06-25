@@ -383,7 +383,7 @@ def setup(non_interactive=False):
         model_choices.append(questionary.Choice(title="🔄 从 API 获取模型列表 (需要已设置 API Key)", value="__fetch__"))
         model_choices.append(questionary.Choice(title="✎ 自定义 litellm 模型标识 ...", value="__custom__"))
         model = questionary.select(
-            f"选择 {provider['name']} 模型 (↑↓ 移动, / 搜索):",
+            f"选择 {provider['name']} 模型 (↑↓ 移动, / 搜索):",  # type: ignore[index]
             choices=model_choices,
             use_indicator=True,
         ).ask()
