@@ -256,7 +256,7 @@ def setup(non_interactive=False):
         {"name": "自定义 (litellm)", "prefix": "",                                  "key": None,                "url": None},
     ]
 
-    choices = [f"{p['name']:20s} {p['prefix']}" for p in _PROVIDERS]
+    choices = [f"{p['name']:20s} {p['prefix']}" for p in _PROVIDERS]  # type: ignore[index]
     selection = questionary.select(
         "选择 LLM 提供商 (↑↓ 移动, / 搜索):",
         choices=choices,
@@ -277,8 +277,8 @@ def setup(non_interactive=False):
     # API Key
     if provider["key"]:  # type: ignore[index]
         if provider["url"]:  # type: ignore[index]
-            console.print(f"  🔗 获取 Key: [link={provider['url']}]{provider['url']}[/]")
-        api_key = questionary.password(f"{provider['key']} (输入隐藏):").ask()
+            console.print(f"  🔗 获取 Key: [link={provider['url']}]{provider['url']}[/]")  # type: ignore[index]
+        api_key = questionary.password(f"{provider['key']} (输入隐藏):").ask()  # type: ignore[index]
         if api_key:
             env_vars[provider["key"]] = api_key  # type: ignore[index]
             console.print("  ✅ API Key 已设置")
@@ -537,7 +537,7 @@ def _fetch_models_from_api(provider, default_model):
 
     models: list[tuple[str, str]] = []
 
-    provider_name = provider["name"]  # type: ignore[index]
+    provider_name = provider["name"]
     try:
         if provider_name == "Ollama (本地)":
             base = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
