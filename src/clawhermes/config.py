@@ -71,7 +71,7 @@ class ClawHermesConfig(BaseSettings):
     """ClawHermes 全局配置 - 类型安全"""
     model_config = SettingsConfigDict(
         env_prefix="CH_",
-        env_file=".env",
+        env_file=os.getenv("CH_DATA_DIR", str(Path.home() / ".clawhermes")) + "/.env",
         env_file_encoding="utf-8",
         extra="ignore",
     )

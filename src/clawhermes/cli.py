@@ -392,7 +392,9 @@ def setup(non_interactive=False):
 
 def _write_env(vars_dict: dict[str, str]):
     """写入 .env 文件（不覆盖已有密钥）"""
-    env_path = Path(".env")
+    data_dir = Path(os.getenv("CH_DATA_DIR", str(Path.home() / ".clawhermes")))
+    data_dir.mkdir(parents=True, exist_ok=True)
+    env_path = data_dir / ".env"
     existing: dict[str, str] = {}
     if env_path.exists():
         for line in env_path.read_text().splitlines():
