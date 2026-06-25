@@ -351,7 +351,8 @@ def setup(non_interactive=False):
             questionary.Choice(title=f"{m[0]:50s} {m[1]}", value=m[0])
             for m in _MODELS_BY_PROVIDER[model_key]
         ]
-        model_choices.append(questionary.Choice(title="✎ 自定义输入 ...", value="__custom__"))
+        model_choices.append(questionary.Choice(title="🔄 从 API 获取模型列表 (需要已设置 API Key)", value="__fetch__"))
+        model_choices.append(questionary.Choice(title="✎ 自定义 litellm 模型标识 ...", value="__custom__"))
         model = questionary.select(
             f"选择 {provider['name']} 模型 (↑↓ 移动, / 搜索):",
             choices=model_choices,
@@ -362,15 +363,13 @@ def setup(non_interactive=False):
                 "自定义 litellm 模型标识:",
                 default=pfx,
             ).ask()
+        elif model == "__fetch__":
+            model = _fetch_models_from_api(provider, pfx)
     else:
         model = questionary.text(
             f"自定义模型标识 (Enter 确认 = {pfx}):",
             default=pfx,
         ).ask()
-
-    if not model:
-        return
-    env_vars["CH_LLM_DEFAULT_MODEL"] = model.strip()
     env_vars["CH_LLM_DEFAULT_MODEL"] = model.strip()
 
     # API Key
@@ -525,6 +524,78 @@ def _setup_noninteractive():
     console.print("  Gateway: 127.0.0.1:18789")
     _apply_setup(env_vars, [], {}, "deepseek/deepseek-chat", "127.0.0.1", 18789)
 
+
+
+def _fetch_models_from_api(provider, default_model):
+    """尝试从 API 动态获取模型列表, 失败则回退到自定义输入"""
+    import json, urllib.request, urllib.error
+
+    key_var = provider.get("key")
+    api_key = os.environ.get(key_var, "") if key_var else ""
+
+    models: list[tuple[str, str]] = []
+
+    provider_name = provider["name"]
+    try:
+        if provider_name == "Ollama (本地)":
+            base = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
+            req = urllib.request.Request(f"{base}/api/tags")
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                data = json.loads(resp.read())
+                for m in data.get("models", []):
+                    name = m.get("name", "")
+                    if name:
+                        models.append((f"ollama/{name}", ""))
+        elif provider_name == "OpenAI" and api_key:
+            req = urllib.request.Request("https://api.openai.com/v1/models")
+            req.add_header("Authorization", f"Bearer {api_key}")
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                data = json.loads(resp.read())
+                for m in data.get("data", []):
+                    mid = m.get("id", "")
+                    if mid and not mid.startswith(("ft:", "davinci", "babbage", "ada")):
+                        models.append((f"openai/{mid}", ""))
+        elif provider_name == "OpenRouter" and api_key:
+            with urllib.request.urlopen("https://openrouter.ai/api/v1/models", timeout=10) as resp:
+                data = json.loads(resp.read())
+                for m in data.get("data", []):
+                    mid = m.get("id", "")
+                    if mid:
+                        models.append((f"openrouter/{mid}", ""))
+    except Exception as e:
+        console.print(f"  [yellow]⚠️  动态获取失败: {e}[/]")
+
+    if models:
+        import questionary
+        models.sort(key=lambda x: x[0])
+        model_choices = [
+            questionary.Choice(title=f"{m[0]:70s}", value=m[0])
+            for m in models[:50]
+        ]
+        if len(models) > 50:
+            model_choices.append(questionary.Choice(
+                title=f"... 还有 {len(models)-50} 个模型, 请用自定义输入",
+                value=None, disabled=True))
+        model_choices.append(questionary.Choice(title="✎ 自定义 litellm 模型标识 ...", value="__custom__"))
+        model = questionary.select(
+            f"{provider_name} 在线模型 ({len(models)} 个, ↑↓ 移动, / 搜索):",
+            choices=model_choices,
+            use_indicator=True,
+        ).ask()
+        if model == "__custom__":
+            return _ask_custom_model(default_model)
+        return model
+
+    console.print("  [yellow]⚠️  无法获取模型列表, 请手动输入[/]")
+    return _ask_custom_model(default_model)
+
+
+def _ask_custom_model(default_model):
+    import questionary
+    return questionary.text(
+        "自定义 litellm 模型标识:",
+        default=default_model,
+    ).ask()
 
 def _apply_setup(env_vars, channels_enabled, channel_defs, model, gw_host, gw_port):
     """执行配置生成"""
