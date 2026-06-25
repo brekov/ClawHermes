@@ -240,7 +240,7 @@ def setup(non_interactive=False):
 
     # 动态提供商列表 (litellm 兼容)
     _providers = [
-        {"name": "DeepSeek",        "prefix": "deepseek/deepseek-chat",           "key": "DEEPSEEK_API_KEY",  "url": "https://platform.deepseek.com/api_keys"},
+        {"name": "DeepSeek",        "prefix": "deepseek/deepseek-chat",           "key": "DEEPSEEK_API_KEY",  "url": "https://platform.deepseek.com/api_keys", "api_base": "https://api.deepseek.com/v1"},
         {"name": "OpenAI",          "prefix": "openai/gpt-4o",                     "key": "OPENAI_API_KEY",    "url": "https://platform.openai.com/api-keys"},
         {"name": "Anthropic",       "prefix": "anthropic/claude-sonnet-4-20250514","key": "ANTHROPIC_API_KEY",  "url": "https://console.anthropic.com/keys"},
         {"name": "Google Gemini",   "prefix": "gemini/gemini-2.5-flash",           "key": "GOOGLE_API_KEY",    "url": "https://aistudio.google.com/apikey"},
@@ -557,13 +557,17 @@ def _fetch_models_from_api(provider, default_model):
                     mid = m.get("id", "")
                     if mid and not mid.startswith(("ft:", "davinci", "babbage", "ada")):
                         models.append((f"openai/{mid}", ""))
-        elif provider_name == "OpenRouter" and api_key:
-            with urllib.request.urlopen("https://openrouter.ai/api/v1/models", timeout=10) as resp:
+        elif provider_name in ("DeepSeek", "OpenRouter") and api_key:
+            api_base = provider.get("api_base", "https://api.deepseek.com/v1" if provider_name == "DeepSeek" else "https://openrouter.ai/api/v1")
+            req = urllib.request.Request(f"{api_base}/models")
+            req.add_header("Authorization", f"Bearer {api_key}")
+            prefix = "deepseek/" if provider_name == "DeepSeek" else "openrouter/"
+            with urllib.request.urlopen(req, timeout=10) as resp:
                 data = json.loads(resp.read())
                 for m in data.get("data", []):
                     mid = m.get("id", "")
                     if mid:
-                        models.append((f"openrouter/{mid}", ""))
+                        models.append((f"{prefix}{mid}", ""))
     except Exception as e:
         console.print(f"  [yellow]⚠️  动态获取失败: {e}[/]")
 
