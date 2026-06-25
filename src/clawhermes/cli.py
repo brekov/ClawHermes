@@ -3,8 +3,8 @@ from __future__ import annotations
 
 import logging
 import os
-import sys
 from pathlib import Path
+import sys
 
 import click
 from rich import box
@@ -15,9 +15,6 @@ from rich.prompt import Prompt
 from rich.table import Table
 from rich.text import Text
 
-
-console = Console()
-logging.basicConfig(level=logging.WARNING)
 
 
 def _create_agent(api_key=None, model=None):
