@@ -3,12 +3,39 @@ ClawHermes - 类型安全配置管理（Pydantic Settings）
 """
 from __future__ import annotations
 
+import logging
 import os
+import re
+import shutil
+import time
 from pathlib import Path
 from typing import Literal
 
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+logger = logging.getLogger(__name__)
+
+# Track config parse warnings to avoid spam
+_CONFIG_PARSE_WARNED: set = set()
+
+# Env var names that control how the next subprocess executes —
+# never writable through save_env_value.
+_BLOCKED_ENV_PREFIXES: tuple[str, ...] = (
+    "LD_PRELOAD", "LD_LIBRARY_PATH", "LD_AUDIT",  # Linux dynamic loader
+    "DYLD_",                                      # macOS dynamic loader
+    "PYTHONPATH", "PYTHONHOME",                   # Python loader
+    "PATH",                                        # Shell path
+)
+
+# ===== 数据目录 =====
+
+def get_data_dir() -> Path:
+    """ClawHermes 数据目录 — 默认为 ~/.clawhermes"""
+    return Path(os.getenv("CH_DATA_DIR", str(Path.home() / ".clawhermes")))
+
+
 
 
 class LLMProviderConf(BaseSettings):
@@ -141,8 +168,62 @@ def get_yaml_path() -> Path:
     return Path(os.environ.get("CH_DATA_DIR", str(Path.home() / ".clawhermes"))) / "config.yaml"
 
 
+def _backup_corrupt_config(config_path: Path) -> Path | None:
+    """备份损坏的 config.yaml 到 .bak 文件
+
+    对齐 Hermes _backup_corrupt_config：损坏的配置文件在静默回退到默认
+    配置前会被快照保存，防止用户丢失可恢复的手动编辑。
+    """
+    try:
+        if config_path.is_symlink():
+            return None
+        st = config_path.stat()
+        if st.st_size == 0:
+            return None
+        ts = time.strftime("%Y%m%d-%H%M%S")
+        backup_path = config_path.with_name(f"{config_path.name}.corrupt.{ts}.bak")
+        if backup_path.exists():
+            return None
+        shutil.copy2(config_path, backup_path)
+        return backup_path
+    except Exception:
+        return None
+
+
+def _warn_config_parse_failure(config_path: Path, exc: Exception) -> None:
+    """记录并报告 config.yaml 解析失败
+
+    对齐 Hermes _warn_config_parse_failure：每个损坏文件只警告一次
+    （通过 mtime/size 去重），同时记录到日志和 stderr。
+    """
+    try:
+        st = config_path.stat()
+        key = (str(config_path), st.st_mtime_ns, st.st_size)
+    except OSError:
+        key = (str(config_path), 0, 0)
+    if key in _CONFIG_PARSE_WARNED:
+        return
+    _CONFIG_PARSE_WARNED.add(key)
+
+    backup_path = _backup_corrupt_config(config_path)
+    msg = (
+        f"无法解析 {config_path}: {exc}. "
+        f"回退到默认配置 — 所有用户覆盖（模型、Gateway、渠道设置）均被忽略. "
+        f"修复 YAML 后重启."
+    )
+    if backup_path is not None:
+        msg += f" 损坏文件的副本已保存到 {backup_path}."
+    logger.warning(msg)
+    try:
+        import sys
+        sys.stderr.write(f"⚠️  clawhermes config: {msg}\n")
+        sys.stderr.flush()
+    except Exception:
+        pass
+
+
 def load_yaml() -> dict:
-    """加载 config.yaml"""
+    """加载 config.yaml（带损坏备份）"""
     import yaml
     p = get_yaml_path()
     if p.exists():
@@ -150,8 +231,20 @@ def load_yaml() -> dict:
             with open(p) as f:
                 return yaml.safe_load(f) or {}
         except Exception as e:
-            print(f"⚠️  config.yaml 加载失败: {e}")
+            _warn_config_parse_failure(p, e)
     return {}
+
+
+def is_env_var_safe(name: str) -> bool:
+    """检查环境变量名是否安全可写入 .env
+
+    阻断可能影响子进程执行的危险环境变量（对齐 Hermes env var safety）。
+    """
+    name_upper = name.upper()
+    for prefix in _BLOCKED_ENV_PREFIXES:
+        if name_upper.startswith(prefix):
+            return False
+    return True
 
 
 def save_yaml(cfg: dict):
