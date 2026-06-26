@@ -553,6 +553,35 @@ def _setup_model_section(existing_config: dict, existing_env: dict, quick: bool)
     return {"env": env_vars, "model": model.strip() if model else "deepseek/deepseek-chat"}
 
 
+def _ensure_lark_sdk() -> None:
+    """确保 lark_oapi 已安装，若未安装则自动 pip install"""
+    try:
+        import lark_oapi  # noqa: F401
+        return
+    except ImportError:
+        pass
+
+    import subprocess
+    import sys
+
+    repo_root = Path(__file__).resolve().parent.parent.parent
+    lark_dir = repo_root / "clawhermes-lark"
+    if not (lark_dir / "pyproject.toml").exists():
+        console.print("  ⚠️  clawhermes-lark 子仓库未找到")
+        console.print("  请手动: git clone <url> clawhermes-lark && pip install -e ./clawhermes-lark")
+        return
+
+    console.print("  📦 正在安装 clawhermes-lark ...")
+    try:
+        subprocess.run(
+            [sys.executable, "-m", "pip", "install", "-e", str(lark_dir)],
+            capture_output=True, check=True,
+        )
+        console.print("  ✅ clawhermes-lark 安装完成")
+    except subprocess.CalledProcessError as e:
+        console.print(f"  ❌ 安装失败: {e}")
+        console.print("  手动安装: pip install -e ./clawhermes-lark")
+
 def _setup_channels_section(channel_defs: dict, existing_env: dict, quick: bool) -> dict | None:
     """消息渠道选择"""
     import questionary
@@ -576,6 +605,7 @@ def _setup_channels_section(channel_defs: dict, existing_env: dict, quick: bool)
     for ch_id in channels_enabled:
         ch_def = channel_defs[ch_id]
         if ch_id == "lark":
+            _ensure_lark_sdk()
             _onboard_feishu(env_vars, existing_env=existing_env if quick else {})
             continue
         console.print(f"\n  [bold]{ch_def['name']}[/]")
@@ -858,6 +888,31 @@ def _apply_setup(env_vars, channels_enabled, channel_defs, model, gw_host, gw_po
 
 
 
+def _probe_feishu_connection(app_id: str, app_secret: str, domain: str, env_vars: dict) -> None:
+    """测试飞书连接，自动安装 SDK"""
+    console.print("\n  🔍 正在测试连接...")
+    try:
+        import lark_oapi as lark
+        from lark_oapi.api.verification.v1 import GetBotInfoRequest
+    except ImportError:
+        console.print("  ⚠️  飞书 SDK (lark_oapi) 未安装，跳过连接测试")
+        return
+
+    try:
+        client = lark.Client.builder().app_id(app_id).app_secret(app_secret).domain(
+            lark.Domain.FEISHU if domain == "feishu" else lark.Domain.LARK
+        ).build()
+        resp = client.verification.v1.bot_info.get(GetBotInfoRequest())
+        if resp.success() and resp.data:
+            bot_name = getattr(resp.data, "name", app_id) or app_id
+            console.print(f"  ✅ 连接成功 → 机器人: [bold green]{bot_name}[/]")
+            env_vars["FEISHU_BOT_NAME"] = bot_name
+        else:
+            console.print("  ⚠️  连接测试失败, 请检查凭证是否正确")
+    except Exception as e:
+        console.print(f"  ⚠️  连接测试失败: {e}")
+        console.print("  凭证将被保存，可在配置完成后手动验证连接。")
+
 def _onboard_feishu(env_vars: dict[str, str], existing_env: dict | None = None):
     """飞书渠道引导 — 对齐 larksuite/openclaw-lark onboarding"""
     import questionary
@@ -905,8 +960,7 @@ def _onboard_feishu(env_vars: dict[str, str], existing_env: dict | None = None):
             console.print("  ⚠️  连接测试失败, 请检查凭证是否正确")
     except ImportError:
         console.print("  ⚠️  飞书 SDK (lark_oapi) 未安装")
-        console.print("  运行: pip install -e ./clawhermes-lark")
-        console.print("  凭证将被保存，安装后自动生效。")
+        _auto_install_lark_sdk()
     except Exception as e:
         console.print(f"  ⚠️  连接测试失败: {e}")
         console.print("  凭证将被保存，可在配置完成后手动验证连接。")
