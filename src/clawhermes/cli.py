@@ -903,6 +903,10 @@ def _onboard_feishu(env_vars: dict[str, str], existing_env: dict | None = None):
             env_vars["FEISHU_BOT_NAME"] = bot_name
         else:
             console.print("  ⚠️  连接测试失败, 请检查凭证是否正确")
+    except ImportError:
+        console.print("  ⚠️  飞书 SDK (lark_oapi) 未安装")
+        console.print("  运行: pip install -e ./clawhermes-lark")
+        console.print("  凭证将被保存，安装后自动生效。")
     except Exception as e:
         console.print(f"  ⚠️  连接测试失败: {e}")
         console.print("  凭证将被保存，可在配置完成后手动验证连接。")
