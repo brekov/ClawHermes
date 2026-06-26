@@ -89,8 +89,22 @@ done
 
 # ── 初始化 ──
 echo ""
+
 echo "==> 交互式配置"
-echo "  运行 clawhermes setup 完成 LLM/渠道/Gateway 配置"
+echo ""
+echo "  ClawHermes 提供交互式初始化向导:"
+echo "    • 选择 LLM 提供商 + 模型"
+echo "    • 配置消息渠道 (飞书/微信/QQ)"
+echo "    • Gateway 服务设置"
+echo ""
+echo -n "  🚀 立即运行 clawhermes setup? [Y/n]: "
+read -r RUN_SETUP
+if [ "${RUN_SETUP:-y}" != "n" ] && [ "${RUN_SETUP:-y}" != "N" ]; then
+    clawhermes setup
+else
+    echo "  稍后运行: clawhermes setup"
+fi
+
 
 # ── 验证 ──
 echo ""
