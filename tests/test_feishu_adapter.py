@@ -41,7 +41,8 @@ class TestFeishuAdapter:
 
     @pytest.mark.asyncio
     async def test_stop_cleanup(self, adapter):
-        with patch("clawhermes_lark.adapter.lark.Client"):
+        with patch("clawhermes_lark.adapter.adapter.lark.Client"), \
+             patch("clawhermes_lark.adapter.adapter.lark.ws.Client"):
             await adapter.start()
             await adapter.stop()
             assert adapter.is_running is False

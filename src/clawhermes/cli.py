@@ -152,8 +152,10 @@ def uninstall_gw():
 @gateway.command("status")
 def gw_status():
     """检查 Gateway 服务状态"""
-    from clawhermes.gateway.setup import check_gateway_service_status
     import json
+
+    from clawhermes.gateway.setup import check_gateway_service_status
+
     st = check_gateway_service_status()
     console.print(json.dumps(st, indent=2, ensure_ascii=False))
 
@@ -288,41 +290,61 @@ def setup(non_interactive: bool = False, section: str | None = None, quick: bool
 
     # ── 按 section 分发 ──
     if section == "model" or section is None:
-        if section is None: console.print("\n[bold cyan]▶ Step 1/4[/]  [bold]LLM 提供商[/]\n")
+        if section is None:
+            console.print("\n[bold cyan]▶ Step 1/4[/]  [bold]LLM 提供商[/]\n")
         result = _setup_model_section(existing_config, existing_env, quick)
-        if result is None: return
+        if result is None:
+            return
         env_vars.update(result.get("env", {}))
         model = result.get("model", model)
-        if section == "model": _finalize_section(env_vars, channels_enabled, channel_defs, model, gw_host, gw_port); return
+        if section == "model":
+            _finalize_section(env_vars, channels_enabled, channel_defs, model, gw_host, gw_port)
+            return
 
     if section == "channels" or section is None:
-        if section is None: console.print("\n[bold cyan]▶ Step 2/4[/]  [bold]消息渠道[/]\n")
+        if section is None:
+            console.print("\n[bold cyan]▶ Step 2/4[/]  [bold]消息渠道[/]\n")
         result = _setup_channels_section(channel_defs, existing_env, quick)
-        if result is None: return
+        if result is None:
+            return
         env_vars.update(result.get("env", {}))
         channels_enabled = result.get("channels", [])
-        if section == "channels": _finalize_section(env_vars, channels_enabled, channel_defs, model, gw_host, gw_port); return
+        if section == "channels":
+            _finalize_section(env_vars, channels_enabled, channel_defs, model, gw_host, gw_port)
+            return
 
     if section == "gateway" or section is None:
-        if section is None: console.print("\n[bold cyan]▶ Step 3/4[/]  [bold]Gateway 服务[/]\n")
+        if section is None:
+            console.print("\n[bold cyan]▶ Step 3/4[/]  [bold]Gateway 服务[/]\n")
         result = _setup_gateway_section(existing_config, existing_env, quick)
-        if result is None: return
+        if result is None:
+            return
         env_vars.update(result.get("env", {}))
         gw_host = result.get("host", gw_host)
         gw_port = result.get("port", gw_port)
-        if section == "gateway": _finalize_section(env_vars, channels_enabled, channel_defs, model, gw_host, gw_port); return
+        if section == "gateway":
+            _finalize_section(env_vars, channels_enabled, channel_defs, model, gw_host, gw_port)
+            return
 
     if section == "tools" or section is None:
-        if section is None: pass  # tools 内联在完整流程
+        if section is None:
+            pass  # tools 内联在完整流程
         result = _setup_tools_section(existing_config, existing_env, quick)
-        if result: env_vars.update(result.get("env", {}))
-        if section == "tools": _finalize_section(env_vars, channels_enabled, channel_defs, model, gw_host, gw_port); return
+        if result:
+            env_vars.update(result.get("env", {}))
+        if section == "tools":
+            _finalize_section(env_vars, channels_enabled, channel_defs, model, gw_host, gw_port)
+            return
 
     if section == "agent" or section is None:
-        if section is None: pass
+        if section is None:
+            pass
         result = _setup_agent_section(existing_config, existing_env, quick)
-        if result: env_vars.update(result.get("env", {}))
-        if section == "agent": _finalize_section(env_vars, channels_enabled, channel_defs, model, gw_host, gw_port); return
+        if result:
+            env_vars.update(result.get("env", {}))
+        if section == "agent":
+            _finalize_section(env_vars, channels_enabled, channel_defs, model, gw_host, gw_port)
+            return
 
     # ── 完整流程: 确认 + 生成 ──
     console.print("\n[bold cyan]▶ Step 4/4[/]  [bold]确认配置[/]\n")
@@ -450,7 +472,7 @@ def _finalize_section(env_vars: dict, channels_enabled: list,
     console.print()
     if env_vars:
         _write_env(env_vars)
-    from clawhermes.config import default_yaml, save_yaml, load_yaml
+    from clawhermes.config import default_yaml, load_yaml, save_yaml
     cfg = load_yaml() or default_yaml()
     if model:
         cfg["llm"]["model"] = model
@@ -476,7 +498,8 @@ def _setup_model_section(existing_config: dict, existing_env: dict, quick: bool)
         style=questionary.Style([('qmark', 'fg:cyan bold'), ('selected', 'fg:green bold')]),
     ).ask()
     if not selection:
-        console.print("  ⚠️  已取消"); return None
+        console.print("  ⚠️  已取消")
+        return None
 
     idx = choices.index(selection)
     provider = _providers[idx]
@@ -981,8 +1004,8 @@ def _write_env(vars_dict: dict[str, str]):
 
 def _copy_and_populate_channel(example_path: str, dest_dir: Path, ch_id: str, env_vars: dict[str, str]):
     """复制渠道 YAML 示例到配置目录，并用 env_vars 填充 ${VAR} 占位符"""
-    import shutil
     import re
+    import shutil
     repo_root = Path(__file__).resolve().parent.parent.parent
     src = repo_root / example_path
     dst = dest_dir / f"{ch_id}.yaml"
@@ -990,8 +1013,9 @@ def _copy_and_populate_channel(example_path: str, dest_dir: Path, ch_id: str, en
         content = src.read_text()
         # Replace ${VAR_NAME} placeholders with actual env values
         def _replace_env_ref(m: re.Match) -> str:
-            var_name = m.group(1)
-            return env_vars.get(var_name, m.group(0))
+            var_name: str = m.group(1)
+            fallback: str = m.group(0)
+            return env_vars.get(var_name, fallback)
         content = re.sub(r'\$\{([A-Z_][A-Z0-9_]*)\}', _replace_env_ref, content)
         dst.write_text(content)
         if not dst.exists():

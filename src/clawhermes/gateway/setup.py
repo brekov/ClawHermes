@@ -10,8 +10,8 @@ from __future__ import annotations
 import os
 import platform
 import secrets
-import shutil
 from pathlib import Path
+
 
 def _get_data_dir() -> Path:
     """ClawHermes 数据目录 — 默认为 ~/.clawhermes"""
@@ -111,7 +111,7 @@ def install_systemd_service(
     try:
         subprocess.run(["systemctl", "--user", "daemon-reload"], check=True, capture_output=True)
         subprocess.run(["systemctl", "--user", "enable", "--now", "clawhermes-gateway"], check=True, capture_output=True)
-        print(f"  ✅ systemd 服务已安装并启动: clawhermes-gateway")
+        print("  ✅ systemd 服务已安装并启动: clawhermes-gateway")
         print(f"    Token: {token}")
         return True
     except subprocess.CalledProcessError as e:
@@ -202,7 +202,7 @@ def install_launchd_service(
     try:
         subprocess.run(["launchctl", "unload", str(plist_path)], capture_output=True)  # noqa
         subprocess.run(["launchctl", "load", str(plist_path)], check=True, capture_output=True)
-        print(f"  ✅ launchd 服务已安装并启动: com.clawhermes.gateway")
+        print("  ✅ launchd 服务已安装并启动: com.clawhermes.gateway")
         print(f"    Token: {token}")
         return True
     except subprocess.CalledProcessError as e:
