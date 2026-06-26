@@ -468,18 +468,9 @@ def _quick_skip(key: str, existing: dict, existing_env: dict) -> bool:
 def _finalize_section(env_vars: dict, channels_enabled: list,
                       channel_defs: dict, model: str | None,
                       gw_host: str, gw_port: int) -> None:
-    """单 section 结束后的配置写入"""
-    console.print()
-    if env_vars:
-        _write_env(env_vars)
-    from clawhermes.config import default_yaml, load_yaml, save_yaml
-    cfg = load_yaml() or default_yaml()
-    if model:
-        cfg["llm"]["model"] = model
-    cfg["gateway"]["host"] = gw_host
-    cfg["gateway"]["port"] = gw_port
-    save_yaml(cfg)
-    console.print("  ✅ 配置已保存")
+    """单 section 结束后的配置写入 — 委托给 _apply_setup"""
+    _apply_setup(env_vars, channels_enabled, channel_defs,
+                 model or "deepseek/deepseek-chat", gw_host, gw_port)
 
 
 def _setup_model_section(existing_config: dict, existing_env: dict, quick: bool) -> dict | None:
@@ -914,8 +905,7 @@ def _onboard_feishu(env_vars: dict[str, str], existing_env: dict | None = None):
             console.print("  ⚠️  连接测试失败, 请检查凭证是否正确")
     except Exception as e:
         console.print(f"  ⚠️  连接测试失败: {e}")
-        if not questionary.confirm("  凭证可能无效, 仍然保存?", default=True).ask():
-            return
+        console.print("  凭证将被保存，可在配置完成后手动验证连接。")
 
     env_vars["FEISHU_APP_ID"] = app_id
     env_vars["FEISHU_APP_SECRET"] = app_secret
