@@ -1,57 +1,305 @@
-"""ClawHermes - Provider 配置管理"""
+"""ClawHermes - Gateway 服务安装与配置
+
+对齐 Hermes gateway install 和 openclaw gateway wizard：
+  - systemd (Linux) / launchd (macOS) 服务模板生成
+  - Gateway auth token 自动生成
+  - 服务生命周期管理 (enable/disable/status)
+"""
 from __future__ import annotations
 
 import os
+import platform
+import secrets
 from pathlib import Path
 
-import yaml
 
-
-def get_data_dir() -> Path:
+def _get_data_dir() -> Path:
+    """ClawHermes 数据目录 — 默认为 ~/.clawhermes"""
     return Path(os.getenv("CH_DATA_DIR", str(Path.home() / ".clawhermes")))
 
 
-def _read_yaml(path: Path) -> dict:
-    if path.exists():
-        try:
-            with open(path) as f:
-                return yaml.safe_load(f) or {}
-        except Exception:
-            return {}
-    return {}
+def get_gateway_token_path() -> Path:
+    """Gateway auth token 存储路径"""
+    return _get_data_dir() / "gateway_token"
 
 
-def _write_yaml(path: Path, data: dict):
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with open(path, "w") as f:
-        yaml.dump(data, f, default_flow_style=False, allow_unicode=True)
+def generate_gateway_token() -> str:
+    """生成 64 字符十六进制 Gateway auth token"""
+    return secrets.token_hex(32)
 
 
-def provider_dir() -> Path:
-    d = get_data_dir() / "providers"
-    d.mkdir(parents=True, exist_ok=True)
-    return d
-
-
-def provider_path(name: str) -> Path:
-    return provider_dir() / f"{name}.yaml"
-
-
-def load_providers() -> dict[str, dict]:
-    providers = {}
-    for f in sorted(provider_dir().glob("*.yaml")):
-        name = f.stem
-        data = _read_yaml(f)
-        if data:
-            providers[name] = data
-    return providers
-
-
-def save_provider(name: str, cfg: dict):
-    _write_yaml(provider_path(name), cfg)
-
-
-def delete_provider(name: str):
-    p = provider_path(name)
+def read_gateway_token() -> str | None:
+    """读取已保存的 Gateway token，不存在则返回 None"""
+    p = get_gateway_token_path()
     if p.exists():
-        p.unlink()
+        return p.read_text().strip()
+    return None
+
+
+def ensure_gateway_token() -> str:
+    """确保 Gateway token 存在，不存在则生成并保存"""
+    token = read_gateway_token()
+    if not token:
+        token = generate_gateway_token()
+        p = get_gateway_token_path()
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(token)
+        p.chmod(0o600)
+    return token
+
+
+# ====== systemd (Linux) ======
+
+SYSTEMD_UNIT_TEMPLATE = """[Unit]
+Description=ClawHermes Gateway
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User={user}
+Environment=CH_DATA_DIR={data_dir}
+Environment=CH_GATEWAY_HOST={host}
+Environment=CH_GATEWAY_PORT={port}
+{secret_env}
+ExecStart={python} -m clawhermes.gateway.app --host {host} --port {port}
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+"""
+
+
+def install_systemd_service(
+    host: str = "127.0.0.1",
+    port: int = 18789,
+    user: str | None = None,
+) -> bool:
+    """安装 systemd 服务"""
+    import subprocess
+    import sys
+
+    if platform.system() != "Linux":
+        print("  ⚠️  systemd 仅在 Linux 上可用")
+        return False
+
+    token = ensure_gateway_token()
+    data_dir = str(_get_data_dir())
+    username = user or os.environ.get("USER", "clawhermes")
+    python_path = sys.executable
+
+    secret_env = ""
+    if host not in ("127.0.0.1", "localhost"):
+        secret_env = f"Environment=CH_GATEWAY_SECRET={token}\n"
+
+    unit_content = SYSTEMD_UNIT_TEMPLATE.format(
+        user=username,
+        data_dir=data_dir,
+        host=host,
+        port=port,
+        secret_env=secret_env,
+        python=python_path,
+    )
+
+    unit_path = Path.home() / ".config" / "systemd" / "user" / "clawhermes-gateway.service"
+    unit_path.parent.mkdir(parents=True, exist_ok=True)
+    unit_path.write_text(unit_content)
+
+    try:
+        subprocess.run(["systemctl", "--user", "daemon-reload"], check=True, capture_output=True)
+        subprocess.run(["systemctl", "--user", "enable", "--now", "clawhermes-gateway"], check=True, capture_output=True)
+        print("  ✅ systemd 服务已安装并启动: clawhermes-gateway")
+        print(f"    Token: {token}")
+        return True
+    except subprocess.CalledProcessError as e:
+        print(f"  ❌ systemd 安装失败: {e}")
+        return False
+    except FileNotFoundError:
+        print("  ⚠️  systemctl 不可用")
+        return False
+
+
+# ====== launchd (macOS) ======
+
+LAUNCHD_PLIST_TEMPLATE = """<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.clawhermes.gateway</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>{python}</string>
+        <string>-m</string>
+        <string>clawhermes.gateway.app</string>
+        <string>--host</string>
+        <string>{host}</string>
+        <string>--port</string>
+        <string>{port}</string>
+    </array>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>CH_DATA_DIR</key>
+        <string>{data_dir}</string>
+        <key>CH_GATEWAY_HOST</key>
+        <string>{host}</string>
+        <key>CH_GATEWAY_PORT</key>
+        <string>{port}</string>
+        {secret_env}
+    </dict>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>{log_dir}/gateway.log</string>
+    <key>StandardErrorPath</key>
+    <string>{log_dir}/gateway-error.log</string>
+</dict>
+</plist>
+"""
+
+
+def install_launchd_service(
+    host: str = "127.0.0.1",
+    port: int = 18789,
+) -> bool:
+    """安装 macOS launchd 服务"""
+    import subprocess
+    import sys
+
+    if platform.system() != "Darwin":
+        print("  ⚠️  launchd 仅在 macOS 上可用")
+        return False
+
+    token = ensure_gateway_token()
+    data_dir = str(_get_data_dir())
+    python_path = sys.executable
+    log_dir = str(_get_data_dir() / "logs")
+    Path(log_dir).mkdir(parents=True, exist_ok=True)
+
+    secret_env = ""
+    if host not in ("127.0.0.1", "localhost"):
+        secret_env = f"<key>CH_GATEWAY_SECRET</key>\n        <string>{token}</string>"
+
+    plist_content = LAUNCHD_PLIST_TEMPLATE.format(
+        python=python_path,
+        host=host,
+        port=port,
+        data_dir=data_dir,
+        secret_env=secret_env,
+        log_dir=log_dir,
+    )
+
+    plist_path = Path.home() / "Library" / "LaunchAgents" / "com.clawhermes.gateway.plist"
+    plist_path.parent.mkdir(parents=True, exist_ok=True)
+    plist_path.write_text(plist_content)
+
+    try:
+        subprocess.run(["launchctl", "unload", str(plist_path)], capture_output=True)  # noqa
+        subprocess.run(["launchctl", "load", str(plist_path)], check=True, capture_output=True)
+        print("  ✅ launchd 服务已安装并启动: com.clawhermes.gateway")
+        print(f"    Token: {token}")
+        return True
+    except subprocess.CalledProcessError as e:
+        print(f"  ❌ launchd 安装失败: {e}")
+        return False
+    except FileNotFoundError:
+        print("  ⚠️  launchctl 不可用")
+        return False
+
+
+# ====== 统一入口 ======
+
+
+def install_gateway_service(
+    host: str = "127.0.0.1",
+    port: int = 18789,
+    user: str | None = None,
+) -> bool:
+    """自动检测平台并安装对应的服务管理器"""
+    system = platform.system()
+    if system == "Linux":
+        return install_systemd_service(host=host, port=port, user=user)
+    elif system == "Darwin":
+        return install_launchd_service(host=host, port=port)
+    else:
+        print(f"  ⚠️  不支持的平台: {system}")
+        return False
+
+
+def uninstall_gateway_service() -> bool:
+    """卸载 Gateway 服务"""
+    import subprocess
+
+    system = platform.system()
+    if system == "Linux":
+        try:
+            subprocess.run(["systemctl", "--user", "disable", "--now", "clawhermes-gateway"],
+                         check=True, capture_output=True)
+            unit_path = Path.home() / ".config" / "systemd" / "user" / "clawhermes-gateway.service"
+            if unit_path.exists():
+                unit_path.unlink()
+            subprocess.run(["systemctl", "--user", "daemon-reload"], check=True, capture_output=True)
+            print("  ✅ systemd 服务已卸载")
+            return True
+        except (subprocess.CalledProcessError, FileNotFoundError) as e:
+            print(f"  ❌ 卸载失败: {e}")
+            return False
+    elif system == "Darwin":
+        try:
+            plist_path = Path.home() / "Library" / "LaunchAgents" / "com.clawhermes.gateway.plist"
+            if plist_path.exists():
+                subprocess.run(["launchctl", "unload", str(plist_path)], capture_output=True)
+                plist_path.unlink()
+            print("  ✅ launchd 服务已卸载")
+            return True
+        except (subprocess.CalledProcessError, FileNotFoundError) as e:
+            print(f"  ❌ 卸载失败: {e}")
+            return False
+    else:
+        print(f"  ⚠️  不支持的平台: {system}")
+        return False
+
+
+def check_gateway_service_status() -> dict:
+    """检查 Gateway 服务状态"""
+    import subprocess
+
+    result = {
+        "installed": False,
+        "running": False,
+        "platform": platform.system(),
+        "token_configured": read_gateway_token() is not None,
+    }
+
+    system = platform.system()
+    if system == "Linux":
+        try:
+            r = subprocess.run(
+                ["systemctl", "--user", "is-active", "clawhermes-gateway"],
+                capture_output=True, text=True,
+            )
+            result["running"] = r.stdout.strip() == "active"
+            unit_path = Path.home() / ".config" / "systemd" / "user" / "clawhermes-gateway.service"
+            result["installed"] = unit_path.exists()
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            pass
+    elif system == "Darwin":
+        plist_path = Path.home() / "Library" / "LaunchAgents" / "com.clawhermes.gateway.plist"
+        result["installed"] = plist_path.exists()
+        if result["installed"]:
+            try:
+                r = subprocess.run(
+                    ["launchctl", "list", "com.clawhermes.gateway"],
+                    capture_output=True, text=True,
+                )
+                result["running"] = r.returncode == 0 and "PID" in r.stdout
+            except (subprocess.CalledProcessError, FileNotFoundError):
+                pass
+
+    return result
