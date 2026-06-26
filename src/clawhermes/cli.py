@@ -459,6 +459,9 @@ def setup(non_interactive=False):
         channels_enabled = list(selected)
         for ch_id in channels_enabled:
             ch_def = channel_defs[ch_id]
+            if ch_id == "lark":
+                _onboard_feishu(env_vars)
+                continue
             console.print(f"\n  [bold]{ch_def['name']}[/]")
             if ch_def.get("bot_url"):
                 console.print(f"  🔗 创建 Bot: [link={ch_def['bot_url']}]{ch_def['bot_url']}[/]")
@@ -655,6 +658,88 @@ def _apply_setup(env_vars, channels_enabled, channel_defs, model, gw_host, gw_po
     else:
         console.print("\n[bold yellow]⚠️  部分依赖缺失, 请运行 pip install -e . 后重试[/]")
 
+
+
+
+def _onboard_feishu(env_vars: dict[str, str]):
+    """飞书渠道引导 — 对齐 larksuite/openclaw-lark onboarding"""
+    import questionary
+
+    console.print("\n  [bold]飞书 (Feishu/Lark)[/]")
+    console.print("  🔗 创建应用: [link=https://open.feishu.cn/app]https://open.feishu.cn/app[/]")
+    console.print("  📋 1) 创建企业自建应用 → 2) 添加「机器人」能力")
+    console.print("  📋 3) 权限: im:message, im:chat, contact:user.base:readonly")
+    console.print("  📋 4) 发布应用或添加测试用户\n")
+
+    # Step b: 凭证
+    app_id = questionary.text("  App ID:", validate=lambda v: bool(v.strip())).ask()
+    if not app_id:
+        return
+    app_secret = questionary.password("  App Secret:", validate=lambda v: bool(v.strip())).ask()
+    if not app_secret:
+        return
+
+    # Step c: 域名选择
+    domain = questionary.select(
+        "  选择域名:",
+        choices=[
+            questionary.Choice(title="feishu.cn  (飞书·中国)", value="feishu"),
+            questionary.Choice(title="larksuite.com  (Lark·国际)", value="lark"),
+        ],
+        default="feishu",
+    ).ask()
+    if not domain:
+        return
+
+    # Step d: 连接测试 (对齐 openclaw-lark probeFeishu)
+    console.print("\n  🔍 正在测试连接...")
+    try:
+        import lark_oapi as lark
+        from lark_oapi.api.verification.v1 import GetBotInfoRequest
+        client = lark.Client.builder().app_id(app_id).app_secret(app_secret).domain(
+            lark.Domain.FEISHU if domain == "feishu" else lark.Domain.LARK
+        ).build()
+        resp = client.verification.v1.bot_info.get(GetBotInfoRequest())
+        if resp.success() and resp.data:
+            bot_name = getattr(resp.data, "name", app_id) or app_id
+            console.print(f"  ✅ 连接成功 → 机器人: [bold green]{bot_name}[/]")
+            env_vars["FEISHU_BOT_NAME"] = bot_name
+        else:
+            console.print("  ⚠️  连接测试失败, 请检查凭证是否正确")
+    except Exception as e:
+        console.print(f"  ⚠️  连接测试失败: {e}")
+        if not questionary.confirm("  凭证可能无效, 仍然保存?", default=True).ask():
+            return
+
+    env_vars["FEISHU_APP_ID"] = app_id
+    env_vars["FEISHU_APP_SECRET"] = app_secret
+    if domain != "feishu":
+        env_vars["FEISHU_DOMAIN"] = domain
+
+    # Step e: 可选安全字段
+    if questionary.confirm("  配置 Webhook 安全验证? (推荐)", default=True).ask():
+        verify_token = questionary.password("  Verify Token:").ask()
+        if verify_token:
+            env_vars["FEISHU_VERIFY_TOKEN"] = verify_token
+        encrypt_key = questionary.password("  Encrypt Key:").ask()
+        if encrypt_key:
+            env_vars["FEISHU_ENCRYPT_KEY"] = encrypt_key
+
+    # Step f: 群聊策略 (对齐 openclaw-lark groupPolicy)
+    console.print("\n  [bold]群聊策略[/]")
+    group_policy = questionary.select(
+        "  群聊访问策略:",
+        choices=[
+            questionary.Choice(title="allowlist — 仅白名单用户可触发 (推荐)", value="allowlist"),
+            questionary.Choice(title="open — 任何人 @提及即可触发", value="open"),
+            questionary.Choice(title="disabled — 禁用群聊", value="disabled"),
+        ],
+        default="allowlist",
+    ).ask()
+    if group_policy:
+        env_vars["FEISHU_GROUP_POLICY"] = group_policy
+
+    console.print("  ✅ 飞书 (Feishu/Lark) 已配置")
 
 
 def _write_env(vars_dict: dict[str, str]):
