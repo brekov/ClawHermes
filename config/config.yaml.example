@@ -1,40 +1,140 @@
-# ============================================
-# ClawHermes 主配置文件（config.yaml）
-# ============================================
-# 保存位置：~/.clawhermes/config.yaml
+# ============================================================
+# ClawHermes · 主配置文件 (config.yaml)
+# ============================================================
+# 保存位置：~/.clawhermes/config.yaml 或 $CH_DATA_DIR/config.yaml
 # 运行 clawhermes setup 自动生成
 # 运行 clawhermes config show 查看当前配置
-# ============================================
+# 运行 clawhermes config path 查看配置文件路径
+#
+# 格式对齐 Hermes cli-config.yaml / OpenClaw openclaw.json
+# ============================================================
 
+# ══════════════════════════════════════════
+# Agent 核心配置
+# ══════════════════════════════════════════
 agent:
+  # Agent 名称（可多 Agent 共存, 通过 clawhermes agent 管理）
   name: default
+
+  # 默认 LLM 模型（litellm 格式: provider/model）
+  # 示例: deepseek/deepseek-chat, openai/gpt-4o, anthropic/claude-sonnet-4
   model: deepseek/deepseek-chat
+
+  # 每次对话最大迭代次数（防止无限循环）
   max_iterations: 50
 
+  # 每轮最大工具调用数
+  max_tool_calls_per_round: 20
+
+  # 消息队列模式
+  #   steer  — 将新消息注入当前运行（默认, 与 OpenClaw 一致）
+  #   queue  — 排队等待当前运行完成
+  #   interrupt — 打断当前运行
+  queue_mode: steer
+
+  # 是否每轮刷新 system prompt（默认持久化）
+  ephemeral_system_prompt: false
+
+# ══════════════════════════════════════════
+# Gateway HTTP 服务
+# ══════════════════════════════════════════
 gateway:
+  # 绑定地址（127.0.0.1 = 仅本地, 0.0.0.0 = 所有网卡）
   host: 127.0.0.1
+
+  # 端口
   port: 18789
 
+  # 密钥（非 127.0.0.1 绑定时必须设置）
+  # secret: your-secret-here
+
+# ══════════════════════════════════════════
+# LLM 提供商
+# ══════════════════════════════════════════
 llm:
+  # 提供商选择（deepseek | openai | anthropic | google | ollama | groq | ...）
   provider: deepseek
 
+  # 最大 token 数（上下文窗口, 最低 16K）
+  max_tokens: 64000
+
+  # 温度（0.0-2.0, 越高越随机）
+  temperature: 0.7
+
+  # 请求超时（毫秒）
+  timeout_ms: 60000
+
+# ══════════════════════════════════════════
+# 记忆系统
+# ══════════════════════════════════════════
 memory:
+  # 引擎: chromadb (向量) | json (文件)
   engine: chromadb
 
+  # 是否每轮后自动同步
+  sync_after_turn: true
+
+  # 最大记忆条数
+  max_items: 1000
+
+# ══════════════════════════════════════════
+# 技能系统（Skill Hub）
+# ══════════════════════════════════════════
 skills:
+  # 是否启用技能系统
   enabled: true
+
+  # 是否后台自动审查技能质量
   background_review: true
-  curator_interval_hours: 168   # 每 7 天自动整理一次技能
 
+  # 技能策展间隔（小时, 默认 7 天）
+  curator_interval_hours: 168
+
+  # 技能过期时间（天）
+  stale_after_days: 30
+
+  # 技能归档时间（天）
+  archive_after_days: 90
+
+# ══════════════════════════════════════════
+# 上下文管理
+# ══════════════════════════════════════════
 context:
-  compress_threshold: 0.75      # 上下文占用超过 75% 窗口时触发压缩
-  protect_first_n: 3            # 压缩时保护前 3 条消息
-  protect_last_n: 6             # 压缩时保护后 6 条消息
+  # 压缩引擎: llm_summary
+  engine: llm_summary
 
+  # 压缩阈值（上下文窗口使用率, 0-1）
+  compress_threshold: 0.75
+
+  # 保护最近 N 条消息不被压缩
+  protect_first_n: 3
+  protect_last_n: 6
+
+  # 摘要比例（摘要 ≈ 内容 × 此值）
+  summary_ratio: 0.20
+
+  # 摘要 Token 上限
+  summary_tokens_ceiling: 12000
+
+  # 图片 Token 估算
+  image_token_estimate: 1600
+
+# ══════════════════════════════════════════
+# 工具系统
+# ══════════════════════════════════════════
 tools:
+  # 是否并行执行工具
   parallel_execution: true
-  profile: standard             # minimal | standard | full（5/9/35 工具）
-  max_workers: 8                # 并行工具最大并发数
-  default_timeout_ms: 30000     # 工具默认超时（毫秒）
-  # allow: []                   # 白名单工具名
-  # deny: []                    # 黑名单工具名
+
+  # 最大并行 worker 数
+  max_workers: 8
+
+  # 默认工具超时（毫秒）
+  default_timeout_ms: 30000
+
+  # 工具集级别: minimal | standard | full
+  profile: standard
+
+  # 工具白名单 / 黑名单
+  # allow: ["read_file", "write_file", "web_search"]
+  # deny: ["shell_exec"]

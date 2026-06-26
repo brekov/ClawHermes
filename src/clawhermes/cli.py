@@ -783,18 +783,69 @@ def _copy_channel_example(example_path: str, dest_dir: Path, ch_id: str):
 @main.command()
 def doctor():
     """诊断"""
-    console.print(f"✅ Python {sys.version_info.major}.{sys.version_info.minor}")
-    for pkg, role in [("litellm", "llm"), ("fastapi", "web"), ("chromadb", "vector"), ("rich", "cli")]:
+    import subprocess
+    _load_dotenv()
+    data_dir = Path(os.getenv("CH_DATA_DIR", str(Path.home() / ".clawhermes")))
+
+    console.print("[bold]ClawHermes Doctor[/]\n")
+
+    py_ok = sys.version_info >= (3, 12)
+    icon = "✅" if py_ok else "❌"
+    console.print(f"{icon} Python {sys.version_info.major}.{sys.version_info.minor}" +
+                 ("" if py_ok else " (需要 3.12+)"))
+
+    for pkg, role in [("litellm", "llm"), ("fastapi", "web"), ("chromadb", "vector"),
+                      ("rich", "cli"), ("yaml", "config"), ("click", "cli"),
+                      ("questionary", "wizard"), ("pydantic", "validation")]:
         try:
             __import__(pkg.replace("-", "_"))
-            console.print(f"  ✅ {pkg}")
+            console.print(f"  ✅ {pkg:15s} ({role})")
         except ImportError:
-            console.print(f"  ❌ {pkg}")
-    found = [k for k in os.environ if k.endswith("_API_KEY") and os.environ[k]]
-    for k in found[:3]:
-        console.print(f"  ✅ {k}")
-    if not found:
-        console.print("  ⚠️  未设置 API Key")
+            console.print(f"  ❌ {pkg:15s} ({role}) — pip install {pkg}")
+
+    for ch_id, ch_name in [("lark", "飞书"), ("weixin", "微信"), ("qq", "QQ")]:
+        try:
+            __import__(f"clawhermes_{ch_id}")
+            console.print(f"  ✅ clawhermes-{ch_id:8s} ({ch_name})")
+        except ImportError:
+            console.print(f"  ⚠️  clawhermes-{ch_id:8s} ({ch_name}) — pip install -e ./clawhermes-{ch_id}")
+
+    env_p = data_dir / ".env"
+    yaml_p = data_dir / "config.yaml"
+    console.print(f"  {'✅' if env_p.exists() else '⚠️'} .env ({'已存在' if env_p.exists() else '未找到 — clawhermes setup'})")
+    console.print(f"  {'✅' if yaml_p.exists() else '⚠️'} config.yaml ({'已存在' if yaml_p.exists() else '未找到 — clawhermes setup'})")
+    channels_dir = data_dir / "channels"
+    if channels_dir.exists():
+        for y in sorted(channels_dir.glob("*.yaml")):
+            console.print(f"  ✅ channels/{y.name}")
+    else:
+        console.print("  ⚠️  channels/ 目录未创建")
+
+    found = sorted(k for k in os.environ if k.endswith("_API_KEY") and os.environ[k])
+    if found:
+        for k in found[:5]:
+            masked = os.environ[k][:8] + "..." if len(os.environ[k]) > 8 else "***"
+            console.print(f"  ✅ {k}={masked}")
+        if len(found) > 5:
+            console.print(f"  ... 还有 {len(found)-5} 个 Key")
+    else:
+        console.print("  ⚠️  未设置 API Key — 在 .env 中配置")
+
+    console.print(f"  ℹ️  Gateway: {os.getenv('CH_GATEWAY_HOST', '127.0.0.1')}:{os.getenv('CH_GATEWAY_PORT', '18789')}")
+
+    try:
+        result = subprocess.run(
+            ["git", "submodule", "status"], capture_output=True, text=True, timeout=5
+        )
+        for line in result.stdout.strip().split("\n"):
+            if line:
+                status = "✅" if not line.startswith("-") else "⚠️  (未初始化)"
+                parts = line.split()
+                if len(parts) >= 2:
+                    console.print(f"  {status} submodule: {parts[1]}")
+    except Exception:
+        pass
+
 
 
 if __name__ == "__main__":
