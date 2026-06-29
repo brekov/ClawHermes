@@ -890,7 +890,6 @@ def _apply_setup(env_vars, channels_enabled, channel_defs, model, gw_host, gw_po
 
 def _onboard_feishu(env_vars: dict[str, str], existing_env: dict | None = None):
     """飞书渠道引导 — 直接调用 clawhermes-lark 的 app_registration 逻辑"""
-    import asyncio
     import questionary
 
     console.print("\n  [bold]飞书 (Feishu/Lark)[/]")
@@ -922,6 +921,7 @@ def _onboard_feishu(env_vars: dict[str, str], existing_env: dict | None = None):
 def _run_scan_to_create(env_vars: dict) -> dict | None:
     """扫码创建飞书应用 — 调用 clawhermes-lark app_registration"""
     import asyncio
+
     import questionary
 
     # 域名选择
@@ -961,7 +961,7 @@ def _run_scan_to_create(env_vars: dict) -> dict | None:
         qr_text = f"[QR Code]\n{begin_result.verification_uri_complete}"
 
     console.print(f"\n{qr_text}\n")
-    console.print(f"  📱 请使用飞书 App 扫描上方二维码")
+    console.print("  📱 请使用飞书 App 扫描上方二维码")
     console.print(f"  🔑 授权码: {begin_result.user_code}")
     console.print(f"  ⏰ 有效期: {begin_result.expire_in // 60} 分钟")
     console.print()
