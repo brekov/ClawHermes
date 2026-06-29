@@ -939,22 +939,31 @@ def _run_scan_to_create(env_vars: dict) -> dict | None:
     try:
         from clawhermes_lark.openclaw_lark.core.app_registration import (
             app_registration_begin,
+            app_registration_init,
+            app_registration_poll,
             render_qr_terminal,
-            run_qr_code_app_creation,
         )
     except ImportError:
         console.print("  ⚠️  clawhermes-lark 未安装，回退到手动配置")
         return _run_manual_feishu_setup(env_vars)
 
-    # Step 1: begin → 获取 QR URL
+    # Step 1: init — 验证环境是否支持 client_secret 认证
     with console.status("  🔍 正在初始化..."):
-        begin_result = asyncio.run(app_registration_begin(domain))
-    if not begin_result.ok:
-        console.print(f"  ⚠️  初始化失败: {begin_result.error}")
+        init_result = asyncio.run(app_registration_init(domain))
+    if not init_result.ok:
+        console.print(f"  ⚠️  环境检查失败: {init_result.error}")
         console.print("  回退到手动配置...")
         return _run_manual_feishu_setup(env_vars)
 
-    # Step 2: 展示 QR 码 + 引导
+    # Step 2: begin — 生成 device_code + QR URL
+    with console.status("  🔍 正在生成扫码授权..."):
+        begin_result = asyncio.run(app_registration_begin(domain))
+    if not begin_result.ok:
+        console.print(f"  ⚠️  创建失败: {begin_result.error}")
+        console.print("  回退到手动配置...")
+        return _run_manual_feishu_setup(env_vars)
+
+    # Step 3: 展示 QR 码 + 引导
     try:
         qr_text = render_qr_terminal(begin_result.verification_uri_complete)
     except Exception:
@@ -966,10 +975,15 @@ def _run_scan_to_create(env_vars: dict) -> dict | None:
     console.print(f"  ⏰ 有效期: {begin_result.expire_in // 60} 分钟")
     console.print()
 
-    # Step 3: 轮询授权结果
+    # Step 4: poll — 轮询授权结果
     console.print("  ⏳ 等待扫码授权 (可 Ctrl+C 取消)...")
     try:
-        poll_result = asyncio.run(run_qr_code_app_creation(domain))
+        poll_result = asyncio.run(app_registration_poll(
+            brand=domain,
+            device_code=begin_result.device_code,
+            interval=begin_result.interval,
+            expire_in=begin_result.expire_in,
+        ))
     except KeyboardInterrupt:
         console.print("\n  ⚠️  已取消")
         return None
