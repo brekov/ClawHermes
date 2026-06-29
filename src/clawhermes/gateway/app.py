@@ -43,11 +43,17 @@ _env_path = Path(os.getenv("CH_DATA_DIR", os.path.expanduser("~/.clawhermes"))) 
 if _env_path.exists():
     for _line in _env_path.read_text().splitlines():
         _line = _line.strip()
-        if _line and not _line.startswith("#") and "=" in _line:
-            _k, _, _v = _line.partition("=")
-            _k = _k.strip()
-            if _k not in os.environ:
-                os.environ[_k] = _v.strip()
+        if not _line or _line.startswith("#") or "=" not in _line:
+            continue
+        _k, _, _v = _line.partition("=")
+        _k = _k.strip()
+        # 剥离行内注释：KEY=value  # comment → value
+        # 注意：值本身可能含 #（如 API token），只剥离 "  # " 这种以空格分隔的注释
+        _v = _v.strip()
+        if "  #" in _v:
+            _v = _v.split("  #", 1)[0].rstrip()
+        if _k not in os.environ:
+            os.environ[_k] = _v
 
 
 logger = logging.getLogger(__name__)

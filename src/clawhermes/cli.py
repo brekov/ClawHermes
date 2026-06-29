@@ -31,8 +31,12 @@ def _load_dotenv():
             continue
         key, _, val = line.partition("=")
         key = key.strip()
+        # 剥离行内注释：KEY=value  # comment → value
+        val = val.strip()
+        if "  #" in val:
+            val = val.split("  #", 1)[0].rstrip()
         if key not in os.environ:
-            os.environ[key] = val.strip()
+            os.environ[key] = val
 def _create_agent(api_key=None, model=None):
     from clawhermes.agent.loop import Agent, AgentConfig, ToolRegistry
     from clawhermes.agent.memory import JSONMemoryProvider, MemoryManager
@@ -1133,9 +1137,15 @@ def _write_env(vars_dict: dict[str, str]):
     if env_path.exists():
         for line in env_path.read_text().splitlines():
             line = line.strip()
-            if line and not line.startswith("#") and "=" in line:
-                k, _, v = line.partition("=")
-                existing[k.strip()] = v.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            k, _, v = line.partition("=")
+            k = k.strip()
+            # 剥离行内注释，避免 "value  # (保留已有)" 累加
+            v = v.strip()
+            if "  #" in v:
+                v = v.split("  #", 1)[0].rstrip()
+            existing[k] = v
     lines_out = [
         "# ============================================================",
         "# ClawHermes · 环境变量配置",
