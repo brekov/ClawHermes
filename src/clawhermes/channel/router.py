@@ -290,7 +290,7 @@ class ChannelRouter:
                     )
                     if adapter:
                         await adapter.send_response(response, message)
-            except Exception as e:
+            except Exception:
                 logger.exception("Error processing message %s", message.message_id)
             finally:
                 self._active_session = None
