@@ -941,7 +941,6 @@ def _run_scan_to_create(env_vars: dict) -> dict | None:
             app_registration_begin,
             app_registration_init,
             app_registration_poll,
-            render_qr_terminal,
         )
     except ImportError:
         console.print("  ⚠️  clawhermes-lark 未安装，回退到手动配置")
@@ -965,8 +964,9 @@ def _run_scan_to_create(env_vars: dict) -> dict | None:
 
     # Step 3: 展示 QR 码 + 引导
     try:
+        from clawhermes_lark.openclaw_lark.core.app_registration import render_qr_terminal
         qr_text = render_qr_terminal(begin_result.verification_uri_complete)
-    except Exception:
+    except ImportError:
         qr_text = f"[QR Code]\n{begin_result.verification_uri_complete}"
 
     console.print(f"\n{qr_text}\n")
