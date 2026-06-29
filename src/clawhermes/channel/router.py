@@ -117,8 +117,12 @@ class ChannelRouter:
         session_router: SessionRouter | None = None,
         default_queue_mode: QueueMode = QueueMode.STEER,
         pairing_manager: DMPairingManager | None = None,
+        pairing_required: bool = False,
     ):
         self._pairing_manager = pairing_manager
+        # 默认 False：未显式启用配对时放行所有用户（向后兼容、开箱即用）
+        # 设为 True 时必须通过 /dm/pair/generate 生成配对码并完成验证
+        self._pairing_required = pairing_required
         self._channel_manager = channel_manager
         self._session_router = session_router or SessionRouter()
         self._default_queue_mode = default_queue_mode
@@ -141,6 +145,10 @@ class ChannelRouter:
     def set_allowlist(self, allowlist: set[str] | None) -> None:
         self._allowlist = allowlist
 
+    def set_pairing_required(self, required: bool) -> None:
+        """显式启用/禁用 DM 配对门控"""
+        self._pairing_required = required
+
     @property
     def session_router(self) -> SessionRouter:
         return self._session_router
@@ -149,7 +157,7 @@ class ChannelRouter:
         self._running = True
         await self._channel_manager.start_all()
         self._channel_manager.set_message_handler(self._on_message)
-        logger.info("Channel Router started")
+        logger.info("Channel Router started (pairing_required=%s)", self._pairing_required)
 
     async def stop(self) -> None:
         self._running = False
@@ -169,9 +177,12 @@ class ChannelRouter:
                 )
                 return
 
-        # DM 配对安全检查
-        if self._pairing_manager is not None and message.channel_type not in (
-            ChannelType.CLI, ChannelType.REST
+        # DM 配对安全检查 — 仅在显式启用 pairing_required 时生效
+        # 默认 False，确保未配置配对时飞书/QQ/WeChat 消息能正常通过
+        if (
+            self._pairing_required
+            and self._pairing_manager is not None
+            and message.channel_type not in (ChannelType.CLI, ChannelType.REST)
         ):
             if not self._pairing_manager.is_paired(message.user.user_id):
                 logger.warning(
@@ -260,13 +271,17 @@ class ChannelRouter:
 
             try:
                 if self._agent_handler:
+                    # 支持 sync 和 async 两种 handler（async 优先）
+                    # async handler 不会阻塞事件循环（agent.chat 通过 to_thread 包装）
                     result = self._agent_handler(
                         message.content,
                         session_id=session_id,
                     )
+                    if asyncio.iscoroutine(result):
+                        result = await result
 
                     response = ChannelResponse(
-                        content=str(result),
+                        content=str(result) if result is not None else "",
                         session_id=session_id,
                     )
 
@@ -276,7 +291,7 @@ class ChannelRouter:
                     if adapter:
                         await adapter.send_response(response, message)
             except Exception as e:
-                logger.error("Error processing message %s: %s", message.message_id, e)
+                logger.exception("Error processing message %s", message.message_id)
             finally:
                 self._active_session = None
 

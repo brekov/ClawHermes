@@ -238,8 +238,16 @@ class GatewayState:
             session_router=session_router,
             pairing_manager=pairing_manager,
         )
-        channel_router.set_agent_handler(lambda msg, session_id="": agent.chat(msg, session_id=session_id))
+        # agent.chat 是同步阻塞调用（内部调用 LLM），必须用 asyncio.to_thread 包装
+        # 否则会在 router._process_queue 中阻塞事件循环，导致 WebSocket ping 超时断连
+        async def _agent_handler(msg: str, session_id: str = "") -> str:
+            return await asyncio.to_thread(agent.chat, msg, session_id=session_id)
+        channel_router.set_agent_handler(_agent_handler)
         channel_router.set_session_creator(lambda: session_mgr.create_session())
+
+        # 关键：启动 channel_router — 否则适配器不会 start()，_on_message 也不会被注册
+        # 这会直接导致飞书消息收发完全无响应
+        await channel_router.start()
 
         self.agent = agent
         self.memory = memory
@@ -256,6 +264,11 @@ class GatewayState:
         """优雅关闭所有后台任务"""
         if self.scheduler:
             await self.scheduler.stop()
+        if self.channel_router:
+            try:
+                await self.channel_router.stop()
+            except Exception as e:
+                logger.error("Channel router stop failed: %s", e)
         for task in self._bg_tasks:
             if not task.done():
                 task.cancel()
