@@ -553,6 +553,35 @@ def _setup_model_section(existing_config: dict, existing_env: dict, quick: bool)
     return {"env": env_vars, "model": model.strip() if model else "deepseek/deepseek-chat"}
 
 
+def _ensure_lark_sdk() -> None:
+    """确保 lark_oapi 已安装，若未安装则自动 pip install"""
+    try:
+        import lark_oapi  # noqa: F401
+        return
+    except ImportError:
+        pass
+
+    import subprocess
+    import sys
+
+    repo_root = Path(__file__).resolve().parent.parent.parent
+    lark_dir = repo_root / "clawhermes-lark"
+    if not (lark_dir / "pyproject.toml").exists():
+        console.print("  ⚠️  clawhermes-lark 子仓库未找到")
+        console.print("  请手动: git clone <url> clawhermes-lark && pip install -e ./clawhermes-lark")
+        return
+
+    console.print("  📦 正在安装 clawhermes-lark ...")
+    try:
+        subprocess.run(
+            [sys.executable, "-m", "pip", "install", "-e", str(lark_dir)],
+            capture_output=True, check=True,
+        )
+        console.print("  ✅ clawhermes-lark 安装完成")
+    except subprocess.CalledProcessError as e:
+        console.print(f"  ❌ 安装失败: {e}")
+        console.print("  手动安装: pip install -e ./clawhermes-lark")
+
 def _setup_channels_section(channel_defs: dict, existing_env: dict, quick: bool) -> dict | None:
     """消息渠道选择"""
     import questionary
@@ -576,6 +605,7 @@ def _setup_channels_section(channel_defs: dict, existing_env: dict, quick: bool)
     for ch_id in channels_enabled:
         ch_def = channel_defs[ch_id]
         if ch_id == "lark":
+            _ensure_lark_sdk()
             _onboard_feishu(env_vars, existing_env=existing_env if quick else {})
             continue
         console.print(f"\n  [bold]{ch_def['name']}[/]")
@@ -859,24 +889,132 @@ def _apply_setup(env_vars, channels_enabled, channel_defs, model, gw_host, gw_po
 
 
 def _onboard_feishu(env_vars: dict[str, str], existing_env: dict | None = None):
-    """飞书渠道引导 — 对齐 larksuite/openclaw-lark onboarding"""
+    """飞书渠道引导 — 直接调用 clawhermes-lark 的 app_registration 逻辑"""
     import questionary
 
     console.print("\n  [bold]飞书 (Feishu/Lark)[/]")
+
+    # ── 选择创建方式 ──
+    method = questionary.select(
+        "  选择配置方式:",
+        choices=[
+            questionary.Choice(title="📱 扫码创建 — 飞书 App 扫码自动创建应用 (推荐)", value="scan"),
+            questionary.Choice(title="⌨️  手动配置 — 在 open.feishu.cn 手动创建后填入凭证", value="manual"),
+        ],
+        default="scan",
+    ).ask()
+    if not method:
+        return
+
+    if method == "scan":
+        result = _run_scan_to_create(env_vars)
+        if result is None:
+            return
+    else:
+        result = _run_manual_feishu_setup(env_vars)
+        if result is None:
+            return
+
+    console.print("  ✅ 飞书 (Feishu/Lark) 已配置")
+
+
+def _run_scan_to_create(env_vars: dict) -> dict | None:
+    """扫码创建飞书应用 — 调用 clawhermes-lark app_registration"""
+    import asyncio
+
+    import questionary
+
+    # 域名选择
+    domain = questionary.select(
+        "  选择平台:",
+        choices=[
+            questionary.Choice(title="feishu.cn  (飞书·中国)", value="feishu"),
+            questionary.Choice(title="larksuite.com  (Lark·国际)", value="lark"),
+        ],
+        default="feishu",
+    ).ask()
+    if not domain:
+        return None
+
+    try:
+        from clawhermes_lark.openclaw_lark.core.app_registration import (
+            app_registration_begin,
+            render_qr_terminal,
+            run_qr_code_app_creation,
+        )
+    except ImportError:
+        console.print("  ⚠️  clawhermes-lark 未安装，回退到手动配置")
+        return _run_manual_feishu_setup(env_vars)
+
+    # Step 1: begin → 获取 QR URL
+    with console.status("  🔍 正在初始化..."):
+        begin_result = asyncio.run(app_registration_begin(domain))
+    if not begin_result.ok:
+        console.print(f"  ⚠️  初始化失败: {begin_result.error}")
+        console.print("  回退到手动配置...")
+        return _run_manual_feishu_setup(env_vars)
+
+    # Step 2: 展示 QR 码 + 引导
+    try:
+        qr_text = render_qr_terminal(begin_result.verification_uri_complete)
+    except Exception:
+        qr_text = f"[QR Code]\n{begin_result.verification_uri_complete}"
+
+    console.print(f"\n{qr_text}\n")
+    console.print("  📱 请使用飞书 App 扫描上方二维码")
+    console.print(f"  🔑 授权码: {begin_result.user_code}")
+    console.print(f"  ⏰ 有效期: {begin_result.expire_in // 60} 分钟")
+    console.print()
+
+    # Step 3: 轮询授权结果
+    console.print("  ⏳ 等待扫码授权 (可 Ctrl+C 取消)...")
+    try:
+        poll_result = asyncio.run(run_qr_code_app_creation(domain))
+    except KeyboardInterrupt:
+        console.print("\n  ⚠️  已取消")
+        return None
+
+    if not poll_result.ok:
+        console.print(f"  ⚠️  扫码创建失败: {poll_result.error}")
+        console.print("  回退到手动配置...")
+        return _run_manual_feishu_setup(env_vars)
+
+    # 拿到凭证
+    app_id = poll_result.client_id
+    app_secret = poll_result.client_secret
+    owner_open_id = poll_result.open_id
+
+    console.print(f"  ✅ 应用已创建: {app_id[:12]}***")
+    env_vars["FEISHU_APP_ID"] = app_id
+    env_vars["FEISHU_APP_SECRET"] = app_secret
+    if domain != "feishu":
+        env_vars["FEISHU_DOMAIN"] = domain
+
+    # 连接测试
+    _probe_feishu(app_id, app_secret, domain, env_vars)
+
+    # 安全策略
+    _setup_feishu_security(env_vars, owner_open_id)
+
+    return {"app_id": app_id, "app_secret": app_secret, "domain": domain}
+
+
+def _run_manual_feishu_setup(env_vars: dict) -> dict | None:
+    """手动配置飞书 — 用户在 open.feishu.cn 手动创建后填入凭证"""
+    import questionary
+
     console.print("  🔗 创建应用: [link=https://open.feishu.cn/app]https://open.feishu.cn/app[/]")
     console.print("  📋 1) 创建企业自建应用 → 2) 添加「机器人」能力")
     console.print("  📋 3) 权限: im:message, im:chat, contact:user.base:readonly")
     console.print("  📋 4) 发布应用或添加测试用户\n")
 
-    # Step b: 凭证
     app_id = questionary.text("  App ID:", validate=lambda v: bool(v.strip())).ask()
     if not app_id:
-        return
+        return None
     app_secret = questionary.password("  App Secret:", validate=lambda v: bool(v.strip())).ask()
     if not app_secret:
-        return
+        return None
 
-    # Step c: 域名选择
     domain = questionary.select(
         "  选择域名:",
         choices=[
@@ -886,42 +1024,49 @@ def _onboard_feishu(env_vars: dict[str, str], existing_env: dict | None = None):
         default="feishu",
     ).ask()
     if not domain:
-        return
-
-    # Step d: 连接测试 (对齐 openclaw-lark probeFeishu)
-    console.print("\n  🔍 正在测试连接...")
-    try:
-        import lark_oapi as lark
-        from lark_oapi.api.verification.v1 import GetBotInfoRequest
-        client = lark.Client.builder().app_id(app_id).app_secret(app_secret).domain(
-            lark.Domain.FEISHU if domain == "feishu" else lark.Domain.LARK
-        ).build()
-        resp = client.verification.v1.bot_info.get(GetBotInfoRequest())
-        if resp.success() and resp.data:
-            bot_name = getattr(resp.data, "name", app_id) or app_id
-            console.print(f"  ✅ 连接成功 → 机器人: [bold green]{bot_name}[/]")
-            env_vars["FEISHU_BOT_NAME"] = bot_name
-        else:
-            console.print("  ⚠️  连接测试失败, 请检查凭证是否正确")
-    except Exception as e:
-        console.print(f"  ⚠️  连接测试失败: {e}")
-        console.print("  凭证将被保存，可在配置完成后手动验证连接。")
+        return None
 
     env_vars["FEISHU_APP_ID"] = app_id
     env_vars["FEISHU_APP_SECRET"] = app_secret
     if domain != "feishu":
         env_vars["FEISHU_DOMAIN"] = domain
 
-    # Step e: 可选安全字段
-    if questionary.confirm("  配置 Webhook 安全验证? (推荐)", default=True).ask():
-        verify_token = questionary.password("  Verify Token:").ask()
-        if verify_token:
-            env_vars["FEISHU_VERIFY_TOKEN"] = verify_token
-        encrypt_key = questionary.password("  Encrypt Key:").ask()
-        if encrypt_key:
-            env_vars["FEISHU_ENCRYPT_KEY"] = encrypt_key
+    # 连接测试
+    _probe_feishu(app_id, app_secret, domain, env_vars)
 
-    # Step f: 群聊策略 (对齐 openclaw-lark groupPolicy)
+    # 安全策略（无 owner open_id，用户手动控制）
+    _setup_feishu_security(env_vars, owner_open_id="")
+
+    return {"app_id": app_id, "app_secret": app_secret, "domain": domain}
+
+
+def _probe_feishu(app_id: str, app_secret: str, domain: str, env_vars: dict) -> None:
+    """测试飞书连接"""
+    console.print("\n  🔍 正在测试连接...")
+    try:
+        import lark_oapi as lark
+        from lark_oapi.api.verification.v1 import GetBotInfoRequest
+
+        dom = lark.Domain.FEISHU if domain == "feishu" else lark.Domain.LARK
+        client = lark.Client.builder().app_id(app_id).app_secret(app_secret).domain(dom).build()
+        resp = client.verification.v1.bot_info.get(GetBotInfoRequest())
+        if resp.success() and resp.data:
+            bot_name = getattr(resp.data, "name", "") or app_id
+            console.print(f"  ✅ 连接成功 → 机器人: [bold green]{bot_name}[/]")
+            env_vars["FEISHU_BOT_NAME"] = bot_name
+        else:
+            console.print("  ⚠️  连接测试失败, 请检查凭证是否正确")
+    except ImportError:
+        console.print("  ⚠️  lark_oapi 未安装，跳过连接测试")
+    except Exception as e:
+        console.print(f"  ⚠️  连接测试失败: {e}")
+
+
+def _setup_feishu_security(env_vars: dict, owner_open_id: str = "") -> None:
+    """配置飞书安全策略（群聊策略 + 安全警告）"""
+    import questionary
+
+    # 群聊策略
     console.print("\n  [bold]群聊策略[/]")
     group_policy = questionary.select(
         "  群聊访问策略:",
@@ -935,7 +1080,16 @@ def _onboard_feishu(env_vars: dict[str, str], existing_env: dict | None = None):
     if group_policy:
         env_vars["FEISHU_GROUP_POLICY"] = group_policy
 
-    # Security check — use clawhermes-lark's security module if available
+    # Webhook 安全
+    if questionary.confirm("  配置 Webhook 安全验证? (推荐)", default=True).ask():
+        verify_token = questionary.password("  Verify Token:").ask()
+        if verify_token:
+            env_vars["FEISHU_VERIFY_TOKEN"] = verify_token
+        encrypt_key = questionary.password("  Encrypt Key:").ask()
+        if encrypt_key:
+            env_vars["FEISHU_ENCRYPT_KEY"] = encrypt_key
+
+    # Security check — use clawhermes-lark's security module
     try:
         from clawhermes_lark.openclaw_lark.core.security import collect_security_warnings
         feishu_cfg = {
@@ -951,9 +1105,7 @@ def _onboard_feishu(env_vars: dict[str, str], existing_env: dict | None = None):
             for w in warnings_list:
                 console.print(f"    {w}")
     except ImportError:
-        pass  # clawhermes-lark not installed
-
-    console.print("  ✅ 飞书 (Feishu/Lark) 已配置")
+        pass
 
 
 def _write_env(vars_dict: dict[str, str]):
