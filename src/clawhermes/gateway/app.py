@@ -369,7 +369,7 @@ async def initialize(req: InitRequest):
 
 
 @app.post("/chat", response_model=ChatResponse)
-def chat(req: ChatRequest):
+async def chat(req: ChatRequest):
     agent = _state.get_agent()
     if _state.session_mgr is None:
         raise HTTPException(500, "Session 管理器未初始化")
@@ -385,7 +385,7 @@ def chat(req: ChatRequest):
 
     try:
         if _state.channel_router:
-            response = _state.channel_router.route_message(
+            response = await _state.channel_router.route_message(
                 content=req.message,
                 channel_type=ChannelType.REST,
                 user_id="rest_user",

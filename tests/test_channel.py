@@ -288,36 +288,36 @@ class TestSessionRouter:
 
 
 class TestChannelRouter:
-    def test_route_message_with_handler(self):
+    async def test_route_message_with_handler(self):
         mgr = ChannelManager()
         mgr.register("rest", RESTAdapter())
         router = ChannelRouter(channel_manager=mgr)
         results = []
         router.set_agent_handler(lambda msg, session_id="": (results.append(msg), "response")[-1])
         router.set_session_creator(lambda: "sess_test")
-        resp = router.route_message("hello", ChannelType.REST, user_id="user1")
+        resp = await router.route_message("hello", ChannelType.REST, user_id="user1")
         assert resp == "response"
         assert results == ["hello"]
 
-    def test_route_message_creates_session(self):
+    async def test_route_message_creates_session(self):
         mgr = ChannelManager()
         mgr.register("rest", RESTAdapter())
         router = ChannelRouter(channel_manager=mgr)
         router.set_agent_handler(lambda msg, session_id="": "ok")
         router.set_session_creator(lambda: "sess_auto")
-        resp = router.route_message("hello", ChannelType.REST, user_id="user1")
+        resp = await router.route_message("hello", ChannelType.REST, user_id="user1")
         assert resp == "ok"
         mapping = router.session_router.resolve(ChannelType.REST, "user1")
         assert mapping is not None
 
-    def test_route_message_with_existing_session(self):
+    async def test_route_message_with_existing_session(self):
         mgr = ChannelManager()
         mgr.register("rest", RESTAdapter())
         router = ChannelRouter(channel_manager=mgr)
         router.set_agent_handler(lambda msg, session_id="": f"ok:{session_id}")
         router.set_session_creator(lambda: "sess_auto")
-        resp1 = router.route_message("hello", ChannelType.REST, user_id="user1")
-        resp2 = router.route_message("world", ChannelType.REST, user_id="user1")
+        resp1 = await router.route_message("hello", ChannelType.REST, user_id="user1")
+        resp2 = await router.route_message("world", ChannelType.REST, user_id="user1")
         assert "ok:" in resp1
         assert "ok:" in resp2
 

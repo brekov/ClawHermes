@@ -155,8 +155,8 @@ class ChannelRouter:
 
     async def start(self) -> None:
         self._running = True
-        await self._channel_manager.start_all()
         self._channel_manager.set_message_handler(self._on_message)
+        await self._channel_manager.start_all()
         logger.info("Channel Router started (pairing_required=%s)", self._pairing_required)
 
     async def stop(self) -> None:
@@ -295,7 +295,7 @@ class ChannelRouter:
             finally:
                 self._active_session = None
 
-    def route_message(
+    async def route_message(
         self,
         content: str,
         channel_type: ChannelType,
@@ -321,6 +321,8 @@ class ChannelRouter:
 
         if self._agent_handler:
             result = self._agent_handler(content, session_id=resolved_session)
+            if asyncio.iscoroutine(result):
+                result = await result
             return str(result)
 
         return ""
