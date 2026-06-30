@@ -668,7 +668,16 @@ async def wecom_webhook(request: Request):
 
 
 if __name__ == "__main__":
-    import uvicorn
+    import argparse
+
+    import uvicorn  # noqa: F401
+
+    parser = argparse.ArgumentParser(description="ClawHermes Gateway")
+    parser.add_argument("--host", default=os.environ.get("CH_GATEWAY_HOST", "127.0.0.1"))
+    parser.add_argument("--port", type=int, default=int(os.environ.get("CH_GATEWAY_PORT", "18789")))
+    args = parser.parse_args()
+
+    uvicorn.run(app, host=args.host, port=args.port, log_level="info")
 
 
 def _to_bool(val: Any) -> bool:
@@ -678,8 +687,6 @@ def _to_bool(val: Any) -> bool:
     if isinstance(val, str):
         return val.lower() in ("true", "1", "yes")
     return bool(val)
-
-    uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("CH_GATEWAY_PORT", "18789")))
 
 
 # ============================================================
