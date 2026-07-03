@@ -1072,12 +1072,72 @@ def _probe_feishu(app_id: str, app_secret: str, domain: str, env_vars: dict) -> 
             bot_name = getattr(resp.data, "name", "") or app_id
             console.print(f"  ✅ 连接成功 → 机器人: [bold green]{bot_name}[/]")
             env_vars["FEISHU_BOT_NAME"] = bot_name
+            _verify_feishu_event_subscriptions(client)
         else:
             console.print("  ⚠️  连接测试失败, 请检查凭证是否正确")
     except ImportError:
         console.print("  ⚠️  lark_oapi 未安装，跳过连接测试")
     except Exception as e:
         console.print(f"  ⚠️  连接测试失败: {e}")
+
+
+
+_REQUIRED_FEISHU_EVENTS = [
+    "im.message.receive_v1",
+    "im.message.reaction.created_v1",
+    "im.chat.member.bot.added_v1",
+    "im.chat.member.bot.deleted_v1",
+]
+
+
+def _verify_feishu_event_subscriptions(client) -> None:
+    """验证飞书应用已订阅必要的事件类型"""
+    console.print("  📋 正在检查事件订阅...")
+    try:
+        import requests
+        from lark_oapi.core.const import FEISHU_DOMAIN
+
+        # 获取 tenant_access_token
+        token_url = f"{FEISHU_DOMAIN}/open-apis/auth/v3/tenant_access_token/internal"
+        token_resp = requests.post(token_url, json={
+            "app_id": client.app_id,
+            "app_secret": client.app_secret,
+        }, timeout=10)
+        if token_resp.status_code != 200:
+            console.print("  ⚠️  无法获取 token 检查事件订阅")
+            return
+        token = token_resp.json().get("tenant_access_token", "")
+        if not token:
+            console.print("  ⚠️  无法获取 token 检查事件订阅")
+            return
+
+        # 查询已订阅的事件
+        sub_url = f"{FEISHU_DOMAIN}/open-apis/event/v1/app/event_subscription/list"
+        sub_resp = requests.get(sub_url, headers={
+            "Authorization": f"Bearer {token}",
+        }, timeout=10)
+        if sub_resp.status_code != 200:
+            console.print("  ⚠️  无法查询事件订阅（可能需要开启事件订阅权限）")
+            return
+
+        data = sub_resp.json()
+        subscribed = set()
+        if data.get("code") == 0:
+            for item in data.get("data", {}).get("event_types", []):
+                subscribed.add(item)
+
+        missing = [e for e in _REQUIRED_FEISHU_EVENTS if e not in subscribed]
+        if missing:
+            console.print("  ⚠️  以下事件未订阅，消息将无法接收:")
+            for evt in missing:
+                console.print(f"     - {evt}")
+            console.print("  🔗 请在飞书开放平台 → 事件订阅 中添加")
+        else:
+            console.print(f"  ✅ 事件订阅正常 ({len(subscribed)} 个)")
+    except ImportError:
+        console.print("  ⚠️  requests 未安装，跳过事件订阅检查")
+    except Exception as e:
+        console.print(f"  ⚠️  事件订阅检查失败: {e}")
 
 
 def _setup_feishu_security(env_vars: dict, owner_open_id: str = "") -> None:
