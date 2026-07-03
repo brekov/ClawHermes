@@ -28,7 +28,7 @@ bot_name: ""                              # Bot 显示名称（可选，不配�
 
 # ── 群聊权限 ─────────────────────────────────────────────────────
 # 策略: open | allowlist | blacklist | admin_only | disabled
-group_policy: allowlist
+group_policy: open                 # 策略: open | allowlist | blacklist | admin_only | disabled
 allowed_group_users:             # 白名单/黑名单 open_id 列表
   - ""
 admins:                          # 管理员 open_id（不受群聊策略限制）

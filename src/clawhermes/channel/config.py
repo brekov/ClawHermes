@@ -52,7 +52,7 @@ _CHANNEL_DEFAULTS: dict[str, dict[str, Any]] = {
     "feishu": {
         "domain": "feishu",
         "connection_mode": "websocket",
-        "group_policy": "allowlist",
+        "group_policy": "open",
         "allow_bots": "none",
         "require_mention": True,
         "webhook_host": "0.0.0.0",

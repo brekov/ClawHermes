@@ -1153,7 +1153,7 @@ def _setup_feishu_security(env_vars: dict, owner_open_id: str = "") -> None:
             questionary.Choice(title="open — 任何人 @提及即可触发", value="open"),
             questionary.Choice(title="disabled — 禁用群聊", value="disabled"),
         ],
-        default="allowlist",
+        default="open",
     ).ask()
     if group_policy:
         env_vars["FEISHU_GROUP_POLICY"] = group_policy
