@@ -1058,6 +1058,55 @@ def _run_manual_feishu_setup(env_vars: dict) -> dict | None:
     return {"app_id": app_id, "app_secret": app_secret, "domain": domain}
 
 
+
+def _resolve_bot_identity(domain: str, app_id: str, app_secret: str, env_vars: dict) -> None:
+    """通过 /bot/v3/info API 获取 bot 的 open_id / user_id
+
+    这两个字段对群聊 @提及检测和自消息过滤至关重要。
+    """
+    try:
+        import requests
+
+        # 获取 tenant_access_token
+        token_url = f"{domain}/open-apis/auth/v3/tenant_access_token/internal"
+        token_resp = requests.post(token_url, json={
+            "app_id": app_id,
+            "app_secret": app_secret,
+        }, timeout=10)
+        if token_resp.status_code != 200:
+            return
+        token = token_resp.json().get("tenant_access_token", "")
+        if not token:
+            return
+
+        # 获取 bot 身份
+        bot_url = f"{domain}/open-apis/bot/v3/info"
+        bot_resp = requests.get(bot_url, headers={
+            "Authorization": f"Bearer {token}",
+        }, timeout=10)
+        if bot_resp.status_code != 200:
+            return
+
+        data = bot_resp.json()
+        if data.get("code") != 0:
+            return
+
+        bot = data.get("bot") or {}
+        open_id = bot.get("open_id", "")
+        user_id = bot.get("user_id", "")
+
+        if open_id:
+            env_vars["FEISHU_BOT_OPEN_ID"] = open_id
+            console.print(f"  👤 Bot Open ID: {open_id}")
+        if user_id:
+            env_vars["FEISHU_BOT_USER_ID"] = user_id
+
+    except ImportError:
+        pass
+    except Exception:
+        pass
+
+
 def _probe_feishu(app_id: str, app_secret: str, domain: str, env_vars: dict) -> None:
     """测试飞书连接"""
     console.print("\n  🔍 正在测试连接...")
@@ -1072,6 +1121,10 @@ def _probe_feishu(app_id: str, app_secret: str, domain: str, env_vars: dict) -> 
             bot_name = getattr(resp.data, "name", "") or app_id
             console.print(f"  ✅ 连接成功 → 机器人: [bold green]{bot_name}[/]")
             env_vars["FEISHU_BOT_NAME"] = bot_name
+
+            # 获取 bot_open_id —— 群聊 @提及检测、自消息过滤都需要
+            _resolve_bot_identity(dom, app_id, app_secret, env_vars)
+
             _verify_feishu_event_subscriptions(client)
         else:
             console.print("  ⚠️  连接测试失败, 请检查凭证是否正确")
