@@ -58,6 +58,10 @@ if _env_path.exists():
 
 logger = logging.getLogger(__name__)
 
+# 确保渠道适配器诊断日志可见（默认 root logger 为 WARNING 会压住 INFO 日志）
+logging.getLogger("clawhermes.lark").setLevel(logging.INFO)
+logging.getLogger("clawhermes.channel").setLevel(logging.INFO)
+
 
 class GatewayState:
     def __init__(self):
