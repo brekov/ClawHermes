@@ -1063,32 +1063,31 @@ def _resolve_bot_identity(domain: str, app_id: str, app_secret: str, env_vars: d
     """通过 /bot/v3/info API 获取 bot 的 open_id / user_id
 
     这两个字段对群聊 @提及检测和自消息过滤至关重要。
+    使用 urllib.request（标准库）避免依赖 requests。
     """
-    try:
-        import requests
+    import json as _json
+    import urllib.request
 
+    try:
         # 获取 tenant_access_token
         token_url = f"{domain}/open-apis/auth/v3/tenant_access_token/internal"
-        token_resp = requests.post(token_url, json={
-            "app_id": app_id,
-            "app_secret": app_secret,
-        }, timeout=10)
-        if token_resp.status_code != 200:
-            return
-        token = token_resp.json().get("tenant_access_token", "")
+        token_data = _json.dumps({"app_id": app_id, "app_secret": app_secret}).encode("utf-8")
+        token_req = urllib.request.Request(token_url, data=token_data, headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(token_req, timeout=10) as token_resp:
+            token_body = _json.loads(token_resp.read().decode("utf-8"))
+        token = token_body.get("tenant_access_token", "")
         if not token:
+            console.print("  ⚠️  tenant_access_token 为空")
             return
 
         # 获取 bot 身份
         bot_url = f"{domain}/open-apis/bot/v3/info"
-        bot_resp = requests.get(bot_url, headers={
-            "Authorization": f"Bearer {token}",
-        }, timeout=10)
-        if bot_resp.status_code != 200:
-            return
+        bot_req = urllib.request.Request(bot_url, headers={"Authorization": f"Bearer {token}"})
+        with urllib.request.urlopen(bot_req, timeout=10) as bot_resp:
+            data = _json.loads(bot_resp.read().decode("utf-8"))
 
-        data = bot_resp.json()
         if data.get("code") != 0:
+            console.print(f"  ⚠️  bot info 返回错误: {data.get('msg', 'unknown')}")
             return
 
         bot = data.get("bot") or {}
@@ -1100,11 +1099,10 @@ def _resolve_bot_identity(domain: str, app_id: str, app_secret: str, env_vars: d
             console.print(f"  👤 Bot Open ID: {open_id}")
         if user_id:
             env_vars["FEISHU_BOT_USER_ID"] = user_id
+            console.print(f"  👤 Bot User ID: {user_id}")
 
-    except ImportError:
-        pass
-    except Exception:
-        pass
+    except Exception as e:
+        console.print(f"  ⚠️  获取 bot identity 失败: {e}")
 
 
 def _probe_feishu(app_id: str, app_secret: str, domain: str, env_vars: dict) -> None:
@@ -1123,7 +1121,8 @@ def _probe_feishu(app_id: str, app_secret: str, domain: str, env_vars: dict) -> 
             env_vars["FEISHU_BOT_NAME"] = bot_name
 
             # 获取 bot_open_id —— 群聊 @提及检测、自消息过滤都需要
-            _resolve_bot_identity(dom, app_id, app_secret, env_vars)
+            dom_url = lark.FEISHU_DOMAIN if domain == "feishu" else lark.LARK_DOMAIN
+            _resolve_bot_identity(dom_url, app_id, app_secret, env_vars)
 
             _verify_feishu_event_subscriptions(client)
         else:
