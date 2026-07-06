@@ -11,3 +11,6 @@ site/
 .pytest_cache/
 .vscode/
 .trae/
+.idea/
+.test_gw_tmp/
+tests/test.py
