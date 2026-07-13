@@ -10,10 +10,9 @@ from __future__ import annotations
 import logging
 import os
 import re
-from pathlib import Path
 from typing import Any
 
-import yaml
+from clawhermes.config import get_data_dir, load_yaml
 
 logger = logging.getLogger(__name__)
 
@@ -81,26 +80,29 @@ _CHANNEL_DEFAULTS: dict[str, dict[str, Any]] = {
 # ── 公共 API ──────────────────────────────────────────────────────
 
 def load_channel_config(channel_name: str) -> dict[str, Any]:
-    """加载渠道配置，${VAR} 自动从 os.environ 注入"""
-    data_dir = Path(os.environ.get("CH_DATA_DIR", Path.home() / ".clawhermes"))
-    runtime_path = data_dir / "channels" / f"{channel_name}.yaml"
-    example_path = (
-        Path(__file__).parent.parent.parent.parent
-        / "config" / "channels" / f"{channel_name}.yaml.example"
-    )
+    """加载渠道配置，${VAR} 自动从 os.environ 注入
+
+    配置来源（按优先级）：
+    1. $CH_DATA_DIR/channels/<name>.yaml （用户运行时配置）
+    2. _CHANNEL_DEFAULTS （内置默认值）
+
+    注意：不再回退到 config/channels/*.yaml.example — 示例文件仅作为模板参考。
+    缺少运行时配置时仅使用内置默认值，敏感字段（api_key 等）需通过环境变量提供。
+    """
+    runtime_path = get_data_dir() / "channels" / f"{channel_name}.yaml"
 
     config: dict[str, Any] = dict(_CHANNEL_DEFAULTS.get(channel_name, {}))
 
-    for path in (runtime_path, example_path):
-        if path.exists():
-            try:
-                with open(path) as f:
-                    loaded = yaml.safe_load(f) or {}
-                if isinstance(loaded, dict):
-                    config.update(loaded)
-                logger.debug("Loaded channel config: %s", path)
-            except Exception as e:
-                logger.warning("Failed to load channel config %s: %s", path, e)
+    if not runtime_path.exists():
+        logger.info(
+            "渠道配置文件不存在: %s — 使用内置默认值（敏感字段需通过环境变量提供）",
+            runtime_path,
+        )
+    else:
+        loaded = load_yaml(runtime_path)
+        if isinstance(loaded, dict) and loaded:
+            config.update(loaded)
+            logger.debug("Loaded channel config: %s", runtime_path)
 
     resolved = _resolve_env_ref(config)
     assert isinstance(resolved, dict)

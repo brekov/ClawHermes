@@ -17,11 +17,13 @@ from rich.panel import Panel
 from rich.prompt import Confirm
 from rich.table import Table
 
+from clawhermes.config import get_data_dir
+
 console = Console()
 
 
 def get_agents_dir() -> Path:
-    data_dir = Path(os.getenv("CH_DATA_DIR", Path.home() / ".clawhermes"))
+    data_dir = get_data_dir()
     agents_dir = data_dir / "agents"
     agents_dir.mkdir(parents=True, exist_ok=True)
     return agents_dir
@@ -29,7 +31,7 @@ def get_agents_dir() -> Path:
 
 def get_default_agent() -> str:
     """获取默认 Agent 名称"""
-    data_dir = Path(os.getenv("CH_DATA_DIR", Path.home() / ".clawhermes"))
+    data_dir = get_data_dir()
     default_file = data_dir / "default_agent.txt"
     if default_file.exists():
         return default_file.read_text().strip()
@@ -37,7 +39,7 @@ def get_default_agent() -> str:
 
 
 def set_default_agent(name: str):
-    data_dir = Path(os.getenv("CH_DATA_DIR", Path.home() / ".clawhermes"))
+    data_dir = get_data_dir()
     (data_dir / "default_agent.txt").write_text(name)
 
 

@@ -115,30 +115,26 @@
 
 | 模块 | 职责 | 关键类 |
 |------|------|--------|
-| `tools/registry.py` | 工具注册与发现 | `ToolRegistry` / `ToolDef` |
-| `tools/dispatch.py` | 工具调度（并行/串行规则） | `ToolDispatcher` |
-| `tools/hooks.py` | 钩子管理（同步+异步） | `HookManager` / `Hook` |
-| `tools/policy.py` | 策略引擎 | `PolicyEngine` / `Policy` / `Profile` |
-| `tools/builtin.py` | 26个内置工具 + 3级 Profile | `MINIMAL_TOOLS` / `STANDARD_TOOLS` / `FULL_TOOLS` / `PROFILE_MAP` |
+| `tools/builtin.py` | 35个内置工具 + 3级 Profile | `MINIMAL_TOOLS` / `STANDARD_TOOLS` / `FULL_TOOLS` / `PROFILE_MAP` |
 | `tools/sandbox.py` | Docker 沙箱执行环境 | `DockerSandbox` / `SandboxPool` / `SandboxResult` |
+
+> 工具注册与发现（`ToolRegistry` / `ToolDef`）、工具调度（`ToolDispatcher`，并行/串行规则）、
+> 钩子管理（`HookManager` / `HookPoint`，同步+异步）均位于 `agent/loop.py`（见 §2.2）。
 
 ### 2.4 LLM 层
 
 | 模块 | 职责 | 关键类 |
 |------|------|--------|
-| `llm/provider.py` | Provider 抽象 + CredentialPool + chat_async | `LLMProvider` / `LLMResponse` / `CredentialPool` |
-| `llm/router.py` | 模型路由 | `ModelRouter` |
-| `llm/credential_pool.py` | 多凭证管理（4策略） | `CredentialPool` (fill_first / round_robin / random / least_used) |
-| `llm/providers/` | 各提供商实现 | — |
+| `llm/provider.py` | Provider 抽象 + CredentialPool（4策略）+ chat_async | `LLMProvider` / `LLMResponse` / `CredentialPool` (fill_first / round_robin / random / least_used) |
 
 ### 2.5 存储层
 
 | 模块 | 职责 | 关键类 |
 |------|------|--------|
-| `storage/session.py` | 会话持久化（SQLite WAL） | `SessionManager` |
-| `storage/transcript.py` | 对话记录（JSONL 树形） | `TranscriptStore` |
-| `storage/vector.py` | 向量检索 | `VectorStore` |
-| `storage/chroma_memory.py` | ChromaDB 向量记忆存储 | `ChromaMemoryProvider` |
+| `storage/chroma_memory.py` | ChromaDB 向量记忆存储（语义检索） | `ChromaMemoryProvider` |
+
+> 会话持久化（`SessionManager`，SQLite WAL）位于 `agent/session.py`（见 §2.2），
+> 记忆管理（`MemoryManager` / `MemoryProvider`）位于 `agent/memory.py`，向其注入 `ChromaMemoryProvider`。
 
 ### 2.6 Channel 层
 
@@ -545,23 +541,19 @@ features:
 ```
 gateway/app.py
     ├── channel/adapter.py → agent/exceptions.py
+    ├── channel/config.py
+    ├── channel/router.py → channel/pairing.py
     ├── agent/loop.py
     │   ├── agent/prompt.py → agent/context.py
     │   ├── agent/ace.py → agent/context.py
-    │   ├── tools/registry.py
-    │   ├── tools/dispatch.py
-    │   ├── tools/hooks.py
-    │   ├── tools/policy.py
-    │   ├── tools/builtin.py → tools/registry.py
+    │   ├── tools/builtin.py → agent/loop.py (ToolDef / ToolRegistry)
     │   ├── tools/sandbox.py → agent/exceptions.py
-    │   ├── agent/memory.py → storage/vector.py
-    │   │                 → storage/chroma_memory.py
+    │   ├── agent/memory.py → storage/chroma_memory.py
     │   ├── skills/manager.py → skills/hub.py
     │   ├── agent/delegate.py → agent/loop.py
     │   └── agent/scheduler.py
     ├── agent/session.py → agent/exceptions.py
-    ├── llm/provider.py → llm/credential_pool.py
-    └── storage/session.py → storage/transcript.py
+    └── llm/provider.py (内含 CredentialPool)
 
     无循环依赖 ✓
 ```
@@ -578,7 +570,7 @@ gateway/app.py
 |------|------|:----:|
 | `agent/exceptions.py` | 自定义异常类层次（5大类10子类 + 扩展异常） | ✅ |
 | `agent/session.py` | 会话持久化管理（SQLite WAL） | ✅ |
-| `tools/builtin.py` | 26个内置工具 + 3级 Profile | ✅ |
+| `tools/builtin.py` | 35个内置工具 + 3级 Profile | ✅ |
 | `agent/loop.py` | Agent Loop + HookManager + ToolDispatcher | ✅ |
 | `agent/prompt.py` | 三层 System Prompt | ✅ |
 | `agent/context.py` | 上下文压缩引擎 | ✅ |

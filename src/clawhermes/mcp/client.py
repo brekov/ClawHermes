@@ -42,6 +42,13 @@ class MCPClient:
         self._server_info: dict = {}
         self._connected = False
         self._request_id = 0
+        # 视为“连接断开”的异常：stdio 的 BrokenPipeError/进程退出，http 的传输层错误
+        self._conn_errors: tuple[type[BaseException], ...] = (BrokenPipeError, ConnectionError)
+        try:
+            import httpx
+            self._conn_errors = (*self._conn_errors, httpx.TransportError)
+        except ImportError:
+            pass
 
     async def connect(self) -> dict[str, Any]:
         """连接 MCP Server 并完成初始化握手"""
@@ -127,8 +134,21 @@ class MCPClient:
         return tools
 
     async def call_tool(self, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
-        """调用 MCP 工具"""
-        return await self._call("tools/call", {"name": name, "arguments": arguments})
+        """调用 MCP 工具，若连接断开则尝试重连一次后重试"""
+        try:
+            return await self._call("tools/call", {"name": name, "arguments": arguments})
+        except self._conn_errors as e:
+            logger.warning(
+                "MCP connection lost for '%s' (%s), reconnecting once...",
+                self.spec.name, e,
+            )
+            await self._reconnect()
+            return await self._call("tools/call", {"name": name, "arguments": arguments})
+
+    async def _reconnect(self) -> None:
+        """断开后重新建立连接（stdio 重启子进程，http 重建会话）"""
+        await self.disconnect()
+        await self.connect()
 
     async def _call(self, method: str, params: dict) -> dict[str, Any]:
         """发送 JSON-RPC 请求"""
@@ -155,12 +175,26 @@ class MCPClient:
         self._process.stdin.write(payload.encode())
         await self._process.stdin.drain()
 
-        # 读取响应
-        line = await asyncio.wait_for(
-            self._process.stdout.readline(),
-            timeout=30.0,
-        )
-        response = json.loads(line.decode())
+        # 读取响应（跳过非 JSON 行，如日志输出、空行；EOF 视为连接断开）
+        response: dict[str, Any] | None = None
+        for _ in range(100):
+            line = await asyncio.wait_for(
+                self._process.stdout.readline(),
+                timeout=30.0,
+            )
+            if not line:
+                raise ConnectionError("MCP stdio stream closed (process exited)")
+            stripped = line.strip()
+            if not stripped:
+                continue
+            try:
+                response = json.loads(stripped.decode())
+                break
+            except ValueError:
+                logger.debug("Skipping non-JSON line from MCP stdio: %s", stripped)
+                continue
+        if response is None:
+            raise ConnectionError("MCP stdio: too many non-JSON lines, giving up")
 
         if "error" in response:
             raise RuntimeError(f"MCP error: {response['error']}")

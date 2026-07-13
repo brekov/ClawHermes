@@ -602,7 +602,6 @@ class TestChannelRouterPairing:
         router = self._build_router(pairing_required=False)
         await router.start()
         try:
-            received = []
             router._on_message(ChannelMessage(
                 "m1", ChannelType.FEISHU, ChannelUser("ou_unpaired"),
                 "hi", metadata={"chat_id": "oc_chat"},
@@ -635,8 +634,10 @@ class TestChannelRouterAsyncHandler:
     async def test_router_awaits_async_handler(self):
         """router._process_queue 应正确 await async handler"""
         from clawhermes.channel.adapter import (
-            ChannelManager, ChannelMessage, ChannelResponse,
-            ChannelType, ChannelUser,
+            ChannelManager,
+            ChannelMessage,
+            ChannelType,
+            ChannelUser,
         )
         from clawhermes.channel.router import ChannelRouter, SessionRouter
 
@@ -681,11 +682,6 @@ class TestGatewayLifecycle:
 
     def test_initialize_starts_channel_router(self, monkeypatch):
         """initialize() 必须调用 channel_router.start()，否则消息收发不工作"""
-        import clawhermes.gateway.app as gw
-        from clawhermes.channel.adapter import (
-            ChannelManager, ChannelType, ChannelUser,
-        )
-        from clawhermes.channel.adapter import ChannelMessage as CM
 
         # Mock channel_router
         mock_router = AsyncMock()

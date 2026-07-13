@@ -306,31 +306,54 @@ class CronScheduler:
             return spec.run_at
 
         if spec.mode == ScheduleMode.CRON:
-            import datetime
-            dt = datetime.datetime.fromtimestamp(now)
-
-            if spec.minute != "*":
-                if int(spec.minute) <= dt.minute:
-                    dt += datetime.timedelta(hours=1)
-                dt = dt.replace(minute=int(spec.minute), second=0, microsecond=0)
-
-            if spec.hour != "*":
-                hour = int(spec.hour)
-                if hour <= dt.hour:
-                    dt += datetime.timedelta(days=1)
-                dt = dt.replace(hour=hour)
-
-            if spec.day_of_week != "*":
-                target_dow = int(spec.day_of_week)
-                current_dow = dt.weekday()
-                days_ahead = (target_dow - current_dow) % 7
-                if days_ahead == 0 and dt.timestamp() <= now:
-                    days_ahead = 7
-                dt += datetime.timedelta(days=days_ahead)
-
-            return dt.timestamp()
+            return self._compute_next_cron(spec, now)
 
         return now + 3600
+
+    @staticmethod
+    def _parse_cron_field(field: str, min_val: int, max_val: int) -> set[int]:
+        """解析 cron 字段，支持 *、*/N、N、N,M,K、N-M、N-M/S 语法"""
+        result: set[int] = set()
+        for part in field.split(","):
+            part = part.strip()
+            if "/" in part:
+                range_part, step_part = part.split("/", 1)
+                step = int(step_part)
+                if range_part == "*":
+                    start, end = min_val, max_val
+                elif "-" in range_part:
+                    s, e = range_part.split("-", 1)
+                    start, end = int(s), int(e)
+                else:
+                    start, end = int(range_part), max_val
+                result.update(range(start, end + 1, step))
+            elif part == "*":
+                result.update(range(min_val, max_val + 1))
+            elif "-" in part:
+                s, e = part.split("-", 1)
+                result.update(range(int(s), int(e) + 1))
+            else:
+                result.add(int(part))
+        return {v for v in result if min_val <= v <= max_val}
+
+    def _compute_next_cron(self, spec: ScheduleSpec, now: float) -> float:
+        """计算 CRON 模式的下一次运行时间（逐分钟向前搜索）"""
+        import datetime
+
+        minutes = self._parse_cron_field(spec.minute, 0, 59)
+        hours = self._parse_cron_field(spec.hour, 0, 23)
+        dows = self._parse_cron_field(spec.day_of_week, 0, 6)
+
+        dt = datetime.datetime.fromtimestamp(now).replace(second=0, microsecond=0)
+        dt += datetime.timedelta(minutes=1)
+
+        # 最多搜索 7 天（10080 分钟），避免无限循环
+        for _ in range(10080):
+            if dt.minute in minutes and dt.hour in hours and dt.weekday() in dows:
+                return dt.timestamp()
+            dt += datetime.timedelta(minutes=1)
+
+        return now + 86400
 
     def _load_jobs(self) -> None:
         if not self._db_path.exists():

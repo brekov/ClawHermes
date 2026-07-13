@@ -11,49 +11,43 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, StreamingResponse
-from pydantic import BaseModel
+from fastapi.responses import JSONResponse
 
 from clawhermes.agent.delegate import DelegateManager
 from clawhermes.agent.exceptions import (
     ClawHermesError,
-    LLMConnectionError,
-    LLMError,
-    LLMRateLimitError,
     SessionNotFoundError,
 )
 from clawhermes.agent.loop import Agent, AgentConfig, HookPoint, ToolRegistry
 from clawhermes.agent.memory import JSONMemoryProvider, MemoryManager
-from clawhermes.agent.scheduler import CronScheduler, ScheduleMode, ScheduleSpec
+from clawhermes.agent.scheduler import CronScheduler
 from clawhermes.agent.session import SessionManager
-from clawhermes.channel.adapter import ChannelManager, ChannelType, RESTAdapter
+from clawhermes.channel.adapter import ChannelManager, RESTAdapter
 from clawhermes.channel.adapters.feishu import FeishuAdapter
 from clawhermes.channel.adapters.qq import QQAdapter
 from clawhermes.channel.adapters.wechat import WeChatAdapter, WeComAdapter
 from clawhermes.channel.config import build_adapter_config
 from clawhermes.channel.pairing import DMPairingManager
 from clawhermes.channel.router import ChannelRouter, SessionRouter
+from clawhermes.config import get_data_dir, load_env
+from clawhermes.gateway.routers.channels import router as channels_router
+from clawhermes.gateway.routers.chat import ChatRequest, ChatResponse
+from clawhermes.gateway.routers.chat import router as chat_router
+from clawhermes.gateway.routers.cron import CronJobRequest
+from clawhermes.gateway.routers.cron import router as cron_router
+from clawhermes.gateway.routers.dm import router as dm_router
+from clawhermes.gateway.routers.mcp import MCPAddRequest
+from clawhermes.gateway.routers.mcp import router as mcp_router
+from clawhermes.gateway.routers.misc import InitRequest
+from clawhermes.gateway.routers.misc import router as misc_router
+from clawhermes.gateway.routers.sessions import router as sessions_router
 from clawhermes.llm.provider import LLMProvider
 from clawhermes.tools.builtin import register_builtin_tools
 
-# 加载 $CH_DATA_DIR/.env → os.environ
-_env_path = Path(os.getenv("CH_DATA_DIR", os.path.expanduser("~/.clawhermes"))) / ".env"
-if _env_path.exists():
-    for _line in _env_path.read_text().splitlines():
-        _line = _line.strip()
-        if not _line or _line.startswith("#") or "=" not in _line:
-            continue
-        _k, _, _v = _line.partition("=")
-        _k = _k.strip()
-        # 剥离行内注释：KEY=value  # comment → value
-        # 注意：值本身可能含 #（如 API token），只剥离 "  # " 这种以空格分隔的注释
-        _v = _v.strip()
-        if "  #" in _v:
-            _v = _v.split("  #", 1)[0].rstrip()
-        if _k not in os.environ:
-            os.environ[_k] = _v
+# 加载 $CH_DATA_DIR/.env → os.environ（不覆盖已存在的环境变量）
+load_env()
 
 
 logger = logging.getLogger(__name__)
@@ -61,6 +55,18 @@ logger = logging.getLogger(__name__)
 # 确保渠道适配器诊断日志可见（默认 root logger 为 WARNING 会压住 INFO 日志）
 logging.getLogger("clawhermes.lark").setLevel(logging.INFO)
 logging.getLogger("clawhermes.channel").setLevel(logging.INFO)
+
+# 请求/响应模型由各 routers/ 模块定义，在此重新导出以保持
+# `from clawhermes.gateway.app import ChatRequest, ...` 向后兼容（被测试使用）。
+__all__ = [
+    "ChatRequest",
+    "ChatResponse",
+    "CronJobRequest",
+    "GatewayState",
+    "InitRequest",
+    "MCPAddRequest",
+    "app",
+]
 
 
 class GatewayState:
@@ -96,7 +102,7 @@ class GatewayState:
 
     def get_skill_manager(self):
         from clawhermes.skills.manager import SkillManager
-        return self.skill_manager or SkillManager(Path(_get_data_dir()) / "skills")
+        return self.skill_manager or SkillManager(get_data_dir() / "skills")
 
     async def initialize(
         self,
@@ -106,7 +112,7 @@ class GatewayState:
         max_iterations: int = 50,
         profile: str = "standard",
     ):
-        data_dir = _get_data_dir()
+        data_dir = get_data_dir()
         provider = LLMProvider(model=model, api_key=api_key, base_url=base_url)
         registry = ToolRegistry()
         register_builtin_tools(registry, profile=profile)
@@ -138,6 +144,7 @@ class GatewayState:
             memory_manager=memory,
             skill_manager=sm,
             delegate_manager=delegate_mgr,
+            session_mgr=session_mgr,
         )
 
         # BackgroundReview：fire-and-forget，用 asyncio.to_thread 避免阻塞事件循环
@@ -242,7 +249,7 @@ class GatewayState:
                 channel_manager.register("qq", self.qq_adapter)
                 logger.info("QQ Adapter 已启用（clawhermes-qq）")
         session_router = SessionRouter()
-        pairing_manager = DMPairingManager()
+        pairing_manager = DMPairingManager(db_path=Path(data_dir) / "pairing_state.json")
         channel_router = ChannelRouter(
             channel_manager=channel_manager,
             session_router=session_router,
@@ -290,10 +297,6 @@ class GatewayState:
 _state = GatewayState()
 
 
-def _get_data_dir() -> str:
-    return os.getenv("CH_DATA_DIR", os.path.expanduser("~/.clawhermes"))
-
-
 async def _auto_init():
     if _state.is_initialized():
         return
@@ -310,25 +313,6 @@ async def _auto_init():
         logger.error("Auto-init failed: %s", e)
 
 
-class InitRequest(BaseModel):
-    api_key: str | None = None
-    model: str = "deepseek/deepseek-chat"
-    base_url: str | None = None
-    max_iterations: int = 50
-    profile: str = "standard"
-
-
-class ChatRequest(BaseModel):
-    message: str
-    session_id: str | None = None
-
-
-class ChatResponse(BaseModel):
-    response: str
-    session_id: str
-    model: str
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("ClawHermes Gateway 启动")
@@ -338,337 +322,37 @@ async def lifespan(app: FastAPI):
     await _state.shutdown()
 
 
-app = FastAPI(title="ClawHermes Gateway", version="0.14.0", lifespan=lifespan)
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True,
-                   allow_methods=["*"], allow_headers=["*"])
+_cors_origins = [o.strip() for o in os.getenv("CH_CORS_ORIGINS", "*").split(",") if o.strip()]
+_gateway_secret = os.getenv("CH_GATEWAY_SECRET", "")
+app = FastAPI(title="ClawHermes Gateway", version="0.15.0", lifespan=lifespan)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_cors_origins,
+    allow_credentials=(_cors_origins != ["*"]),
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
-@app.post("/init")
-async def initialize(req: InitRequest):
-    try:
-        api_key = req.api_key or os.getenv("DEEPSEEK_API_KEY")
-        if not api_key:
-            raise HTTPException(400, "请设置 api_key")
-        base_url = req.base_url or os.getenv("DEEPSEEK_BASE_URL")
-        await _state.initialize(
-            api_key=api_key,
-            model=req.model,
-            base_url=base_url,
-            max_iterations=req.max_iterations,
-            profile=req.profile,
-        )
-        assert _state.agent is not None
-        return {
-            "status": "ok",
-            "model": req.model,
-            "tools": len(_state.agent.tools.list()),
-            "profile": req.profile,
-        }
-    except ClawHermesError as e:
-        raise HTTPException(500, f"初始化失败: {e}")
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(500, f"初始化失败: {e}")
+@app.middleware("http")
+async def _gateway_secret_middleware(request: Request, call_next):
+    """网关密钥校验：配置了 CH_GATEWAY_SECRET 时，除 /health 外所有请求需携带 X-Gateway-Secret 头"""
+    if _gateway_secret and request.url.path != "/health":
+        if request.headers.get("X-Gateway-Secret") != _gateway_secret:
+            return JSONResponse(status_code=401, content={"detail": "网关密钥无效或缺失"})
+    return await call_next(request)
 
 
-@app.post("/chat", response_model=ChatResponse)
-async def chat(req: ChatRequest):
-    agent = _state.get_agent()
-    if _state.session_mgr is None:
-        raise HTTPException(500, "Session 管理器未初始化")
-
-    if req.session_id:
-        try:
-            _state.session_mgr.get_session(req.session_id)
-        except SessionNotFoundError:
-            raise HTTPException(404, f"会话不存在: {req.session_id}")
-        sid = req.session_id
-    else:
-        sid = _state.session_mgr.create_session()
-
-    try:
-        if _state.channel_router:
-            response = await _state.channel_router.route_message(
-                content=req.message,
-                channel_type=ChannelType.REST,
-                user_id="rest_user",
-                session_id=sid,
-            )
-        else:
-            response = agent.chat(req.message, session_id=sid)
-
-        model_name = agent.llm.model if hasattr(agent, 'llm') else "unknown"
-        return ChatResponse(response=response, session_id=sid, model=model_name)
-    except LLMRateLimitError as e:
-        retry = getattr(e, 'retry_after', 60)
-        raise HTTPException(429, f"LLM 速率限制，{retry}秒后重试", headers={"Retry-After": str(retry)})
-    except LLMConnectionError as e:
-        raise HTTPException(502, f"LLM 连接失败: {e}")
-    except LLMError as e:
-        raise HTTPException(500, f"LLM 调用失败: {e}")
-    except ClawHermesError as e:
-        raise HTTPException(500, f"Agent 错误: {e}")
-    except Exception as e:
-        logger.exception("Unexpected error in chat")
-        raise HTTPException(500, f"内部错误: {e}")
-
-
-@app.post("/chat/stream")
-async def chat_stream(req: ChatRequest):
-    """流式聊天 — SSE (text/event-stream) 端点。
-
-    使用 Agent.chat_stream() 生成 SSE 事件流：text | tool_call | tool_result | error | done。
-    """
-    agent = _state.get_agent()
-    if _state.session_mgr is None:
-        raise HTTPException(500, "Session 管理器未初始化")
-
-    if req.session_id:
-        try:
-            _state.session_mgr.get_session(req.session_id)
-        except SessionNotFoundError:
-            raise HTTPException(404, f"会话不存在: {req.session_id}")
-        sid = req.session_id
-    else:
-        sid = _state.session_mgr.create_session()
-
-    import json as _json
-
-    async def _event_stream():
-        try:
-            async for event in agent.chat_stream(req.message, session_id=sid):
-                event_name = event.get("event", "message")
-                event_data = event.get("data", "")
-                if not isinstance(event_data, str):
-                    event_data = _json.dumps(event_data, ensure_ascii=False)
-                yield f"event: {event_name}\ndata: {event_data}\n\n"
-        except LLMRateLimitError as e:
-            retry = getattr(e, 'retry_after', 60)
-            yield f"event: error\ndata: LLM 速率限制，{retry}秒后重试\n\n"
-        except LLMConnectionError as e:
-            yield f"event: error\ndata: LLM 连接失败: {e}\n\n"
-        except LLMError as e:
-            yield f"event: error\ndata: LLM 调用失败: {e}\n\n"
-        except ClawHermesError as e:
-            yield f"event: error\ndata: Agent 错误: {e}\n\n"
-        except Exception as e:
-            logger.exception("Unexpected error in chat/stream")
-            yield f"event: error\ndata: 内部错误: {e}\n\n"
-
-    return StreamingResponse(
-        _event_stream(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "X-Accel-Buffering": "no",
-        },
-    )
-
-
-@app.get("/health")
-def health():
-    info = {
-        "status": "ok",
-        "initialized": _state.is_initialized(),
-        "uptime": round(time.time() - _state.start_time, 1),
-    }
-    if _state.agent:
-        info["model"] = _state.agent.llm.model if hasattr(_state.agent, 'llm') else "unknown"
-        info["tools"] = len(_state.agent.tools.list())
-    if _state.scheduler:
-        info["cron_jobs"] = _state.scheduler.job_count
-    if _state.channel_router:
-        info["queue_size"] = _state.channel_router.get_queue_size()
-        info["active_session"] = _state.channel_router.get_active_session()
-    return info
-
-
-@app.get("/tools")
-def list_tools():
-    agent = _state.get_agent()
-    return {"tools": agent.tools.schemas()}
-
-
-@app.post("/memory/save")
-def save_memory(content: str = Query(...), importance: float = 0.5, scope: str = "user"):
-    from clawhermes.types import MemoryScope
-    memory = _state.get_memory()
-    try:
-        ms = MemoryScope(scope)
-    except ValueError:
-        ms = MemoryScope.USER
-    memory.save(content=content, importance=importance, scope=ms)
-    return {"status": "ok"}
-
-
-@app.get("/memory/search")
-def search_memory(query: str = Query(...)):
-    memory = _state.get_memory()
-    results = memory.search(query)
-    return {"results": [{"content": r.content, "importance": r.importance} for r in results]}
-
-
-@app.get("/skills")
-def list_skills(status: str | None = None):
-    sm = _state.get_skill_manager()
-    return {"skills": [{"name": s.name, "description": s.description,
-                        "category": s.category, "status": s.status,
-                        "usage_count": s.usage_count} for s in sm.list(status)]}
-
-
-@app.post("/skills/create")
-def create_skill(name: str = Query(...), content: str = Query(...), description: str = ""):
-    sm = _state.get_skill_manager()
-    skill = sm.create(name, content, description)
-    return {"status": "ok", "name": skill.name}
-
-
-@app.post("/curator/run")
-def run_curator(dry_run: bool = False):
-    from clawhermes.skills.manager import Curator
-    curator = Curator(_state.get_skill_manager())
-    stats = curator.run(dry_run=dry_run)
-    return {"status": "ok", "stats": stats}
-
-
-@app.get("/sessions")
-def list_sessions(limit: int = 50):
-    if _state.session_mgr is None:
-        return {"sessions": [], "count": 0}
-    sessions = _state.session_mgr.list_sessions(limit=limit)
-    return {"sessions": sessions, "count": len(sessions)}
-
-
-@app.get("/sessions/{session_id}")
-def get_session(session_id: str):
-    if _state.session_mgr is None:
-        raise HTTPException(500, "Session 管理器未初始化")
-    try:
-        info = _state.session_mgr.get_session(session_id)
-        messages = _state.session_mgr.get_messages(session_id)
-        return {"session": info, "messages": messages}
-    except SessionNotFoundError as e:
-        raise HTTPException(404, str(e))
-
-
-@app.delete("/sessions/{session_id}")
-def delete_session(session_id: str):
-    if _state.session_mgr is None:
-        raise HTTPException(500, "Session 管理器未初始化")
-    if _state.session_mgr.delete_session(session_id):
-        return {"status": "ok"}
-    raise HTTPException(404, f"会话不存在: {session_id}")
-
-
-class CronJobRequest(BaseModel):
-    name: str
-    task: str
-    mode: str = "interval"
-    interval_seconds: int = 3600
-    minute: str = "*"
-    hour: str = "*"
-    day_of_week: str = "*"
-    delay_seconds: int = 0
-    session_id: str = ""
-
-
-@app.post("/cron/jobs")
-def create_cron_job(req: CronJobRequest):
-    if _state.scheduler is None:
-        raise HTTPException(500, "调度器未初始化")
-    try:
-        mode = ScheduleMode(req.mode)
-        if mode == ScheduleMode.CRON:
-            spec = ScheduleSpec.cron(req.minute, req.hour, req.day_of_week)
-        elif mode == ScheduleMode.ONESHOT:
-            spec = ScheduleSpec.oneshot(delay_seconds=req.delay_seconds)
-        else:
-            spec = ScheduleSpec.interval(req.interval_seconds)
-        job = _state.scheduler.create_job(req.name, req.task, spec, session_id=req.session_id)
-        return {"status": "ok", "job": job.to_dict()}
-    except ValueError as e:
-        raise HTTPException(400, f"无效的调度模式: {e}")
-
-
-@app.get("/cron/jobs")
-def list_cron_jobs(status: str | None = None):
-    if _state.scheduler is None:
-        return {"jobs": [], "count": 0}
-    jobs = _state.scheduler.list_jobs(status=status)
-    return {"jobs": [j.to_dict() for j in jobs], "count": len(jobs)}
-
-
-@app.get("/cron/jobs/{job_id}")
-def get_cron_job(job_id: str):
-    if _state.scheduler is None:
-        raise HTTPException(500, "调度器未初始化")
-    job = _state.scheduler.get_job(job_id)
-    if job is None:
-        raise HTTPException(404, f"任务不存在: {job_id}")
-    return {"job": job.to_dict()}
-
-
-@app.delete("/cron/jobs/{job_id}")
-def delete_cron_job(job_id: str):
-    if _state.scheduler is None:
-        raise HTTPException(500, "调度器未初始化")
-    if _state.scheduler.delete_job(job_id):
-        return {"status": "ok"}
-    raise HTTPException(404, f"任务不存在: {job_id}")
-
-
-@app.post("/cron/jobs/{job_id}/pause")
-def pause_cron_job(job_id: str):
-    if _state.scheduler is None:
-        raise HTTPException(500, "调度器未初始化")
-    if _state.scheduler.pause_job(job_id):
-        return {"status": "ok"}
-    raise HTTPException(400, f"无法暂停任务: {job_id}")
-
-
-@app.post("/cron/jobs/{job_id}/resume")
-def resume_cron_job(job_id: str):
-    if _state.scheduler is None:
-        raise HTTPException(500, "调度器未初始化")
-    if _state.scheduler.resume_job(job_id):
-        return {"status": "ok"}
-    raise HTTPException(400, f"无法恢复任务: {job_id}")
-
-
-@app.get("/channels")
-def list_channels():
-    if _state.channel_router is None:
-        return {"channels": [], "count": 0}
-    return {"channels": _state.channel_router.list_channels()}
-
-
-@app.get("/channels/sessions")
-def list_channel_sessions():
-    if _state.channel_router is None:
-        return {"mappings": [], "count": 0}
-    return {"mappings": _state.channel_router.session_router.list_mappings()}
-
-
-
-@app.api_route("/wechat/webhook", methods=["POST"])
-async def wechat_webhook(request: Request):
-    """个人微信 Webhook 端点（兼容 iLink 回调）"""
-    if _state.wechat_adapter is None:
-        raise HTTPException(501, "WeChat Adapter 未启用")
-    body = await request.json()
-    result = await _state.wechat_adapter.handle_webhook(body)
-    return result
-
-
-@app.api_route("/wecom/webhook", methods=["POST"])
-async def wecom_webhook(request: Request):
-    """企业微信 Webhook 端点"""
-    if _state.wecom_adapter is None:
-        raise HTTPException(501, "WeCom Adapter 未启用")
-    body = await request.json()
-    result = await _state.wecom_adapter.handle_webhook(body)
-    return result
+# ============================================================
+# 路由注册 — 端点按功能分组到 routers/ 模块
+# ============================================================
+app.include_router(misc_router)
+app.include_router(chat_router)
+app.include_router(sessions_router)
+app.include_router(cron_router)
+app.include_router(channels_router)
+app.include_router(mcp_router)
+app.include_router(dm_router)
 
 
 if __name__ == "__main__":
@@ -691,170 +375,3 @@ def _to_bool(val: Any) -> bool:
     if isinstance(val, str):
         return val.lower() in ("true", "1", "yes")
     return bool(val)
-
-
-# ============================================================
-# Feishu Webhook（飞书消息事件回调）
-# ============================================================
-
-@app.api_route("/feishu/webhook", methods=["POST"])
-async def feishu_webhook(request: Request):
-    """飞书事件回调端点（需启用 clawhermes-lark）"""
-    if _state.feishu_adapter is None:
-        raise HTTPException(503, "Feishu Adapter 未启用")
-    body = await request.json()
-    result = await _state.feishu_adapter.handle_webhook(body)
-    return JSONResponse(content=result)
-
-
-# ============================================================
-# QQ Webhook（QQ Bot 事件回调）
-# ============================================================
-
-
-@app.api_route("/qq/webhook", methods=["POST"])
-async def qq_webhook(request: Request):
-    """QQ Bot 事件回调端点（需启用 clawhermes-qq）"""
-    if _state.qq_adapter is None:
-        raise HTTPException(503, "QQ Adapter 未启用")
-    body = await request.json()
-    result = await _state.qq_adapter.handle_webhook(body)
-    return JSONResponse(content=result)
-
-
-# ============================================================
-# MCP (Model Context Protocol) 集成端点 (M3.7)
-# ============================================================
-
-class MCPAddRequest(BaseModel):
-    name: str
-    transport: str = "stdio"
-    command: str | None = None
-    args: list[str] = []
-    url: str | None = None
-
-
-@app.post("/mcp/servers")
-async def add_mcp_server(req: MCPAddRequest):
-    """添加 MCP Server 并自动注册其工具"""
-    if _state.agent is None:
-        raise HTTPException(400, "请先初始化 Agent (/init)")
-
-    from clawhermes.mcp.client import MCPRegistry, MCPServerSpec
-
-    if not hasattr(_state, '_mcp_registry') or _state._mcp_registry is None:
-        _state._mcp_registry = MCPRegistry(_state.agent.tools)
-
-    spec = MCPServerSpec(
-        name=req.name,
-        transport=req.transport,
-        command=req.command,
-        args=req.args,
-        url=req.url,
-    )
-    try:
-        tools = await _state._mcp_registry.add_server(spec)
-        return {"status": "ok", "server": req.name, "tools": tools, "count": len(tools)}
-    except Exception as e:
-        raise HTTPException(500, f"MCP Server 连接失败: {e}")
-
-
-@app.get("/mcp/servers")
-def list_mcp_servers():
-    """列出所有 MCP Server"""
-    if not hasattr(_state, '_mcp_registry') or _state._mcp_registry is None:
-        return {"servers": [], "count": 0}
-    return {"servers": _state._mcp_registry.list_servers(), "count": len(_state._mcp_registry.list_servers())}
-
-
-@app.delete("/mcp/servers/{name}")
-async def remove_mcp_server(name: str):
-    """移除 MCP Server"""
-    if not hasattr(_state, '_mcp_registry') or _state._mcp_registry is None:
-        raise HTTPException(404, "无 MCP Server")
-    if await _state._mcp_registry.remove_server(name):
-        return {"status": "ok"}
-    raise HTTPException(404, f"MCP Server 未找到: {name}")
-
-
-# ════════════════════════════════════════════════════════
-# DM 配对安全 (M3.6d)
-# ════════════════════════════════════════════════════════
-
-
-@app.post("/dm/pair/generate")
-def dm_pair_generate(user_id: str, platform: str, device_family: str = "", admin_key: str = ""):
-    """管理员生成 DM 配对码"""
-    _require_admin(admin_key)
-    if _state.pairing_manager is None:
-        raise HTTPException(500, "Pairing Manager 未初始化")
-    try:
-        req = _state.pairing_manager.generate_code(user_id, platform, device_family)
-        return {
-            "code": req.code,
-            "challenge": req.challenge,
-            "user_id": req.user_id,
-            "platform": req.platform,
-            "expires_in": int(req.expires_at - time.time()),
-        }
-    except Exception as e:
-        raise HTTPException(400, f"生成配对码失败: {e}")
-
-
-@app.post("/dm/pair/verify")
-def dm_pair_verify(code: str, response: str, user_id: str | None = None):
-    """用户提交配对码 + 挑战响应进行验证"""
-    if _state.pairing_manager is None:
-        raise HTTPException(500, "Pairing Manager 未初始化")
-    try:
-        req = _state.pairing_manager.verify_code(code, response, user_id)
-        return {
-            "status": req.status.value,
-            "user_id": req.user_id,
-            "platform": req.platform,
-        }
-    except ClawHermesError as e:
-        raise HTTPException(400, str(e)) from e
-
-
-@app.get("/dm/pair/status")
-def dm_pair_status(user_id: str):
-    """查询配对状态"""
-    if _state.pairing_manager is None:
-        raise HTTPException(500, "Pairing Manager 未初始化")
-    result = _state.pairing_manager.get_pairing_status(user_id)
-    if result is None:
-        raise HTTPException(404, f"未找到配对状态: {user_id}")
-    return result
-
-
-@app.get("/dm/pair/list")
-def dm_pair_list(admin_key: str = ""):
-    """列出全部已配对用户和 pending 配对请求"""
-    _require_admin(admin_key)
-    if _state.pairing_manager is None:
-        raise HTTPException(500, "Pairing Manager 未初始化")
-    return {
-        "paired": _state.pairing_manager.list_paired_users(),
-        "pending": _state.pairing_manager.list_pending_requests(),
-    }
-
-
-@app.delete("/dm/pair/{user_id}")
-async def dm_pair_revoke(user_id: str, admin_key: str = ""):
-    """撤销配对"""
-    _require_admin(admin_key)
-    if _state.pairing_manager is None:
-        raise HTTPException(500, "Pairing Manager 未初始化")
-    if _state.pairing_manager.revoke_pairing(user_id):
-        return {"status": "ok", "user_id": user_id}
-    raise HTTPException(404, f"配对用户未找到: {user_id}")
-
-
-def _require_admin(admin_key: str):
-    """管理员权限校验（通过 ADMIN_KEY 环境变量）"""
-    _admin = os.getenv("ADMIN_KEY", "")
-    if not _admin:
-        raise HTTPException(501, "ADMIN_KEY 未配置")
-    if admin_key != _admin:
-        raise HTTPException(403, "需要管理员权限")

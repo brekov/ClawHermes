@@ -4,7 +4,7 @@
 
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![Tests: 373 passed](https://img.shields.io/badge/tests-416%20passed-brightgreen)](tests/)
+[![Tests: 672 passed](https://img.shields.io/badge/tests-672%20passed%2C%2010%20skipped-brightgreen)](tests/)
 [![Coverage: 73%](https://img.shields.io/badge/coverage-73%25-yellow)](tests/)
 [![Ruff](https://img.shields.io/badge/ruff-0%20errors-brightgreen)](pyproject.toml)
 [![v0.15.0](https://img.shields.io/badge/version-0.15.0-blue)](CHANGELOG.md)
@@ -171,6 +171,7 @@ curl http://127.0.0.1:18789/sessions
 | `timer` | 定时器/秒表 | ❌ |
 | `url_encode` | URL 编码 | ✅ |
 | `url_decode` | URL 解码 | ✅ |
+| `calc` | 计算数学表达式 | ✅ |
 | `sqlite_query` | 查询 SQLite 数据库 | ❌ |
 | `csv_parse` | 解析 CSV 文件 | ✅ |
 | `hash_file` | 文件哈希 (md5/sha1/sha256) | ✅ |
@@ -287,7 +288,7 @@ src/clawhermes/
 ## 测试
 
 ```bash
-# 单元测试 + 集成测试（416 个测试，全部通过 ✅）
+# 单元测试 + 集成测试（672 passed, 10 skipped ✅）
 pytest tests/ -v
 
 # 带覆盖率
