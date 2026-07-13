@@ -9,11 +9,13 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import hmac
+import json
 import logging
 import secrets
 import time
 from dataclasses import dataclass, field
 from enum import Enum
+from pathlib import Path
 from typing import Any
 
 from clawhermes.agent.exceptions import ClawHermesError
@@ -96,20 +98,26 @@ class DMPairingManager:
     CODE_TTL: int = 300
     # 签名挑战 nonce TTL
     CHALLENGE_TTL: int = 60
-    # HMAC 密钥（从环境或生成）
-    _signing_key: bytes = b""
 
-    def __init__(self, signing_key: str | None = None):
-        if signing_key:
-            self._signing_key = signing_key.encode()
-        else:
-            self._signing_key = secrets.token_bytes(32)
-
+    def __init__(self, signing_key: str | None = None, db_path: str | Path | None = None):
+        self._db_path = Path(db_path) if db_path else None
+        self._signing_key: bytes = b""
         self._pending: dict[str, PairingRequest] = {}       # code -> PairingRequest
         self._paired: dict[str, PairedUser] = {}            # user_id -> PairedUser
         self._challenges: dict[str, tuple[str, float]] = {}  # challenge -> (user_id, expires)
         self._allowlist: set[str] = set()                   # admin allowlist
         self._lock = asyncio.Lock()
+
+        # 从持久化存储加载 signing_key 和已配对用户
+        if self._db_path is not None:
+            self._load_state()
+        # signing_key 优先级：显式传入 > 持久化加载 > 新生成
+        if signing_key:
+            self._signing_key = signing_key.encode()
+        if not self._signing_key:
+            self._signing_key = secrets.token_bytes(32)
+            if self._db_path is not None:
+                self._save_state()
 
     # ── 配对码管理 ──────────────────────────────────────
 
@@ -180,6 +188,7 @@ class DMPairingManager:
         )
 
         logger.info("Pairing verified: user=%s platform=%s", request.user_id, request.platform)
+        self._save_state()
         return request
 
     def reject_code(self, code: str, admin_id: str = "") -> PairingRequest:
@@ -247,6 +256,7 @@ class DMPairingManager:
         if user_id in self._paired:
             del self._paired[user_id]
             logger.info("Pairing revoked: user=%s", user_id)
+            self._save_state()
             return True
         return False
 
@@ -339,3 +349,51 @@ class DMPairingManager:
         ]
         for c in expired:
             del self._challenges[c]
+
+    # ── 持久化 ──────────────────────────────────────────
+
+    def _load_state(self) -> None:
+        """从 JSON 文件加载 signing_key 和已配对用户"""
+        if self._db_path is None or not self._db_path.exists():
+            return
+        try:
+            data = json.loads(self._db_path.read_text(encoding="utf-8"))
+            key_hex = data.get("signing_key", "")
+            if key_hex:
+                self._signing_key = bytes.fromhex(key_hex)
+            for item in data.get("paired_users", []):
+                user = PairedUser(
+                    user_id=item["user_id"],
+                    platform=item["platform"],
+                    device_family=item.get("device_family", ""),
+                    paired_at=item["paired_at"],
+                    approved_by=item.get("approved_by", ""),
+                    last_active=item.get("last_active", item["paired_at"]),
+                )
+                self._paired[user.user_id] = user
+            logger.info("Loaded %d paired users from %s", len(self._paired), self._db_path)
+        except Exception as e:
+            logger.error("Failed to load pairing state: %s", e)
+
+    def _save_state(self) -> None:
+        """将 signing_key 和已配对用户保存到 JSON 文件"""
+        if self._db_path is None:
+            return
+        try:
+            data = {
+                "signing_key": self._signing_key.hex(),
+                "paired_users": [
+                    {
+                        "user_id": u.user_id,
+                        "platform": u.platform,
+                        "device_family": u.device_family,
+                        "paired_at": u.paired_at,
+                        "approved_by": u.approved_by,
+                        "last_active": u.last_active,
+                    }
+                    for u in self._paired.values()
+                ],
+            }
+            self._db_path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+        except Exception as e:
+            logger.error("Failed to save pairing state: %s", e)

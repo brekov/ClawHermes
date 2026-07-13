@@ -180,7 +180,14 @@ def test_gateway_api():
     from clawhermes.gateway.app import app
 
     # 检查路由注册
-    routes = [r.path for r in app.routes]
+    # FastAPI 0.137+ 的 include_router() 将子路由包装为 _IncludedRouter 惰性对象，
+    # 需通过 original_router.routes 展开获取实际路径
+    routes = []
+    for r in app.routes:
+        if hasattr(r, "original_router"):
+            routes.extend(sub.path for sub in r.original_router.routes)
+        elif hasattr(r, "path"):
+            routes.append(r.path)
     check("Gateway /init 路由", "/init" in routes)
     check("Gateway /chat 路由", "/chat" in routes)
     check("Gateway /health 路由", "/health" in routes)

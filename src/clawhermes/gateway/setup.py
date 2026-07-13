@@ -12,15 +12,12 @@ import platform
 import secrets
 from pathlib import Path
 
-
-def _get_data_dir() -> Path:
-    """ClawHermes 数据目录 — 默认为 ~/.clawhermes"""
-    return Path(os.getenv("CH_DATA_DIR", str(Path.home() / ".clawhermes")))
+from clawhermes.config import get_data_dir
 
 
 def get_gateway_token_path() -> Path:
     """Gateway auth token 存储路径"""
-    return _get_data_dir() / "gateway_token"
+    return get_data_dir() / "gateway_token"
 
 
 def generate_gateway_token() -> str:
@@ -87,7 +84,7 @@ def install_systemd_service(
         return False
 
     token = ensure_gateway_token()
-    data_dir = str(_get_data_dir())
+    data_dir = str(get_data_dir())
     username = user or os.environ.get("USER", "clawhermes")
     python_path = sys.executable
 
@@ -177,9 +174,9 @@ def install_launchd_service(
         return False
 
     token = ensure_gateway_token()
-    data_dir = str(_get_data_dir())
+    data_dir = str(get_data_dir())
     python_path = sys.executable
-    log_dir = str(_get_data_dir() / "logs")
+    log_dir = str(get_data_dir() / "logs")
     Path(log_dir).mkdir(parents=True, exist_ok=True)
 
     secret_env = ""

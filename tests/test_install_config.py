@@ -3,9 +3,7 @@
 """
 from __future__ import annotations
 
-import os
 import yaml
-import pytest
 
 
 class TestGetDataDir:
@@ -87,7 +85,7 @@ class TestYamlLoad:
 class TestYamlSave:
     def test_save_and_reload(self, tmp_path, monkeypatch):
         monkeypatch.setenv("CH_DATA_DIR", str(tmp_path))
-        from clawhermes.config import save_yaml, load_yaml
+        from clawhermes.config import load_yaml, save_yaml
         cfg = {"test": "hello", "nested": {"key": "value"}}
         save_yaml(cfg)
         loaded = load_yaml()

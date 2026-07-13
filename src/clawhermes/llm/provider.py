@@ -5,6 +5,7 @@ ClawHermes - LLM Provider 抽象层
 from __future__ import annotations
 
 import logging
+import random
 import time
 from collections.abc import AsyncGenerator
 from dataclasses import dataclass
@@ -79,6 +80,8 @@ class CredentialPool:
             if self.strategy == self.STRATEGY_ROUND_ROBIN:
                 key = available[self._index % len(available)]
                 self._index += 1
+            elif self.strategy == self.STRATEGY_RANDOM:
+                key = random.choice(available)
             elif self.strategy == self.STRATEGY_LEAST_USED:
                 key = min(available, key=lambda k: self._used_count[k])
             else:

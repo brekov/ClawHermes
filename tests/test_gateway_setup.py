@@ -9,7 +9,6 @@ Gateway Setup 模块测试。
 from __future__ import annotations
 
 import os
-from unittest.mock import patch
 
 import pytest
 from click.testing import CliRunner

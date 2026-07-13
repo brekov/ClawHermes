@@ -1,172 +1,22 @@
-"""ClawHermes - CLI"""
+"""setup / config 初始化向导相关命令及辅助函数。"""
 from __future__ import annotations
 
-import logging
 import os
 import sys
 from pathlib import Path
 
 import click
 from rich import box
-from rich.console import Console
-from rich.markdown import Markdown
 from rich.panel import Panel
-from rich.prompt import Prompt
 from rich.table import Table
 from rich.text import Text
 
-console = Console()
-logging.basicConfig(level=logging.WARNING)
-
-
-
-def _load_dotenv():
-    """加载 $CH_DATA_DIR/.env 到 os.environ（不覆盖已有环境变量）"""
-    env_path = Path(os.getenv("CH_DATA_DIR", str(Path.home() / ".clawhermes"))) / ".env"
-    if not env_path.exists():
-        return
-    for line in env_path.read_text().splitlines():
-        line = line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, _, val = line.partition("=")
-        key = key.strip()
-        # 剥离行内注释：KEY=value  # comment → value
-        val = val.strip()
-        if "  #" in val:
-            val = val.split("  #", 1)[0].rstrip()
-        if key not in os.environ:
-            os.environ[key] = val
-def _create_agent(api_key=None, model=None):
-    from clawhermes.agent.loop import Agent, AgentConfig, ToolRegistry
-    from clawhermes.agent.memory import JSONMemoryProvider, MemoryManager
-    from clawhermes.llm.provider import LLMProvider
-    from clawhermes.tools.builtin import register_builtin_tools
-    provider = LLMProvider(
-        model=model or os.getenv("CH_DEFAULT_MODEL", "deepseek/deepseek-chat"),
-        api_key=api_key or os.getenv("DEEPSEEK_API_KEY"),
-        base_url=os.getenv("DEEPSEEK_BASE_URL"),
-    )
-    registry = ToolRegistry()
-    register_builtin_tools(registry)
-    data_dir = Path(os.getenv("CH_DATA_DIR", "~/.clawhermes")).expanduser()
-    memory = MemoryManager()
-    memory.add_provider(JSONMemoryProvider(data_dir))
-    agent = Agent(llm_provider=provider, tool_registry=registry,
-                  config=AgentConfig(max_iterations=20))
-    return agent, memory
-
-
-@click.group()
-def main():
-    """ClawHermes AI Agent 框架"""
-    pass
-
-
-# ====== chat ======
-
-@main.command()
-@click.option("--model", default=None)
-@click.option("--api-key", default=None)
-@click.option("--one-shot", default=None)
-def chat(model, api_key, one_shot):
-    """CLI 对话"""
-    from clawhermes.agent.memory import MemoryScope
-    try:
-        agent, memory = _create_agent(api_key, model)
-    except Exception as e:
-        console.print(f"❌ {e}", style="red")
-        return
-    console.print(f"🚀 已就绪 | 工具: {len(agent.tools.list())} 个 | 模型: {agent.llm.model}")
-    if one_shot:
-        with console.status("思考中..."):
-            try:
-                console.print(Markdown(agent.chat(one_shot)))
-            except Exception as e:
-                console.print(f"❌ {e}", style="red")
-        return
-    while True:
-        user = Prompt.ask("\n[bold cyan]You[/bold cyan]")
-        if user in ("/exit", "/quit"):
-            break
-        if user.startswith("/save "):
-            memory.save(user[6:], MemoryScope.USER)
-            console.print("✅ 已保存", style="green")
-            continue
-        if user == "/tools":
-            for t in agent.tools.list():
-                console.print(f"  • {t.name}: {t.description}")
-            continue
-        with console.status("思考中..."):
-            try:
-                console.print(Markdown(agent.chat(user)))
-            except Exception as e:
-                console.print(f"❌ {e}", style="red")
-
-
-# ====== gateway ======
-
-@main.group()
-def gateway():
-    """管理 Gateway 服务"""
-    pass
-
-
-@gateway.command()
-@click.option("--port", default=18789)
-@click.option("--host", default="127.0.0.1")
-@click.option("--api-key", default=None)
-@click.option("--model", default=None)
-def start(port, host, api_key, model):
-    """启动 Gateway"""
-    _load_dotenv()
-    api_key = api_key or os.getenv("DEEPSEEK_API_KEY")
-    if not api_key:
-        console.print("❌ 请设置 DEEPSEEK_API_KEY", style="red")
-        return
-    import uvicorn
-
-    from clawhermes.gateway.app import app
-    os.environ["CH_GW_API_KEY"] = api_key
-    if model:
-        os.environ["CH_GW_MODEL"] = model
-    console.print(f"🚀 Gateway: {host}:{port}")
-    uvicorn.run(app, host=host, port=port, log_level="info")
-
-
-
-@gateway.command("setup")
-@click.option("--host", default="127.0.0.1", help="监听地址")
-@click.option("--port", default=18789, help="监听端口")
-@click.option("--user", default=None, help="systemd 运行用户")
-def setup_gw(host, port, user):
-    """安装 Gateway 为系统服务 (systemd/launchd)"""
-    from clawhermes.gateway.setup import install_gateway_service
-    console.print("\n[bold cyan]Gateway 服务安装[/]\n")
-    install_gateway_service(host=host, port=port, user=user)
-
-
-@gateway.command("uninstall")
-def uninstall_gw():
-    """卸载 Gateway 系统服务"""
-    from clawhermes.gateway.setup import uninstall_gateway_service
-    uninstall_gateway_service()
-
-
-@gateway.command("status")
-def gw_status():
-    """检查 Gateway 服务状态"""
-    import json
-
-    from clawhermes.gateway.setup import check_gateway_service_status
-
-    st = check_gateway_service_status()
-    console.print(json.dumps(st, indent=2, ensure_ascii=False))
-
+from clawhermes.cli import console
+from clawhermes.config import get_data_dir
 
 # ====== config ======
 
-@main.group()
+@click.group()
 def config():
     """管理配置"""
     pass
@@ -193,57 +43,10 @@ def config_path():
     console.print(f"📄 {get_yaml_path()}")
 
 
-# ====== agent ======
-
-@main.group()
-def agent():
-    """管理 Agent"""
-    pass
-
-
-@agent.command("list")
-def agent_list():
-    from clawhermes.agent.agent_mgr import cmd_list
-    cmd_list()
-
-
-@agent.command()
-@click.argument("name")
-@click.option("--clone", default=None)
-def create(name, clone):
-    from clawhermes.agent.agent_mgr import cmd_create
-    cmd_create(name, clone)
-
-
-@agent.command()
-@click.argument("name", required=False)
-def show(name):
-    from clawhermes.agent.agent_mgr import cmd_show
-    cmd_show(name)
-
-
-@agent.command()
-@click.argument("name")
-def switch(name):
-    from clawhermes.agent.agent_mgr import agent_exists, set_default_agent
-    if agent_exists(name):
-        set_default_agent(name)
-        console.print(f"✅ 已切换到 '{name}'")
-    else:
-        console.print(f"❌ Agent '{name}' 不存在")
-
-
-@agent.command(name="set")
-@click.argument("name", required=False)
-def cmd_agent_set(name):
-    from clawhermes.agent.agent_mgr import cmd_set_persona
-    cmd_set_persona(name)
-
-
 # ====== setup / doctor ======
 
 
-@main.command()
+@click.command()
 @click.option("--non-interactive", is_flag=True, help="非交互模式, 使用默认值")
 @click.argument("section", required=False, type=click.Choice(["model", "channels", "gateway", "tools", "agent"]))
 @click.option("--quick", is_flag=True, help="仅提示缺失/未设置的项目")
@@ -358,7 +161,7 @@ def setup(non_interactive: bool = False, section: str | None = None, quick: bool
     summary.add_row("LLM 模型", model or "(未设置)")
     summary.add_row("渠道", ", ".join(str(channel_defs[c]["name"]) for c in channels_enabled) if channels_enabled else "(无)")
     summary.add_row("Gateway", f"{gw_host}:{gw_port}")
-    data_dir = Path(os.getenv("CH_DATA_DIR", str(Path.home() / ".clawhermes")))
+    data_dir = get_data_dir()
     summary.add_row("数据目录", str(data_dir))
     console.print(summary)
     if not questionary.confirm("\n确认生成配置?", default=True).ask():
@@ -451,17 +254,12 @@ _prov_to_model_key: dict[str, str | None] = {
 # ====== Section helpers ======
 
 def _load_existing_env() -> dict[str, str]:
-    """读取已有 .env 中的键值对"""
-    data_dir = Path(os.getenv("CH_DATA_DIR", str(Path.home() / ".clawhermes")))
-    env_path = data_dir / ".env"
-    result: dict[str, str] = {}
-    if env_path.exists():
-        for line in env_path.read_text().splitlines():
-            line = line.strip()
-            if line and not line.startswith("#") and "=" in line:
-                k, _, v = line.partition("=")
-                result[k.strip()] = v.strip()
-    return result
+    """读取已有 .env 中的键值对（不写入 os.environ）"""
+    from dotenv import dotenv_values
+    env_path = get_data_dir() / ".env"
+    if not env_path.exists():
+        return {}
+    return {k: v or "" for k, v in dotenv_values(env_path).items()}
 
 
 def _quick_skip(key: str, existing: dict, existing_env: dict) -> bool:
@@ -568,7 +366,7 @@ def _ensure_lark_sdk() -> None:
     import subprocess
     import sys
 
-    repo_root = Path(__file__).resolve().parent.parent.parent
+    repo_root = Path(__file__).resolve().parent.parent.parent.parent
     lark_dir = repo_root / "clawhermes-lark"
     if not (lark_dir / "pyproject.toml").exists():
         console.print("  ⚠️  clawhermes-lark 子仓库未找到")
@@ -738,8 +536,6 @@ def _setup_agent_section(existing_config: dict, existing_env: dict, quick: bool)
     return {"env": env_vars}
 
 
-
-
 def _setup_noninteractive(section: str | None = None, reset: bool = False):
     """CI/Docker 静默初始化"""
     env_vars: dict[str, str] = {
@@ -757,7 +553,6 @@ def _setup_noninteractive(section: str | None = None, reset: bool = False):
     if section in (None, "gateway"):
         console.print("  Gateway: 127.0.0.1:18789")
     _apply_setup(env_vars, [], {}, "deepseek/deepseek-chat", "127.0.0.1", 18789)
-
 
 
 def _fetch_models_from_api(provider, default_model):
@@ -848,7 +643,7 @@ def _apply_setup(env_vars, channels_enabled, channel_defs, model, gw_host, gw_po
     cfg["gateway"]["port"] = gw_port
     save_yaml(cfg)
     console.print("  ✅ config.yaml 已生成")
-    data_dir = Path(os.getenv("CH_DATA_DIR", str(Path.home() / ".clawhermes")))
+    data_dir = get_data_dir()
     channels_dir = data_dir / "channels"
     channels_dir.mkdir(parents=True, exist_ok=True)
     for ch_id in channels_enabled:
@@ -888,8 +683,6 @@ def _apply_setup(env_vars, channels_enabled, channel_defs, model, gw_host, gw_po
         console.print("  🚀 启动: clawhermes gateway start")
     else:
         console.print("\n[bold yellow]⚠️  部分依赖缺失, 请运行 pip install -e . 后重试[/]")
-
-
 
 
 def _onboard_feishu(env_vars: dict[str, str], existing_env: dict | None = None):
@@ -1058,7 +851,6 @@ def _run_manual_feishu_setup(env_vars: dict) -> dict | None:
     return {"app_id": app_id, "app_secret": app_secret, "domain": domain}
 
 
-
 def _resolve_bot_identity(domain: str, app_id: str, app_secret: str, env_vars: dict) -> None:
     """通过 /bot/v3/info API 获取 bot 的 open_id / user_id
 
@@ -1131,7 +923,6 @@ def _probe_feishu(app_id: str, app_secret: str, domain: str, env_vars: dict) -> 
         console.print("  ⚠️  lark_oapi 未安装，跳过连接测试")
     except Exception as e:
         console.print(f"  ⚠️  连接测试失败: {e}")
-
 
 
 _REQUIRED_FEISHU_EVENTS = [
@@ -1242,7 +1033,7 @@ def _write_env(vars_dict: dict[str, str]):
     """写入 .env 文件（不覆盖已有密钥，阻断危险环境变量）"""
     from clawhermes.config import is_env_var_safe
 
-    data_dir = Path(os.getenv("CH_DATA_DIR", str(Path.home() / ".clawhermes")))
+    data_dir = get_data_dir()
     data_dir.mkdir(parents=True, exist_ok=True)
     env_path = data_dir / ".env"
     existing: dict[str, str] = {}
@@ -1284,7 +1075,7 @@ def _copy_and_populate_channel(example_path: str, dest_dir: Path, ch_id: str, en
     """复制渠道 YAML 示例到配置目录，并用 env_vars 填充 ${VAR} 占位符"""
     import re
     import shutil
-    repo_root = Path(__file__).resolve().parent.parent.parent
+    repo_root = Path(__file__).resolve().parent.parent.parent.parent
     src = repo_root / example_path
     dst = dest_dir / f"{ch_id}.yaml"
     if src.exists():
@@ -1302,30 +1093,9 @@ def _copy_and_populate_channel(example_path: str, dest_dir: Path, ch_id: str, en
 def _copy_channel_example(example_path: str, dest_dir: Path, ch_id: str):
     """复制渠道 YAML 示例到配置目录（兼容旧调用）"""
     import shutil
-    repo_root = Path(__file__).resolve().parent.parent.parent
+    repo_root = Path(__file__).resolve().parent.parent.parent.parent
     src = repo_root / example_path
     dst = dest_dir / f"{ch_id}.yaml"
     if src.exists():
         if not dst.exists():
             shutil.copy(src, dst)
-
-
-@main.command()
-def doctor():
-    """诊断"""
-    console.print(f"✅ Python {sys.version_info.major}.{sys.version_info.minor}")
-    for pkg, role in [("litellm", "llm"), ("fastapi", "web"), ("chromadb", "vector"), ("rich", "cli")]:
-        try:
-            __import__(pkg.replace("-", "_"))
-            console.print(f"  ✅ {pkg}")
-        except ImportError:
-            console.print(f"  ❌ {pkg}")
-    found = [k for k in os.environ if k.endswith("_API_KEY") and os.environ[k]]
-    for k in found[:3]:
-        console.print(f"  ✅ {k}")
-    if not found:
-        console.print("  ⚠️  未设置 API Key")
-
-
-if __name__ == "__main__":
-    main()

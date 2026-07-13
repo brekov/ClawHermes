@@ -405,6 +405,7 @@ class Agent:
         context_engine=None,
         agent_name: str | None = None,
         delegate_manager=None,
+        session_mgr=None,
     ):
         self.llm = llm_provider
         self.prompt = SystemPrompt()
@@ -416,6 +417,7 @@ class Agent:
         self.skills = skill_manager
         self.context_engine = context_engine
         self.delegate_manager = delegate_manager
+        self.session_mgr = session_mgr
         self._agent_name = agent_name or "ClawHermes"
         self._interrupt = threading.Event()
         self._last_conversation: list[dict] = []
@@ -441,6 +443,12 @@ class Agent:
             "content": self.prompt.build(),
         })
         messages.append({"role": "user", "content": user_message})
+
+        if self.session_mgr and session_id:
+            try:
+                self.session_mgr.add_message(session_id, "user", user_message)
+            except Exception:
+                pass
 
         for iteration in range(self.config.max_iterations):
             hook_result = self.hooks.trigger(
@@ -493,6 +501,12 @@ class Agent:
 
                 self.hooks.trigger(HookPoint.AFTER_AGENT_END, messages=messages)
 
+                if self.session_mgr and session_id:
+                    try:
+                        self.session_mgr.add_message(session_id, "assistant", final)
+                    except Exception:
+                        pass
+
                 return final
 
             tool_context = self._build_tool_context(session_id)
@@ -514,6 +528,12 @@ class Agent:
             "content": self.prompt.build(),
         })
         messages.append({"role": "user", "content": user_message})
+
+        if self.session_mgr and session_id:
+            try:
+                self.session_mgr.add_message(session_id, "user", user_message)
+            except Exception:
+                pass
 
         for iteration in range(self.config.max_iterations):
             hook_result = self.hooks.trigger(
@@ -565,6 +585,12 @@ class Agent:
                 ]
 
                 self.hooks.trigger(HookPoint.AFTER_AGENT_END, messages=messages)
+
+                if self.session_mgr and session_id:
+                    try:
+                        self.session_mgr.add_message(session_id, "assistant", final)
+                    except Exception:
+                        pass
 
                 return final
 

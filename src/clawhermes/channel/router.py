@@ -135,6 +135,8 @@ class ChannelRouter:
         self._allowlist: set[str] | None = None
         self._collect_buffer: list[ChannelMessage] = []
         self._collect_timer: float | None = None
+        self._collect_flush_task: asyncio.Task[None] | None = None
+        self._collect_idle_seconds: float = 2.0
 
     def set_agent_handler(self, handler: Callable[..., Any]) -> None:
         self._agent_handler = handler
@@ -220,8 +222,17 @@ class ChannelRouter:
                 self._queue.append(qm)
             elif mode == QueueMode.COLLECT:
                 self._collect_buffer.append(message)
-                if self._collect_timer is None:
-                    self._collect_timer = time.time()
+                self._collect_timer = time.time()
+                # 刷新空闲定时器：静默 _collect_idle_seconds 秒后自动 flush
+                if self._collect_flush_task is not None:
+                    self._collect_flush_task.cancel()
+                try:
+                    loop = asyncio.get_running_loop()
+                    self._collect_flush_task = loop.create_task(
+                        self._flush_collect_after_idle(session_id)
+                    )
+                except RuntimeError:
+                    pass
                 return
         else:
             if mode == QueueMode.COLLECT and self._collect_buffer:
@@ -250,6 +261,21 @@ class ChannelRouter:
         self._collect_buffer.clear()
         self._collect_timer = None
         self._queue.append(QueuedMessage(message=merged, mode=QueueMode.STEER))
+
+    async def _flush_collect_after_idle(self, session_id: str) -> None:
+        """静默 _collect_idle_seconds 秒后自动 flush COLLECT 缓冲区并触发处理。"""
+        try:
+            await asyncio.sleep(self._collect_idle_seconds)
+        except asyncio.CancelledError:
+            return
+        if not self._collect_buffer:
+            return
+        self._flush_collect_buffer(session_id)
+        try:
+            loop = asyncio.get_running_loop()
+            loop.create_task(self._process_queue())
+        except RuntimeError:
+            pass
 
     async def _process_queue(self) -> None:
         if not self._queue:

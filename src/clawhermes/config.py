@@ -10,7 +10,7 @@ import time
 from pathlib import Path
 from typing import Literal
 
-from pydantic import field_validator
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = logging.getLogger(__name__)
@@ -32,6 +32,15 @@ _BLOCKED_ENV_PREFIXES: tuple[str, ...] = (
 def get_data_dir() -> Path:
     """ClawHermes 数据目录 — 默认为 ~/.clawhermes"""
     return Path(os.getenv("CH_DATA_DIR", str(Path.home() / ".clawhermes")))
+
+
+def load_env() -> None:
+    """加载 $CH_DATA_DIR/.env 到 os.environ（不覆盖已有环境变量）。
+
+    统一入口，替代各模块自行手写 .env 解析或直接调用 load_dotenv。
+    """
+    from dotenv import load_dotenv
+    load_dotenv(get_data_dir() / ".env", override=False)
 
 
 
@@ -96,7 +105,7 @@ class ClawHermesConfig(BaseSettings):
     """ClawHermes 全局配置 - 类型安全"""
     model_config = SettingsConfigDict(
         env_prefix="CH_",
-        env_file=os.getenv("CH_DATA_DIR", str(Path.home() / ".clawhermes")) + "/.env",
+        env_file=str(get_data_dir() / ".env"),
         env_file_encoding="utf-8",
         extra="ignore",
     )
@@ -138,8 +147,12 @@ class ClawHermesConfig(BaseSettings):
     tools: ToolsConf = ToolsConf()
 
     # === 存储 ===
-    data_dir: str = str(Path.home() / ".clawhermes")
-    db_url: str = f"sqlite+aiosqlite:///{Path.home() / '.clawhermes' / 'clawhermes.db'}"
+    # 使用 default_factory 延迟到实例化时求值，确保尊重 CH_DATA_DIR 环境变量
+    # （类级默认值会在模块导入时调用 Path.home()，无法响应后续 env 变更）
+    data_dir: str = Field(default_factory=lambda: str(get_data_dir()))
+    db_url: str = Field(
+        default_factory=lambda: f"sqlite+aiosqlite:///{get_data_dir() / 'clawhermes.db'}"
+    )
 
     @field_validator("llm_default_max_tokens")
     @classmethod
@@ -163,7 +176,7 @@ class ClawHermesConfig(BaseSettings):
 
 
 def get_yaml_path() -> Path:
-    return Path(os.environ.get("CH_DATA_DIR", str(Path.home() / ".clawhermes"))) / "config.yaml"
+    return get_data_dir() / "config.yaml"
 
 
 def _backup_corrupt_config(config_path: Path) -> Path | None:
@@ -220,10 +233,15 @@ def _warn_config_parse_failure(config_path: Path, exc: Exception) -> None:
         pass
 
 
-def load_yaml() -> dict:
-    """加载 config.yaml（带损坏备份）"""
+def load_yaml(path: Path | None = None) -> dict:
+    """加载 YAML 配置文件（带损坏备份）
+
+    Args:
+        path: YAML 文件路径。默认为 config.yaml (get_yaml_path())。
+              传入路径可获得与主配置相同的损坏备份 + 告警行为。
+    """
     import yaml
-    p = get_yaml_path()
+    p = path or get_yaml_path()
     if p.exists():
         try:
             with open(p) as f:
