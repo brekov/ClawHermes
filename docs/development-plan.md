@@ -1,9 +1,9 @@
 # ClawHermes · 项目推进计划
 
-> 版本：v2.1
-> 日期：2026-06-24
-> 基线版本：v0.15.0（Block Streaming ✅ + DM 配对 ✅ + QQ 适配器 ✅）
-> 状态：Phase 1 ✅ | Phase 2 ✅ | Phase 3 ✅ v0.15.0 | 下一目标 v0.16.0
+> 版本：v2.2
+> 日期：2026-07-14
+> 基线版本：v0.15.1（安全修复 + 并发加固 + Agent Loop 重构）
+> 状态：Phase 1 ✅ | Phase 2 ✅ | Phase 3 ✅ v0.15.1 | 下一目标 v0.16.0
 > 方法论：软件工程全流程 — 现状评估 → 竞品研究 → 差距分析 → SMART 目标 → 架构演进 → 分阶段路线图 → 质量保障 → 风险管理
 
 ---
@@ -285,6 +285,26 @@ CI/CD:      GitHub Actions（lint + typecheck + test + build）
 |:---|:---|:---|
 | DM 配对安全模型 | pairing 码 + 管理员审批 + 签名挑战 | ✅ 已完成 |
 | QQ 适配器 | QQ Bot HTTP API + 子仓库复刻，完成第三渠道 | ✅ 已完成 |
+
+### 5.1c v0.15.1 评审修复（✅ 已完成 2026-07-14）
+
+基于全面代码评审的安全修复与质量加固版本，6 个 PR 全部合入 main。
+
+| 修复项 | 内容 | PR |
+|:---|:---|:---|
+| T1.1 _calc eval RCE | eval() → AST 白名单求值器（5 节点 + 16 函数 + 3 常量） | #46 |
+| T1.2 shell=True 注入 | _web_fetch/_web_search_fallback/_grep 改 httpx/Python 原生；_exec_command 加审计日志+危险命令黑名单 | #47 |
+| T1.3 _run_maybe_async 废弃 | 删除线程创建函数，改为内联 asyncio.run | #49 |
+| T1.4 Agent Loop 重构 | 抽取 _build_messages/_should_loop_continue/_finalize_response，chat() 从 80→40 行 | #49 |
+| T1.5 静默吞异常加固 | 5 处 except Exception: pass → logger.warning | #48 |
+| T1.6 DMPairingManager 锁 | asyncio.Lock → threading.RLock，12 个方法全部加锁 | #48 |
+| T1.7 SkillManager 文件锁 | 新增 threading.RLock，4 个写方法加锁 | #48 |
+| T1.8 _parse_review 加固 | 支持 ```json ``` 围栏剥离 + 类型校验 + assert→if | #48 |
+| T1.9 版本号统一 | __version__ = "0.15.1" 作为单一来源 | #48 |
+| T1.11 并发测试 | +20 个回归测试（RCE 逃逸/并发/加固） | #50 |
+| 审查跟进 | pairing 6 个遗漏锁方法补锁 + builtin import 提顶 + grep 排除目录 | #51 |
+
+**质量指标**：pytest 639 → 659 passed（+20），ruff 0 / mypy 0，净减 52 行代码。
 
 ### 5.2 v0.16.0（Phase 3 后期）
 
