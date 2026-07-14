@@ -13,7 +13,7 @@ src/clawhermes/
 ├── storage/     # ChromaDB / JSON persistence
 └── tools/       # Built-in tools (35 registered)
 
-tests/           # pytest (416 cases), mirror src/ structure
+tests/           # pytest (659 cases), mirror src/ structure
 config/          # Config examples: .env.example, config.yaml.example, channels/
 docs/            # Architecture, API contract, development plan, env reference
 scripts/         # install.sh (one-line bootstrap)
@@ -26,7 +26,7 @@ clawhermes-*/    # Channel submodules (lark, weixin, qq) — pip install -e ./cl
 pip install -e ".[dev]"          # install with dev deps (pytest, ruff, mypy)
 ruff check src/                  # lint — rules: E, F, I, N, W (100-char line limit)
 mypy src/                        # type check — Python 3.12, warn_return_any
-pytest -q                        # run all 416 tests (~23s)
+pytest -q                        # run all 659 tests (~23s)
 pytest tests/test_cli.py -x      # run single test file, stop on first failure
 python -m clawhermes.cli setup   # interactive config wizard
 python -m clawhermes.cli gateway start  # start Gateway on :18789

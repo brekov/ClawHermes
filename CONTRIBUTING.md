@@ -33,6 +33,11 @@
 - ruff lint
 - 单文件不超过 500 行
 - `json.loads()` 使用 `assert isinstance()` 做运行时守卫
+- **安全规范**：
+  - 禁止使用 `eval()`，使用 AST 白名单求值器替代
+  - 禁止使用 `shell=True`，使用 Python 原生实现替代
+  - 敏感操作必须有 `require_confirm=True` 保护
+  - 并发写操作必须加锁保护
 
 ## 添加新工具
 

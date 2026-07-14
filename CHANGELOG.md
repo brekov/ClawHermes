@@ -1,5 +1,102 @@
 # Changelog
 
+## v0.15.1 (2026-07-14)
+
+基于全面代码评审的安全修复与质量加固版本，6 个 PR 全部合入 main。
+
+### 安全修复
+
+#### T1.1 _calc eval RCE 消除
+- **问题**：`_calc` 工具使用 `eval()`，即使 `__builtins__={}` 仍可被类反射链逃逸（`().__class__.__bases__[0].__subclasses__()`）
+- **方案**：替换为 AST 白名单求值器
+  - 仅允许 5 种 AST 节点：`BinOp / UnaryOp / Constant / Name / Call`
+  - 函数白名单：`abs/round/min/max/sqrt/sin/cos/tan/log/log10/log2/pow/ceil/floor/int/float`
+  - 常量白名单：`pi/e/tau`
+  - 显式拒绝：属性访问、lambda、列表推导、关键字参数、非数字常量
+
+#### T1.2 shell=True 注入消除
+- **`_web_fetch`**：curl + sed + shell=True → httpx + Python 正则（纯 Python 实现）
+- **`_web_search_fallback`**：curl + grep + shell=True → httpx + 正则提取 `<h3>`（纯 Python 实现）
+- **`_grep`**：shell grep + shell=True → Python `re` + `pathlib.rglob`（纯 Python 实现）
+- **`_exec_command`**：保留 shell=True（需支持管道/重定向），但增加危险命令黑名单 + 审计日志
+  - 黑名单：`rm -rf /`、`mkfs`、`dd if=/dev/zero`、fork bomb、格式化命令等
+  - `require_confirm=True` 作为主防线
+
+### 代码重构
+
+#### T1.3 _run_maybe_async 废弃
+- **问题**：嵌套事件循环场景下通过 `threading.Thread` 创建新循环执行协程，效率低且有线程安全风险
+- **方案**：删除 `_run_maybe_async()`，改为内联 `asyncio.run()` 或直接调用协程
+
+#### T1.4 Agent Loop 重构
+- 抽取 3 个辅助方法，消除 ~80 行重复代码：
+  - `_build_messages(user_message, session_id)` — 构建 system+user 消息并持久化
+  - `_should_loop_continue(messages, iteration)` — hooks/interrupt/context_engine 压缩检查
+  - `_finalize_response(messages, content, session_id)` — hooks + 会话快照 + assistant 消息持久化
+- `chat()` 和 `_chat_async_internal()` 各从 ~80 行降到 ~40 行
+- 净减少 52 行代码
+
+### 并发安全加固
+
+#### T1.6 DMPairingManager 锁修复
+- `asyncio.Lock` → `threading.RLock`（可重入锁）
+- 12 个公开方法全部加锁，保护 `_pending`/`_paired`/`_challenges` 三个 dict
+- 解决 `verify_code()` → `_cleanup_expired()` 嵌套调用死锁问题
+
+#### T1.7 SkillManager 文件锁
+- 新增 `threading.RLock`
+- 4 个写方法加锁：`_save_meta` / `create` / `update` / `record_usage`
+- 保护 `_skills` dict 与 .md/.json 文件 I/O
+
+### 异常处理加固
+
+#### T1.5 静默吞异常修复
+- 5 处 `except Exception: pass` → `logger.warning`
+  - `session_mgr.add_message` 调用（4 处）
+  - `_parse_review` JSON 解析
+
+#### T1.8 _parse_review 加固
+- 支持 ```json ``` 围栏剥离
+- `assert` 改为 `if` + `logger.warning`（避免 `-O` 模式剥离）
+- 显式类型校验（`memories`/`skills` 非 list 时容错）
+
+### 版本号统一
+
+#### T1.9 版本号统一
+- `__version__ = "0.15.1"` 作为单一来源（`clawhermes/__init__.py`）
+- gateway/app.py 和 mcp/client.py 统一引用 `__version__`
+- 消除 3 处硬编码不一致
+
+### 测试增强
+
+#### T1.11 回归测试
+- +20 个回归测试：
+  - `_calc`：7 个测试（3 个合法表达式 + 4 类 RCE 逃逸测试）
+  - `DMPairingManager`：3 个并发测试（100 个配对码无碰撞、verify+revoke 无损坏）
+  - `_web_fetch` / `_grep`：各 1 个回归测试
+  - `_exec_command`：2 个安全测试
+  - `_parse_review`：2 个边界测试
+  - `SkillManager`：3 个锁测试
+
+### 质量指标
+
+| 指标 | v0.15.0 | v0.15.1 | 变化 |
+|:---|:---|:---|:---|
+| 测试用例 | 416 | 659 | +243 |
+| 源文件 | 31 | 44 | +13 |
+| 内置工具 | 35 | 35 | — |
+| API 端点 | 33 | 33 | — |
+| ruff | 0 | 0 | ✅ |
+| mypy | 0 | 0 | ✅ |
+| 代码行数 | ~6,900 | ~9,550 | +2,650（含子仓库） |
+
+### 审查跟进（PR #51）
+- `DMPairingManager` 6 个遗漏锁方法补锁（touch_user/list_pending_requests/is_paired/get_paired_user/list_paired_users/get_pairing_status）
+- `builtin.py` import 提顶（`import logging`/`import re` 从函数内部移到模块顶部）
+- `_grep` 排除 .git/node_modules/__pycache__ 等目录
+
+---
+
 ## v0.15.0 (2026-06-24)
 
 ### M3.6d DM 配对安全模型 — 配对码 + HMAC 挑战 + 管理员审批

@@ -1,6 +1,6 @@
 # ClawHermes · 完整功能介绍
 
-> 版本：v0.15.0 | 源文件：31 个 + 3 个子仓库 | 测试：416/416 ✅
+> 版本：v0.15.1 | 源文件：44 个 + 3 个子仓库 | 测试：659/659 ✅
 > GitHub：https://github.com/brekov/ClawHermes
 
 ---
@@ -92,7 +92,7 @@
 | `env_list` | 环境变量（脱敏） | ✅ |
 | `timer` | 定时器/秒表 | — |
 | `url_encode` / `url_decode` | URL 编解码 | ✅ |
-| `calc` | 安全数学计算 | ✅ |
+| `calc` | 安全数学计算（AST 白名单求值器） | ✅ |
 
 | `sqlite_query` | 查询 SQLite 数据库 | — |
 | `csv_parse` | 解析 CSV 文件 | ✅ |
@@ -253,7 +253,8 @@ bash <(curl -fsSL https://raw.githubusercontent.com/brekov/ClawHermes/main/scrip
 
 ### 9. 测试
 
-- 416 个测试，全部通过 ✅
+- 659 个测试，全部通过 ✅
 - ruff 0 errors | mypy 0 errors（6 strict checks）
 - 覆盖率 73%（核心模块 > 80%）
 - GitHub Actions CI：lint + typecheck + test + build
+- v0.15.1 新增 20 个回归测试（RCE 逃逸/并发/安全加固场景）
