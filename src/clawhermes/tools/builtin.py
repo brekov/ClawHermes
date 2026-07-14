@@ -7,9 +7,11 @@ import ast as _ast
 import datetime
 import gzip
 import json
+import logging
 import math as _math
 import operator as _operator
 import os
+import re
 import subprocess
 import time
 import urllib.parse
@@ -720,7 +722,6 @@ _EXEC_DANGEROUS_PATTERNS = (
 def _exec_command(command: str, timeout: int = 30, **kwargs) -> dict:
     """执行 shell 命令 — 保留 shell 能力（Agent 设计意图），
     但增加审计日志与危险命令兜底拒绝。"""
-    import logging
     _logger = logging.getLogger("clawhermes.tools.exec")
 
     # 危险命令检测（大小写不敏感）
@@ -900,7 +901,6 @@ def _web_search_tavily(query: str) -> dict:
 
 def _web_search_fallback(query: str) -> dict:
     """Google 搜索 fallback — 纯 httpx + 正则解析，无 shell 调用"""
-    import re
     try:
         import httpx
     except ImportError:
@@ -971,7 +971,6 @@ def _delegate_task(tasks: list[dict], **kwargs) -> dict:
 
 def _web_fetch(url: str, **kwargs) -> dict:
     """抓取网页内容并转为纯文本 — 纯 httpx + 正则，无 shell 调用"""
-    import re
     try:
         import httpx
     except ImportError:
@@ -1030,7 +1029,6 @@ def _patch_file(path: str, search: str, replace: str, **kwargs) -> dict:
 
 def _grep(pattern: str, path: str = ".", file_pattern: str = "*.py", **kwargs) -> dict:
     """在文件中搜索匹配的文本行 — 纯 Python 正则 + pathlib，无 shell 调用"""
-    import re
     try:
         regex = re.compile(pattern)
     except re.error as e:
@@ -1041,9 +1039,14 @@ def _grep(pattern: str, path: str = ".", file_pattern: str = "*.py", **kwargs) -
         return {"error": f"路径不存在: {path}"}
 
     matches: list[str] = []
+    # 排除常见非源码目录，避免大项目超时
+    _skip_dirs = {".git", "node_modules", "__pycache__", ".venv", "venv", ".mypy_cache", ".ruff_cache"}
     try:
         for file_path in root.rglob(file_pattern):
             if not file_path.is_file():
+                continue
+            # 跳过排除目录下的文件
+            if any(part in _skip_dirs for part in file_path.relative_to(root).parts):
                 continue
             try:
                 text = file_path.read_text(encoding="utf-8", errors="ignore")
