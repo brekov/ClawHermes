@@ -245,16 +245,19 @@ class DMPairingManager:
 
     def is_paired(self, user_id: str) -> bool:
         """检查用户是否已配对"""
-        return user_id in self._paired
+        with self._lock:
+            return user_id in self._paired
 
     def get_paired_user(self, user_id: str) -> PairedUser | None:
-        return self._paired.get(user_id)
+        with self._lock:
+            return self._paired.get(user_id)
 
     def touch_user(self, user_id: str) -> None:
         """更新用户活跃时间"""
-        user = self._paired.get(user_id)
-        if user:
-            user.last_active = time.time()
+        with self._lock:
+            user = self._paired.get(user_id)
+            if user:
+                user.last_active = time.time()
 
     def revoke_pairing(self, user_id: str) -> bool:
         """撤销配对"""
@@ -267,60 +270,63 @@ class DMPairingManager:
             return False
 
     def list_paired_users(self) -> list[dict[str, Any]]:
-        return [
-            {
-                "user_id": u.user_id,
-                "platform": u.platform,
-                "device_family": u.device_family,
-                "paired_at": u.paired_at,
-                "approved_by": u.approved_by,
-                "last_active": u.last_active,
-            }
-            for u in self._paired.values()
-        ]
+        with self._lock:
+            return [
+                {
+                    "user_id": u.user_id,
+                    "platform": u.platform,
+                    "device_family": u.device_family,
+                    "paired_at": u.paired_at,
+                    "approved_by": u.approved_by,
+                    "last_active": u.last_active,
+                }
+                for u in self._paired.values()
+            ]
 
     def list_pending_requests(self) -> list[dict[str, Any]]:
-        self._cleanup_expired()
-        return [
-            {
-                "code": r.code,
-                "user_id": r.user_id,
-                "platform": r.platform,
-                "created_at": r.created_at,
-                "expires_at": r.expires_at,
-                "status": r.status.value,
-            }
-            for r in self._pending.values()
-            if r.status == PairingStatus.PENDING
-        ]
+        with self._lock:
+            self._cleanup_expired()
+            return [
+                {
+                    "code": r.code,
+                    "user_id": r.user_id,
+                    "platform": r.platform,
+                    "created_at": r.created_at,
+                    "expires_at": r.expires_at,
+                    "status": r.status.value,
+                }
+                for r in self._pending.values()
+                if r.status == PairingStatus.PENDING
+            ]
 
     def get_pairing_status(self, code_or_user_id: str) -> dict[str, Any] | None:
         """查询配对状态（通过配对码或用户ID）"""
-        # 先查 pending
-        for code, req in self._pending.items():
-            if code == code_or_user_id or req.user_id == code_or_user_id:
+        with self._lock:
+            # 先查 pending
+            for code, req in self._pending.items():
+                if code == code_or_user_id or req.user_id == code_or_user_id:
+                    return {
+                        "code": req.code,
+                        "user_id": req.user_id,
+                        "platform": req.platform,
+                        "status": req.status.value,
+                        "created_at": req.created_at,
+                        "expires_at": req.expires_at,
+                        "is_expired": req.is_expired,
+                    }
+
+            # 再查 paired
+            user = self._paired.get(code_or_user_id)
+            if user:
                 return {
-                    "code": req.code,
-                    "user_id": req.user_id,
-                    "platform": req.platform,
-                    "status": req.status.value,
-                    "created_at": req.created_at,
-                    "expires_at": req.expires_at,
-                    "is_expired": req.is_expired,
+                    "user_id": user.user_id,
+                    "platform": user.platform,
+                    "status": "paired",
+                    "paired_at": user.paired_at,
+                    "last_active": user.last_active,
                 }
 
-        # 再查 paired
-        user = self._paired.get(code_or_user_id)
-        if user:
-            return {
-                "user_id": user.user_id,
-                "platform": user.platform,
-                "status": "paired",
-                "paired_at": user.paired_at,
-                "last_active": user.last_active,
-            }
-
-        return None
+            return None
 
     # ── 内部方法 ────────────────────────────────────────
 
