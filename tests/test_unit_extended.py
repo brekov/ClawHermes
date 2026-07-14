@@ -971,11 +971,49 @@ class TestMoreToolHandlers:
         from clawhermes.tools.builtin import _calc
         result = _calc(expression="42")
         assert isinstance(result, dict)
+        assert result.get("result") == 42
 
     def test_calc_complex(self):
         from clawhermes.tools.builtin import _calc
-        result = _calc(expression="sum(range(100))")
+        # 使用白名单函数的组合表达式
+        result = _calc(expression="sqrt(16) + 2 * 3")
         assert isinstance(result, dict)
+        assert result.get("result") == 10.0
+
+    def test_calc_constants(self):
+        from clawhermes.tools.builtin import _calc
+        result = _calc(expression="pi * 2")
+        assert isinstance(result, dict)
+        assert "result" in result
+
+    def test_calc_rejects_dunder_import(self):
+        """RCE 逃逸尝试：__import__ 必须被拒绝"""
+        from clawhermes.tools.builtin import _calc
+        result = _calc(expression="__import__('os')")
+        assert isinstance(result, dict)
+        assert "error" in result
+        assert "result" not in result
+
+    def test_calc_rejects_class_reflection(self):
+        """RCE 逃逸尝试：类反射链必须被拒绝"""
+        from clawhermes.tools.builtin import _calc
+        result = _calc(expression="().__class__.__bases__[0].__subclasses__()")
+        assert isinstance(result, dict)
+        assert "error" in result
+
+    def test_calc_rejects_attribute_access(self):
+        """属性访问必须被拒绝"""
+        from clawhermes.tools.builtin import _calc
+        result = _calc(expression="(1).bit_length()")
+        assert isinstance(result, dict)
+        assert "error" in result
+
+    def test_calc_rejects_lambda(self):
+        """lambda/列表推导等高级语法必须被拒绝"""
+        from clawhermes.tools.builtin import _calc
+        result = _calc(expression="(lambda: 1)()")
+        assert isinstance(result, dict)
+        assert "error" in result
 
 
 class TestSkillManager:
