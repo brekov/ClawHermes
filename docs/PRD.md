@@ -1,8 +1,8 @@
 # ClawHermes · 产品需求文档
 
-> 版本：v3.0
-> 日期：2026-06-17
-> 状态：Phase 1 ✅ | Phase 2 ✅ | Phase 3 ✅ (v0.15.0) | v0.16.0 📋
+> 版本：v3.1
+> 日期：2026-07-14
+> 状态：Phase 1 ✅ | Phase 2 ✅ | Phase 3 ✅ (v0.15.1) | v0.16.0 📋
 
 > **v0.10.0 重要决策**：ClawHermes 移除旧消息渠道代码（飞书、微信、QQ、Telegram），集中精力重构 Agent 核心能力。
 > ClawHermes 提供 **Channel Adapter SDK** 抽象层 + 标准化适配器接口，消息渠道由部署者按需集成，项目不内嵌任何平台特定代码。
@@ -296,8 +296,27 @@ Agent 提供 REST API，上层应用（飞书/微信/网页等）通过 Channel 
 
 ## 8. Phase 3 进行中（v0.13.0~v0.14.1 ✅ | v0.15.0+ 🔄）
 
-> 状态：v0.15.0 已交付 ✅
+> 状态：v0.15.1 已交付 ✅
 > 目标：生态建设 — 联邦技能中心、MCP 集成、异步化、工具扩展、渠道适配器
+
+### 8.1 v0.15.1 安全加固（2026-07-14）
+
+基于全面代码评审的安全修复与质量加固版本，6 个 PR 全部合入。
+
+| 修复项 | 内容 | 优先级 |
+|--------|------|--------|
+| T1.1 | _calc eval RCE → AST 白名单求值器（5 节点 + 16 函数 + 3 常量） | P0 |
+| T1.2 | shell=True 注入消除：_web_fetch/_grep 改 Python 原生；_exec_command 加审计+黑名单 | P0 |
+| T1.3 | _run_maybe_async 废弃（线程创建风险）→ 内联 asyncio.run | P0 |
+| T1.4 | Agent Loop 重构：3 个辅助方法消除 80 行重复代码 | P1 |
+| T1.5 | 5 处 except Exception: pass → logger.warning | P1 |
+| T1.6 | DMPairingManager 锁修复：asyncio.Lock → threading.RLock，12 个方法加锁 | P1 |
+| T1.7 | SkillManager 文件锁：新增 threading.RLock，4 个写方法加锁 | P1 |
+| T1.8 | _parse_review 加固：支持 ```json ``` 围栏 + 类型校验 | P1 |
+| T1.9 | 版本号统一：__version__ = "0.15.1" 作为单一来源 | P2 |
+| T1.11 | +20 个回归测试（RCE 逃逸/并发/加固场景） | P0 |
+
+**质量指标**：pytest 639 → 659 passed（+20），ruff 0 / mypy 0，净减 52 行代码。
 
 | 里程碑 | 功能 | 优先级 | 说明 | 状态 |
 |--------|------|--------|------|:----:|
