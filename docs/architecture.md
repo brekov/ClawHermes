@@ -1,9 +1,9 @@
 # ClawHermes · 架构设计文档
 
-> 版本：v2.1
-> 日期：2026-06-23
-> 基线版本：v0.15.0
-> 状态：已实现 ChannelConfigLoader、飞书 26 字段、微信双模式、YAML ${VAR} 配置分层
+> 版本：v2.2
+> 日期：2026-07-14
+> 基线版本：v0.15.1
+> 状态：已实现 ChannelConfigLoader、飞书 26 字段、微信双模式、YAML ${VAR} 配置分层；v0.15.1 安全加固（AST 求值器、shell 注入消除、并发锁完善）
 
 ---
 
@@ -121,6 +121,26 @@
 > 工具注册与发现（`ToolRegistry` / `ToolDef`）、工具调度（`ToolDispatcher`，并行/串行规则）、
 > 钩子管理（`HookManager` / `HookPoint`，同步+异步）均位于 `agent/loop.py`（见 §2.2）。
 
+**工具安全策略（v0.15.1+）**：
+
+| 工具 | 安全措施 |
+|------|----------|
+| `_calc` | AST 白名单求值器（5 节点 + 16 函数 + 3 常量），禁止属性访问/lambda/导入 |
+| `_exec_command` | 危险命令黑名单（rm -rf /、mkfs、fork bomb 等）+ 审计日志 + `require_confirm=True` |
+| `_web_fetch` | 纯 httpx + 正则剥离 HTML，无 shell 调用 |
+| `_web_search_fallback` | 纯 httpx + 正则提取 `<h3>`，无 shell 调用 |
+| `_grep` | 纯 Python `re` + `pathlib.rglob`，排除 .git/node_modules 等目录 |
+
+**Agent Loop 重构（v0.15.1+）**：
+
+`chat()` 和 `_chat_async_internal()` 共享 3 个辅助方法，消除约 80 行重复代码：
+
+| 辅助方法 | 职责 |
+|----------|------|
+| `_build_messages(user_message, session_id)` | 构建 system+user 消息并持久化 |
+| `_should_loop_continue(messages, iteration)` | hooks/interrupt/context_engine 压缩检查 |
+| `_finalize_response(messages, content, session_id)` | hooks + 会话快照 + assistant 消息持久化 |
+
 ### 2.4 LLM 层
 
 | 模块 | 职责 | 关键类 |
@@ -167,6 +187,17 @@ ClawHermes 通过 **Channel Adapter SDK** 提供标准化渠道接口，渠道�
 | `channel/adapter.py` | ChannelAdapter ABC + 内置适配器 | `ChannelAdapter` / `CLIAdapter` / `RESTAdapter` / `WebSocketAdapter` |
 | `channel/config.py` | 渠道配置管理（YAML + ${VAR} 插值） | `ChannelConfigLoader` |
 | `channel/router.py` | 消息路由 + 队列 + 配对 | `ChannelRouter` / `SessionRouter` / `DMPairingManager` |
+
+**并发安全模型（v0.15.1+）**：
+
+| 模块 | 锁机制 | 保护范围 |
+|------|--------|----------|
+| `DMPairingManager` | `threading.RLock` | 12 个公开方法全部加锁，保护 `_pending`/`_paired`/`_challenges` 三个 dict |
+| `SkillManager` | `threading.RLock` | 4 个写方法加锁（_save_meta/create/update/record_usage），保护 `_skills` dict 与文件 I/O |
+| `SessionManager` | `threading.Lock` | 所有方法加锁，保护 SQLite 连接（`check_same_thread=False`） |
+| `CronScheduler` | `asyncio.Lock` | 异步锁，保护 `_jobs` dict 与 JSON 持久化 |
+
+> RLock（可重入锁）用于方法间存在调用关系的场景（如 `verify_code` → `_cleanup_expired`），避免死锁。
 
 **待实现模块**（Phase 3 后续）：
 
