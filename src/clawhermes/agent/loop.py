@@ -24,34 +24,6 @@ from clawhermes.llm.provider import LLMProvider, LLMResponse
 logger = logging.getLogger(__name__)
 
 
-def _run_maybe_async(coro_or_value: Any) -> Any:
-    """执行可能是协程的返回值；同步分派路径用于兼容 async handler。
-
-    - 非协程：原样返回。
-    - 协程 + 无运行事件循环：``asyncio.run`` 执行。
-    - 协程 + 已有运行事件循环（例如 parallel-safe 分派在独立 loop 中
-      经 ``run_until_complete`` 回调进入本函数）：在独立线程中新建 loop
-      执行，避免嵌套 ``asyncio.run`` 报错。
-    """
-    if not asyncio.iscoroutine(coro_or_value):
-        return coro_or_value
-    try:
-        asyncio.get_running_loop()
-    except RuntimeError:
-        return asyncio.run(coro_or_value)
-
-    # 已在事件循环中，需在独立线程跑新 loop
-    result_box: dict[str, Any] = {}
-
-    def _runner() -> None:
-        result_box["value"] = asyncio.run(coro_or_value)
-
-    t = threading.Thread(target=_runner)
-    t.start()
-    t.join()
-    return result_box.get("value")
-
-
 class HookPoint:
     BEFORE_TOOL_CALL = "before_tool_call"
     AFTER_TOOL_CALL = "after_tool_call"
@@ -220,7 +192,10 @@ class ToolDispatcher:
 
         start_ms = time.monotonic() * 1000
         try:
-            result = _run_maybe_async(tool_def.handler(**args, **tool_context))
+            raw = tool_def.handler(**args, **tool_context)
+            # 同步路径中工具可能返回协程 — chat() 被 asyncio.to_thread 包装在独立线程，
+            # 无运行中的事件循环，可安全 asyncio.run
+            result = asyncio.run(raw) if asyncio.iscoroutine(raw) else raw
             duration_ms = time.monotonic() * 1000 - start_ms
             result_data = {
                 "role": "tool",
@@ -436,36 +411,70 @@ class Agent:
             ctx["_delegate_manager"] = self.delegate_manager
         return ctx
 
-    def chat(self, user_message: str, session_id: str = "") -> str:
-        messages = []
-        messages.append({
-            "role": "system",
-            "content": self.prompt.build(),
-        })
-        messages.append({"role": "user", "content": user_message})
-
+    def _build_messages(self, user_message: str, session_id: str = "") -> list[dict]:
+        """构建 system+user 消息并持久化 user 消息（chat/chat_async 共用）"""
+        messages: list[dict] = [
+            {"role": "system", "content": self.prompt.build()},
+            {"role": "user", "content": user_message},
+        ]
         if self.session_mgr and session_id:
             try:
                 self.session_mgr.add_message(session_id, "user", user_message)
             except Exception as e:
                 logger.warning("Failed to persist user message: %s", e)
+        return messages
+
+    def _finalize_response(
+        self, messages: list[dict], content: str, session_id: str = ""
+    ) -> str:
+        """完成响应：触发 hooks、更新会话快照、持久化 assistant 消息（chat/chat_async 共用）"""
+        hook_result = self.hooks.trigger(
+            HookPoint.BEFORE_AGENT_REPLY,
+            response=content,
+        )
+        final = str(hook_result.get("override_response", content))
+
+        self._last_conversation = [
+            {"role": m["role"], "content": str(m.get("content", ""))[:500]}
+            for m in messages[-6:]
+        ]
+        self.hooks.trigger(HookPoint.AFTER_AGENT_END, messages=messages)
+
+        if self.session_mgr and session_id:
+            try:
+                self.session_mgr.add_message(session_id, "assistant", final)
+            except Exception as e:
+                logger.warning("Failed to persist assistant message: %s", e)
+        return final
+
+    def _should_loop_continue(self, messages: list[dict], iteration: int) -> str | None:
+        """检查循环控制信号：hooks abort / interrupt / context 压缩。
+        返回非 None 表示应提前退出，返回值即退出响应。"""
+        hook_result = self.hooks.trigger(
+            HookPoint.BEFORE_AGENT_RUN,
+            messages=messages,
+            iteration=iteration,
+        )
+        if hook_result.get("abort"):
+            return str(hook_result.get("response", ""))
+
+        if self._interrupt.is_set():
+            return "（已中断）"
+
+        if self.context_engine and iteration > 1:
+            prompt_tokens = sum(len(m.get("content", "")) for m in messages)
+            if self.context_engine.should_compress(prompt_tokens):
+                messages[:] = self.context_engine.compress(messages, prompt_tokens)
+
+        return None
+
+    def chat(self, user_message: str, session_id: str = "") -> str:
+        messages = self._build_messages(user_message, session_id)
 
         for iteration in range(self.config.max_iterations):
-            hook_result = self.hooks.trigger(
-                HookPoint.BEFORE_AGENT_RUN,
-                messages=messages,
-                iteration=iteration,
-            )
-            if hook_result.get("abort"):
-                return str(hook_result.get("response", ""))
-
-            if self._interrupt.is_set():
-                return "（已中断）"
-
-            if self.context_engine and iteration > 1:
-                prompt_tokens = sum(len(m.get("content", "")) for m in messages)
-                if self.context_engine.should_compress(prompt_tokens):
-                    messages = self.context_engine.compress(messages, prompt_tokens)
+            early = self._should_loop_continue(messages, iteration)
+            if early is not None:
+                return early
 
             self.hooks.trigger(HookPoint.MODEL_CALL_STARTED)
             try:
@@ -488,26 +497,7 @@ class Agent:
             messages.append(assistant_msg)
 
             if not response.tool_calls:
-                hook_result = self.hooks.trigger(
-                    HookPoint.BEFORE_AGENT_REPLY,
-                    response=response.content or "",
-                )
-                final = str(hook_result.get("override_response", response.content or ""))
-
-                self._last_conversation = [
-                    {"role": m["role"], "content": str(m.get("content", ""))[:500]}
-                    for m in messages[-6:]
-                ]
-
-                self.hooks.trigger(HookPoint.AFTER_AGENT_END, messages=messages)
-
-                if self.session_mgr and session_id:
-                    try:
-                        self.session_mgr.add_message(session_id, "assistant", final)
-                    except Exception as e:
-                        logger.warning("Failed to persist assistant message: %s", e)
-
-                return final
+                return self._finalize_response(messages, response.content or "", session_id)
 
             tool_context = self._build_tool_context(session_id)
             tool_context["iteration"] = iteration
@@ -522,35 +512,12 @@ class Agent:
 
     async def _chat_async_internal(self, user_message: str, session_id: str = "") -> str:
         """内部异步聊天实现，使用原生异步LLM调用"""
-        messages = []
-        messages.append({
-            "role": "system",
-            "content": self.prompt.build(),
-        })
-        messages.append({"role": "user", "content": user_message})
-
-        if self.session_mgr and session_id:
-            try:
-                self.session_mgr.add_message(session_id, "user", user_message)
-            except Exception as e:
-                logger.warning("Failed to persist user message: %s", e)
+        messages = self._build_messages(user_message, session_id)
 
         for iteration in range(self.config.max_iterations):
-            hook_result = self.hooks.trigger(
-                HookPoint.BEFORE_AGENT_RUN,
-                messages=messages,
-                iteration=iteration,
-            )
-            if hook_result.get("abort"):
-                return str(hook_result.get("response", ""))
-
-            if self._interrupt.is_set():
-                return "（已中断）"
-
-            if self.context_engine and iteration > 1:
-                prompt_tokens = sum(len(m.get("content", "")) for m in messages)
-                if self.context_engine.should_compress(prompt_tokens):
-                    messages = self.context_engine.compress(messages, prompt_tokens)
+            early = self._should_loop_continue(messages, iteration)
+            if early is not None:
+                return early
 
             self.hooks.trigger(HookPoint.MODEL_CALL_STARTED)
             try:
@@ -573,26 +540,7 @@ class Agent:
             messages.append(assistant_msg)
 
             if not response.tool_calls:
-                hook_result = self.hooks.trigger(
-                    HookPoint.BEFORE_AGENT_REPLY,
-                    response=response.content or "",
-                )
-                final = str(hook_result.get("override_response", response.content or ""))
-
-                self._last_conversation = [
-                    {"role": m["role"], "content": str(m.get("content", ""))[:500]}
-                    for m in messages[-6:]
-                ]
-
-                self.hooks.trigger(HookPoint.AFTER_AGENT_END, messages=messages)
-
-                if self.session_mgr and session_id:
-                    try:
-                        self.session_mgr.add_message(session_id, "assistant", final)
-                    except Exception as e:
-                        logger.warning("Failed to persist assistant message: %s", e)
-
-                return final
+                return self._finalize_response(messages, response.content or "", session_id)
 
             tool_context = self._build_tool_context(session_id)
             tool_context["iteration"] = iteration
