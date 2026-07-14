@@ -6,12 +6,12 @@ DM 配对安全模型：配对码生成 + 管理员审批 + 签名挑战
 """
 from __future__ import annotations
 
-import asyncio
 import hashlib
 import hmac
 import json
 import logging
 import secrets
+import threading
 import time
 from dataclasses import dataclass, field
 from enum import Enum
@@ -106,7 +106,7 @@ class DMPairingManager:
         self._paired: dict[str, PairedUser] = {}            # user_id -> PairedUser
         self._challenges: dict[str, tuple[str, float]] = {}  # challenge -> (user_id, expires)
         self._allowlist: set[str] = set()                   # admin allowlist
-        self._lock = asyncio.Lock()
+        self._lock = threading.RLock()  # 可重入锁，保护 _pending/_paired/_challenges
 
         # 从持久化存储加载 signing_key 和已配对用户
         if self._db_path is not None:
@@ -128,25 +128,26 @@ class DMPairingManager:
 
         返回 PairingRequest，code 为 6 位数字
         """
-        code = secrets.randbelow(10 ** self.CODE_LENGTH)
-        code_str = f"{code:0{self.CODE_LENGTH}d}"
+        with self._lock:
+            code = secrets.randbelow(10 ** self.CODE_LENGTH)
+            code_str = f"{code:0{self.CODE_LENGTH}d}"
 
-        challenge = self._generate_challenge(user_id)
+            challenge = self._generate_challenge(user_id)
 
-        request = PairingRequest(
-            code=code_str,
-            challenge=challenge,
-            user_id=user_id,
-            platform=platform,
-            device_family=device_family,
-        )
+            request = PairingRequest(
+                code=code_str,
+                challenge=challenge,
+                user_id=user_id,
+                platform=platform,
+                device_family=device_family,
+            )
 
-        self._pending[code_str] = request
-        self._challenges[challenge] = (user_id, time.time() + self.CHALLENGE_TTL)
+            self._pending[code_str] = request
+            self._challenges[challenge] = (user_id, time.time() + self.CHALLENGE_TTL)
 
-        logger.info("Pairing code generated: user=%s platform=%s code=%s",
-                     user_id, platform, code_str)
-        return request
+            logger.info("Pairing code generated: user=%s platform=%s code=%s",
+                         user_id, platform, code_str)
+            return request
 
     def verify_code(self, code: str, challenge_response: str,
                     user_id: str | None = None) -> PairingRequest:
@@ -155,76 +156,80 @@ class DMPairingManager:
 
         验证通过后状态变为 APPROVED
         """
-        self._cleanup_expired()
+        with self._lock:
+            self._cleanup_expired()
 
-        request = self._pending.get(code)
-        if request is None:
-            raise PairingInvalidError(f"无效的配对码: {code}")
+            request = self._pending.get(code)
+            if request is None:
+                raise PairingInvalidError(f"无效的配对码: {code}")
 
-        if not request.is_valid:
-            if request.is_expired:
-                request.status = PairingStatus.EXPIRED
-                raise PairingExpiredError(f"配对码已过期: {code}")
-            raise PairingInvalidError(f"配对码状态异常: {request.status}")
+            if not request.is_valid:
+                if request.is_expired:
+                    request.status = PairingStatus.EXPIRED
+                    raise PairingExpiredError(f"配对码已过期: {code}")
+                raise PairingInvalidError(f"配对码状态异常: {request.status}")
 
-        if user_id and request.user_id != user_id:
-            raise PairingInvalidError("配对码与用户不匹配")
+            if user_id and request.user_id != user_id:
+                raise PairingInvalidError("配对码与用户不匹配")
 
-        # 验证 HMAC 挑战响应
-        expected = self._compute_challenge_response(request.challenge)
-        if not hmac.compare_digest(challenge_response, expected):
-            raise PairingInvalidError("挑战响应验证失败")
+            # 验证 HMAC 挑战响应
+            expected = self._compute_challenge_response(request.challenge)
+            if not hmac.compare_digest(challenge_response, expected):
+                raise PairingInvalidError("挑战响应验证失败")
 
-        request.status = PairingStatus.APPROVED
-        request.approved_at = time.time()
+            request.status = PairingStatus.APPROVED
+            request.approved_at = time.time()
 
-        # 加入已配对列表
-        self._paired[request.user_id] = PairedUser(
-            user_id=request.user_id,
-            platform=request.platform,
-            device_family=request.device_family,
-            paired_at=time.time(),
-            approved_by=request.approved_by or "self",
-        )
+            # 加入已配对列表
+            self._paired[request.user_id] = PairedUser(
+                user_id=request.user_id,
+                platform=request.platform,
+                device_family=request.device_family,
+                paired_at=time.time(),
+                approved_by=request.approved_by or "self",
+            )
 
-        logger.info("Pairing verified: user=%s platform=%s", request.user_id, request.platform)
-        self._save_state()
-        return request
+            logger.info("Pairing verified: user=%s platform=%s", request.user_id, request.platform)
+            self._save_state()
+            return request
 
     def reject_code(self, code: str, admin_id: str = "") -> PairingRequest:
         """管理员拒绝配对请求"""
-        request = self._pending.get(code)
-        if request is None:
-            raise PairingInvalidError(f"无效的配对码: {code}")
+        with self._lock:
+            request = self._pending.get(code)
+            if request is None:
+                raise PairingInvalidError(f"无效的配对码: {code}")
 
-        request.status = PairingStatus.REJECTED
-        request.approved_by = admin_id
-        logger.info("Pairing rejected: user=%s by=%s", request.user_id, admin_id)
-        return request
+            request.status = PairingStatus.REJECTED
+            request.approved_by = admin_id
+            logger.info("Pairing rejected: user=%s by=%s", request.user_id, admin_id)
+            return request
 
     # ── 签名挑战 ────────────────────────────────────────
 
     def create_challenge(self, user_id: str) -> str:
         """为用户创建签名挑战"""
-        challenge = self._generate_challenge(user_id)
-        self._challenges[challenge] = (user_id, time.time() + self.CHALLENGE_TTL)
-        return challenge
+        with self._lock:
+            challenge = self._generate_challenge(user_id)
+            self._challenges[challenge] = (user_id, time.time() + self.CHALLENGE_TTL)
+            return challenge
 
     def verify_challenge(self, challenge: str, response: str) -> bool:
         """验证挑战响应"""
-        self._cleanup_challenges()
+        with self._lock:
+            self._cleanup_challenges()
 
-        entry = self._challenges.get(challenge)
-        if entry is None:
-            return False
+            entry = self._challenges.get(challenge)
+            if entry is None:
+                return False
 
-        user_id, expires = entry
-        if time.time() > expires:
-            del self._challenges[challenge]
-            return False
+            user_id, expires = entry
+            if time.time() > expires:
+                del self._challenges[challenge]
+                return False
 
-        expected = self._compute_challenge_response(challenge)
-        return hmac.compare_digest(response, expected)
+            expected = self._compute_challenge_response(challenge)
+            return hmac.compare_digest(response, expected)
 
     def sign_payload(self, payload: bytes) -> str:
         """对消息签名，用于身份验证"""
@@ -253,12 +258,13 @@ class DMPairingManager:
 
     def revoke_pairing(self, user_id: str) -> bool:
         """撤销配对"""
-        if user_id in self._paired:
-            del self._paired[user_id]
-            logger.info("Pairing revoked: user=%s", user_id)
-            self._save_state()
-            return True
-        return False
+        with self._lock:
+            if user_id in self._paired:
+                del self._paired[user_id]
+                logger.info("Pairing revoked: user=%s", user_id)
+                self._save_state()
+                return True
+            return False
 
     def list_paired_users(self) -> list[dict[str, Any]]:
         return [
