@@ -592,11 +592,15 @@ class TestToolHandlers:
         from clawhermes.tools.builtin import _calc
         result = _calc(expression="2 + 3 * 4")
         assert isinstance(result, dict)
+        assert result.get("result") == 14
 
     def test_calc_invalid(self):
+        """__import__ 逃逸尝试必须被拒绝，返回 error 且不返回 result"""
         from clawhermes.tools.builtin import _calc
         result = _calc(expression="__import__('os')")
         assert isinstance(result, dict)
+        assert "error" in result
+        assert "result" not in result
 
     def test_url_encode_decode(self):
         from clawhermes.tools.builtin import _url_decode, _url_encode

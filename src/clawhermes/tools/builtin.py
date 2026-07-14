@@ -3,14 +3,18 @@ ClawHermes - 内置工具集
 """
 from __future__ import annotations
 
+import ast as _ast
 import datetime
 import gzip
 import json
+import math as _math
+import operator as _operator
 import os
 import subprocess
 import time
 import urllib.parse
 from pathlib import Path
+from typing import Any
 
 from clawhermes.agent.loop import ToolDef, ToolRegistry
 
@@ -1141,20 +1145,79 @@ def _url_decode(text: str, **kwargs) -> dict:
     return {"result": urllib.parse.unquote(text)}
 
 
+# ===== 安全表达式求值器（替代 eval，避免 RCE）=====
+# 仅允许以下 AST 节点类型与白名单函数/常量，杜绝 __import__/().__class__ 等逃逸路径
+_CALC_ALLOWED_FUNCS: dict[str, Any] = {
+    "abs": abs, "round": round, "min": min, "max": max,
+    "sqrt": _math.sqrt, "sin": _math.sin, "cos": _math.cos, "tan": _math.tan,
+    "log": _math.log, "log10": _math.log10, "log2": _math.log2,
+    "pow": pow, "ceil": _math.ceil, "floor": _math.floor,
+    "int": int, "float": float,
+}
+_CALC_ALLOWED_CONSTS: dict[str, Any] = {
+    "pi": _math.pi, "e": _math.e, "tau": _math.tau,
+}
+_CALC_BIN_OPS: dict[type, Any] = {
+    _ast.Add: _operator.add,
+    _ast.Sub: _operator.sub,
+    _ast.Mult: _operator.mul,
+    _ast.Div: _operator.truediv,
+    _ast.FloorDiv: _operator.floordiv,
+    _ast.Mod: _operator.mod,
+    _ast.Pow: _operator.pow,
+}
+_CALC_UNARY_OPS: dict[type, Any] = {
+    _ast.UAdd: _operator.pos,
+    _ast.USub: _operator.neg,
+}
+
+class _CalcUnsafeError(ValueError):
+    """表达式包含不允许的节点或名字"""
+
+
+def _calc_eval_node(node: _ast.AST) -> Any:
+    """递归求值 AST 节点，遇到非白名单节点立即抛错"""
+    if isinstance(node, _ast.Expression):
+        return _calc_eval_node(node.body)
+    if isinstance(node, _ast.Constant):
+        # 仅允许数字常量（int/float/complex/bool）
+        if isinstance(node.value, (int, float, complex)):
+            return node.value
+        raise _CalcUnsafeError(f"不允许的常量类型: {type(node.value).__name__}")
+    if isinstance(node, _ast.BinOp):
+        op_fn = _CALC_BIN_OPS.get(type(node.op))
+        if op_fn is None:
+            raise _CalcUnsafeError(f"不允许的二元运算: {type(node.op).__name__}")
+        return op_fn(_calc_eval_node(node.left), _calc_eval_node(node.right))
+    if isinstance(node, _ast.UnaryOp):
+        op_fn = _CALC_UNARY_OPS.get(type(node.op))
+        if op_fn is None:
+            raise _CalcUnsafeError(f"不允许的一元运算: {type(node.op).__name__}")
+        return op_fn(_calc_eval_node(node.operand))
+    if isinstance(node, _ast.Name):
+        if node.id in _CALC_ALLOWED_CONSTS:
+            return _CALC_ALLOWED_CONSTS[node.id]
+        raise _CalcUnsafeError(f"不允许的名字: {node.id}")
+    if isinstance(node, _ast.Call):
+        if not isinstance(node.func, _ast.Name):
+            raise _CalcUnsafeError("仅支持直接函数调用")
+        fn = _CALC_ALLOWED_FUNCS.get(node.func.id)
+        if fn is None:
+            raise _CalcUnsafeError(f"不允许的函数: {node.func.id}")
+        if node.keywords:
+            raise _CalcUnsafeError("不支持关键字参数")
+        args = [_calc_eval_node(a) for a in node.args]
+        return fn(*args)
+    raise _CalcUnsafeError(f"不允许的语法节点: {type(node).__name__}")
+
+
 def _calc(expression: str, **kwargs) -> dict:
-    allowed_names = {
-        "abs": abs, "round": round, "min": min, "max": max,
-        "sqrt": __import__("math").sqrt,
-        "sin": __import__("math").sin,
-        "cos": __import__("math").cos,
-        "tan": __import__("math").tan,
-        "log": __import__("math").log,
-        "log10": __import__("math").log10,
-        "pow": pow, "pi": __import__("math").pi, "e": __import__("math").e,
-        "int": int, "float": float,
-    }
+    """计算数学表达式（安全 AST 求值，禁止属性访问/导入/类反射）"""
     try:
-        result = eval(expression, {"__builtins__": {}}, allowed_names)
+        tree = _ast.parse(expression, mode="eval")
+        result = _calc_eval_node(tree)
         return {"expression": expression, "result": result}
+    except _CalcUnsafeError as e:
+        return {"error": f"表达式不安全: {e}"}
     except Exception as e:
         return {"error": f"计算失败: {e}"}
