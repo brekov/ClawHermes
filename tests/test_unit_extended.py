@@ -1095,6 +1095,60 @@ class TestSkillManager:
         active = sm.list(status="active")
         assert len(active) >= 1
 
+    def test_skill_manager_concurrent_create(self, tmp_path):
+        """T1.7 并发安全测试 — 多线程并发 create 不应损坏文件"""
+        import threading
+
+        from clawhermes.skills.manager import SkillManager
+
+        sm = SkillManager(tmp_path)
+        errors: list[Exception] = []
+
+        def _worker(thread_id: int):
+            try:
+                for i in range(10):
+                    sm.create(f"skill_t{thread_id}_{i}", f"content_{i}", f"desc_{i}")
+            except Exception as e:
+                errors.append(e)
+
+        threads = [threading.Thread(target=_worker, args=(t,)) for t in range(5)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        assert errors == [], f"并发产生异常: {errors}"
+        # 50 个技能都应成功创建
+        assert len(sm.list()) >= 50
+
+    def test_skill_manager_concurrent_update(self, tmp_path):
+        """T1.7 并发安全测试 — 多线程并发 update 同一技能不应损坏"""
+        import threading
+
+        from clawhermes.skills.manager import SkillManager
+
+        sm = SkillManager(tmp_path)
+        sm.create("shared-skill", "initial", "desc")
+        errors: list[Exception] = []
+
+        def _worker():
+            try:
+                for i in range(20):
+                    sm.update("shared-skill", usage_count=i)
+            except Exception as e:
+                errors.append(e)
+
+        threads = [threading.Thread(target=_worker) for _ in range(5)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        assert errors == [], f"并发产生异常: {errors}"
+        # 技能应仍然存在且可读
+        skill = sm.get("shared-skill")
+        assert skill is not None
+
 
 class TestBackgroundReview:
     """Test BackgroundReview parsing"""
@@ -1145,6 +1199,71 @@ class TestBackgroundReview:
         prompt = br._build_review_prompt(conv)
         assert "hello" in prompt
         assert "hi" in prompt
+
+    def test_review_parse_json_fenced(self, tmp_path):
+        """T1.8 加固测试 — ```json 围栏剥离"""
+        from clawhermes.agent.memory import JSONMemoryProvider, MemoryManager
+        from clawhermes.llm.provider import LLMProvider
+        from clawhermes.skills.manager import BackgroundReview, SkillManager
+
+        provider = LLMProvider(model="deepseek/deepseek-chat", api_key="test")
+        memory = MemoryManager()
+        memory.add_provider(JSONMemoryProvider(tmp_path))
+        sm = SkillManager(tmp_path)
+        br = BackgroundReview(provider, memory, sm)
+
+        # LLM 常见输出格式：```json 围栏
+        text = '```json\n{"memories": [{"content": "fenced", "importance": 0.8}], "skills": []}\n```'
+        result = br._parse_review(text)
+        assert len(result["memories"]) == 1
+        assert result["memories"][0]["content"] == "fenced"
+
+    def test_review_parse_plain_fenced(self, tmp_path):
+        """T1.8 加固测试 — ``` 围栏（无 json 标记）剥离"""
+        from clawhermes.agent.memory import JSONMemoryProvider, MemoryManager
+        from clawhermes.llm.provider import LLMProvider
+        from clawhermes.skills.manager import BackgroundReview, SkillManager
+
+        provider = LLMProvider(model="deepseek/deepseek-chat", api_key="test")
+        memory = MemoryManager()
+        memory.add_provider(JSONMemoryProvider(tmp_path))
+        sm = SkillManager(tmp_path)
+        br = BackgroundReview(provider, memory, sm)
+
+        text = '```\n{"memories": [], "skills": [{"name": "test", "content": "x"}]}\n```'
+        result = br._parse_review(text)
+        assert len(result["skills"]) == 1
+
+    def test_review_parse_non_dict_json(self, tmp_path):
+        """T1.8 加固测试 — JSON 是 list 而非 dict 时应返回空"""
+        from clawhermes.agent.memory import JSONMemoryProvider, MemoryManager
+        from clawhermes.llm.provider import LLMProvider
+        from clawhermes.skills.manager import BackgroundReview, SkillManager
+
+        provider = LLMProvider(model="deepseek/deepseek-chat", api_key="test")
+        memory = MemoryManager()
+        memory.add_provider(JSONMemoryProvider(tmp_path))
+        sm = SkillManager(tmp_path)
+        br = BackgroundReview(provider, memory, sm)
+
+        result = br._parse_review("[1, 2, 3]")
+        assert result == {"memories": [], "skills": []}
+
+    def test_review_parse_memories_not_list(self, tmp_path):
+        """T1.8 加固测试 — memories 字段非 list 时应容错为空列表"""
+        from clawhermes.agent.memory import JSONMemoryProvider, MemoryManager
+        from clawhermes.llm.provider import LLMProvider
+        from clawhermes.skills.manager import BackgroundReview, SkillManager
+
+        provider = LLMProvider(model="deepseek/deepseek-chat", api_key="test")
+        memory = MemoryManager()
+        memory.add_provider(JSONMemoryProvider(tmp_path))
+        sm = SkillManager(tmp_path)
+        br = BackgroundReview(provider, memory, sm)
+
+        result = br._parse_review('{"memories": "not_a_list", "skills": null}')
+        assert result["memories"] == []
+        assert result["skills"] == []
 
 
 class TestCurator:
