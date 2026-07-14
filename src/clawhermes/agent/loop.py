@@ -425,8 +425,8 @@ class Agent:
         if agent_name:
             try:
                 self.prompt.stable.load_from_agent(agent_name)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("Failed to load stable prompt: %s", e)
 
     def _build_tool_context(self, session_id: str = "") -> dict:
         ctx: dict[str, Any] = {"session_id": session_id}
@@ -447,8 +447,8 @@ class Agent:
         if self.session_mgr and session_id:
             try:
                 self.session_mgr.add_message(session_id, "user", user_message)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("Failed to persist user message: %s", e)
 
         for iteration in range(self.config.max_iterations):
             hook_result = self.hooks.trigger(
@@ -504,8 +504,8 @@ class Agent:
                 if self.session_mgr and session_id:
                     try:
                         self.session_mgr.add_message(session_id, "assistant", final)
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.warning("Failed to persist assistant message: %s", e)
 
                 return final
 
@@ -532,8 +532,8 @@ class Agent:
         if self.session_mgr and session_id:
             try:
                 self.session_mgr.add_message(session_id, "user", user_message)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("Failed to persist user message: %s", e)
 
         for iteration in range(self.config.max_iterations):
             hook_result = self.hooks.trigger(
@@ -589,8 +589,8 @@ class Agent:
                 if self.session_mgr and session_id:
                     try:
                         self.session_mgr.add_message(session_id, "assistant", final)
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.warning("Failed to persist assistant message: %s", e)
 
                 return final
 

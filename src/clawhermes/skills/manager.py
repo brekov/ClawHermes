@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import json
 import logging
+import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -36,6 +37,7 @@ class SkillManager:
         self.skills_dir = Path(skills_dir)
         self.skills_dir.mkdir(parents=True, exist_ok=True)
         self._skills: dict[str, Skill] = {}
+        self._lock = threading.RLock()  # 保护 _skills dict 与文件 I/O（被 to_thread 并发调用）
         self._load_all()
 
     def _load_all(self):
@@ -48,8 +50,8 @@ class SkillManager:
             if meta_file.exists():
                 try:
                     meta = json.loads(meta_file.read_text())
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.warning("Failed to load skill meta %s: %s", meta_file, e)
 
             self._skills[name] = Skill(
                 name=name,
@@ -66,17 +68,18 @@ class SkillManager:
 
     def _save_meta(self, skill: Skill):
         """保存技能元数据"""
-        meta_file = self.skills_dir / f"{skill.name}.json"
-        meta_file.write_text(json.dumps({
-            "description": skill.description,
-            "category": skill.category,
-            "version": skill.version,
-            "usage_count": skill.usage_count,
-            "last_used": skill.last_used,
-            "created_at": skill.created_at,
-            "status": skill.status,
-            "source": skill.source,
-        }, indent=2, ensure_ascii=False))
+        with self._lock:
+            meta_file = self.skills_dir / f"{skill.name}.json"
+            meta_file.write_text(json.dumps({
+                "description": skill.description,
+                "category": skill.category,
+                "version": skill.version,
+                "usage_count": skill.usage_count,
+                "last_used": skill.last_used,
+                "created_at": skill.created_at,
+                "status": skill.status,
+                "source": skill.source,
+            }, indent=2, ensure_ascii=False))
 
     def list(self, status: str | None = None) -> list[Skill]:
         """列出技能"""
@@ -90,42 +93,45 @@ class SkillManager:
 
     def create(self, name: str, content: str, description: str = "", category: str = "general") -> Skill:
         """创建新技能"""
-        skill = Skill(
-            name=name,
-            content=content,
-            description=description,
-            category=category,
-            created_at=time.time(),
-            source="user",
-        )
-        skill_file = self.skills_dir / f"{name}.md"
-        skill_file.write_text(content, encoding="utf-8")
-        self._save_meta(skill)
-        self._skills[name] = skill
-        logger.info("技能创建: %s", name)
-        return skill
+        with self._lock:
+            skill = Skill(
+                name=name,
+                content=content,
+                description=description,
+                category=category,
+                created_at=time.time(),
+                source="user",
+            )
+            skill_file = self.skills_dir / f"{name}.md"
+            skill_file.write_text(content, encoding="utf-8")
+            self._save_meta(skill)
+            self._skills[name] = skill
+            logger.info("技能创建: %s", name)
+            return skill
 
     def update(self, name: str, **kwargs) -> Skill | None:
         """更新技能"""
-        skill = self.get(name)
-        if not skill:
-            return None
-        for k, v in kwargs.items():
-            if hasattr(skill, k):
-                setattr(skill, k, v)
-        if "content" in kwargs:
-            skill_file = self.skills_dir / f"{name}.md"
-            skill_file.write_text(kwargs["content"], encoding="utf-8")
-        self._save_meta(skill)
-        return skill
+        with self._lock:
+            skill = self.get(name)
+            if not skill:
+                return None
+            for k, v in kwargs.items():
+                if hasattr(skill, k):
+                    setattr(skill, k, v)
+            if "content" in kwargs:
+                skill_file = self.skills_dir / f"{name}.md"
+                skill_file.write_text(kwargs["content"], encoding="utf-8")
+            self._save_meta(skill)
+            return skill
 
     def record_usage(self, name: str):
         """记录技能使用"""
-        skill = self.get(name)
-        if skill:
-            skill.usage_count += 1
-            skill.last_used = time.time()
-            self._save_meta(skill)
+        with self._lock:
+            skill = self.get(name)
+            if skill:
+                skill.usage_count += 1
+                skill.last_used = time.time()
+                self._save_meta(skill)
 
     def get_context(self, active_skills: List[str] | None = None) -> str:
         """生成技能上下文（供 System Prompt 使用）"""
@@ -193,18 +199,38 @@ Rules:
 - Be conservative - don't save trivial information"""
 
     def _parse_review(self, text: str) -> dict:
-        """解析 LLM 返回的审查结果"""
+        """解析 LLM 返回的审查结果 — 加固版
+
+        处理以下情况：
+        - LLM 返回 ```json ... ``` 围栏包裹的 JSON
+        - JSON 前后有多余文本
+        - 缺少 memories/skills 字段时返回空列表
+        """
         import json
-        # 提取 JSON
+        import re
+
+        # 1. 先尝试剥离 ```json ... ``` 或 ``` ... ``` 围栏
+        fence_match = re.search(r"```(?:json)?\s*\n?(.*?)\n?```", text, re.DOTALL)
+        if fence_match:
+            text = fence_match.group(1)
+
+        # 2. 提取最外层 JSON 对象
         start = text.find("{")
         end = text.rfind("}")
         if start >= 0 and end > start:
             try:
                 result = json.loads(text[start:end + 1])
-                assert isinstance(result, dict)
+                if not isinstance(result, dict):
+                    logger.warning("Background review JSON is not a dict: %s", type(result).__name__)
+                    return {"memories": [], "skills": []}
+                # 确保字段类型正确
+                if not isinstance(result.get("memories", []), list):
+                    result["memories"] = []
+                if not isinstance(result.get("skills", []), list):
+                    result["skills"] = []
                 return result
-            except json.JSONDecodeError:
-                pass
+            except json.JSONDecodeError as e:
+                logger.warning("Background review JSON parse failed: %s", e)
         return {"memories": [], "skills": []}
 
     def apply(self, conversation: list[dict]):

@@ -11,6 +11,8 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any
 
+from clawhermes import __version__
+
 logger = logging.getLogger(__name__)
 
 
@@ -81,7 +83,7 @@ class MCPClient:
         init_result = await self._send_request_stdio("initialize", {
             "protocolVersion": "2024-11-05",
             "capabilities": {},
-            "clientInfo": {"name": "clawhermes", "version": "0.14.0"},
+            "clientInfo": {"name": "clawhermes", "version": __version__},
         })
         self._server_info = init_result
         self._connected = True
@@ -103,7 +105,7 @@ class MCPClient:
         init_result = await self._send_request_http("initialize", {
             "protocolVersion": "2024-11-05",
             "capabilities": {},
-            "clientInfo": {"name": "clawhermes", "version": "0.14.0"},
+            "clientInfo": {"name": "clawhermes", "version": __version__},
         })
         self._server_info = init_result
         self._connected = True

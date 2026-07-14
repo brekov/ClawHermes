@@ -15,6 +15,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from clawhermes import __version__
 from clawhermes.agent.delegate import DelegateManager
 from clawhermes.agent.exceptions import (
     ClawHermesError,
@@ -167,8 +168,8 @@ class GatewayState:
                 await asyncio.sleep(3600)
                 try:
                     curator.run()
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.warning("Curator run failed: %s", e)
         curator_task = asyncio.create_task(_curator_loop(), name="curator_loop")
         self._bg_tasks.add(curator_task)
         curator_task.add_done_callback(self._bg_tasks.discard)
@@ -324,7 +325,7 @@ async def lifespan(app: FastAPI):
 
 _cors_origins = [o.strip() for o in os.getenv("CH_CORS_ORIGINS", "*").split(",") if o.strip()]
 _gateway_secret = os.getenv("CH_GATEWAY_SECRET", "")
-app = FastAPI(title="ClawHermes Gateway", version="0.15.0", lifespan=lifespan)
+app = FastAPI(title="ClawHermes Gateway", version=__version__, lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_origins,
