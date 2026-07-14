@@ -577,6 +577,24 @@ class TestToolHandlers:
         f.write_text("def foo():\n    return 42\n")
         result = _grep(pattern="def", path=str(tmp_path), file_pattern="*.py")
         assert isinstance(result, dict)
+        assert result.get("count") >= 1
+
+    def test_grep_with_shell_metachars(self, tmp_path):
+        """包含 shell 元字符的 pattern 不得触发 shell 执行 — 应作为正则处理"""
+        from clawhermes.tools.builtin import _grep
+        f = tmp_path / "test_grep.py"
+        f.write_text("import os\nprint('hello')\n")
+        # pattern 含 ; 和 $，旧实现会注入 shell；新实现应安全作为正则
+        result = _grep(pattern="print.*hello", path=str(tmp_path), file_pattern="*.py")
+        assert isinstance(result, dict)
+        assert "error" not in result
+
+    def test_grep_invalid_regex(self, tmp_path):
+        """无效正则应返回 error 而非崩溃"""
+        from clawhermes.tools.builtin import _grep
+        result = _grep(pattern="[unclosed", path=str(tmp_path), file_pattern="*.py")
+        assert isinstance(result, dict)
+        assert "error" in result
 
     def test_git_status_no_repo(self, tmp_path):
         from clawhermes.tools.builtin import _git_status

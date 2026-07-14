@@ -705,7 +705,38 @@ def _write_file(path: str, content: str, **kwargs) -> dict:
         return {"error": str(e)}
 
 
+# 危险命令模式 — 命中即拒绝执行（防误操作 + 提示注入兜底）
+# 注意：这不是完整沙箱，仅作兜底；require_confirm=True 仍是主防线
+_EXEC_DANGEROUS_PATTERNS = (
+    "rm -rf /", "rm -rf ~", "rm -rf *", "rm -rf .",
+    "mkfs", "dd of=/dev/sd", "dd of=/dev/nvme",
+    ":(){:|:&};:",  # fork bomb
+    "> /dev/sda", "> /dev/nvme",
+    "shutdown", "reboot", "halt", "poweroff",
+    "chmod -R 777 /",
+)
+
+
 def _exec_command(command: str, timeout: int = 30, **kwargs) -> dict:
+    """执行 shell 命令 — 保留 shell 能力（Agent 设计意图），
+    但增加审计日志与危险命令兜底拒绝。"""
+    import logging
+    _logger = logging.getLogger("clawhermes.tools.exec")
+
+    # 危险命令检测（大小写不敏感）
+    cmd_lower = command.lower().strip()
+    for pattern in _EXEC_DANGEROUS_PATTERNS:
+        if pattern in cmd_lower:
+            _logger.warning("BLOCKED dangerous command: %r (matched %r)", command, pattern)
+            return {
+                "error": f"命令被安全策略拒绝（匹配危险模式: {pattern}）",
+                "command": command,
+                "blocked": True,
+            }
+
+    # 审计日志（无论成功失败都记录）
+    _logger.warning("exec_command: %r (timeout=%ds)", command, timeout)
+
     try:
         result = subprocess.run(
             command, shell=True, capture_output=True,
@@ -715,11 +746,12 @@ def _exec_command(command: str, timeout: int = 30, **kwargs) -> dict:
             "stdout": result.stdout[:5000],
             "stderr": result.stderr[:2000],
             "return_code": result.returncode,
+            "command": command,
         }
     except subprocess.TimeoutExpired:
-        return {"error": f"命令超时 ({timeout}s)"}
+        return {"error": f"命令超时 ({timeout}s)", "command": command}
     except Exception as e:
-        return {"error": str(e)}
+        return {"error": str(e), "command": command}
 
 
 def _get_time(**kwargs) -> dict:
@@ -867,13 +899,32 @@ def _web_search_tavily(query: str) -> dict:
 
 
 def _web_search_fallback(query: str) -> dict:
+    """Google 搜索 fallback — 纯 httpx + 正则解析，无 shell 调用"""
+    import re
+    try:
+        import httpx
+    except ImportError:
+        return {"results": [], "note": "httpx 未安装，无法执行搜索 fallback"}
+
     encoded = urllib.parse.quote(query)
-    result = subprocess.run(
-        f'curl -sL "https://www.google.com/search?q={encoded}&num=5" 2>/dev/null | '
-        f'grep -oP \'<h3[^>]*>.*?</h3>\' | head -5',
-        shell=True, capture_output=True, text=True, timeout=10,
-    )
-    return {"results": result.stdout[:3000] or "（搜索结果为空）"}
+    url = f"https://www.google.com/search?q={encoded}&num=5"
+    try:
+        with httpx.Client(timeout=10, follow_redirects=True, headers={"User-Agent": "Mozilla/5.0"}) as client:
+            resp = client.get(url)
+            resp.raise_for_status()
+    except Exception as e:
+        return {"results": [], "note": f"搜索请求失败: {e}"}
+
+    # 用正则提取 <h3> 标题（Google 搜索结果标题在 h3 中）
+    results: list[dict[str, str]] = []
+    for match in re.finditer(r"<h3[^>]*>(.*?)</h3>", resp.text, re.DOTALL):
+        title = re.sub(r"<[^>]+>", "", match.group(1)).strip()
+        if title:
+            results.append({"title": title, "url": "", "snippet": ""})
+        if len(results) >= 5:
+            break
+
+    return {"results": results, "engine": "google_fallback"}
 
 
 def _memory_search(query: str, **kwargs) -> dict:
@@ -919,15 +970,30 @@ def _delegate_task(tasks: list[dict], **kwargs) -> dict:
 
 
 def _web_fetch(url: str, **kwargs) -> dict:
+    """抓取网页内容并转为纯文本 — 纯 httpx + 正则，无 shell 调用"""
+    import re
     try:
-        result = subprocess.run(
-            f'curl -sL -A "Mozilla/5.0" "{url}" 2>/dev/null | '
-            f'sed -e "s/<[^>]*>//g" | sed "/^$/d" | head -200',
-            shell=True, capture_output=True, text=True, timeout=15,
-        )
-        return {"content": result.stdout[:8000] or "（内容为空）", "url": url}
+        import httpx
+    except ImportError:
+        return {"error": "httpx 未安装，无法执行 web_fetch"}
+
+    try:
+        with httpx.Client(timeout=15, follow_redirects=True, headers={"User-Agent": "Mozilla/5.0"}) as client:
+            resp = client.get(url)
+            resp.raise_for_status()
+    except httpx.HTTPError as e:
+        return {"error": f"HTTP 请求失败: {e}"}
     except Exception as e:
         return {"error": str(e)}
+
+    # 用正则剥离 HTML 标签 + 压缩空行，等价于原 sed 流程
+    text = resp.text
+    text = re.sub(r"<script[^>]*>.*?</script>", "", text, flags=re.DOTALL | re.IGNORECASE)
+    text = re.sub(r"<style[^>]*>.*?</style>", "", text, flags=re.DOTALL | re.IGNORECASE)
+    text = re.sub(r"<[^>]+>", "", text)
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    content = "\n".join(lines[:200])
+    return {"content": content[:8000] or "（内容为空）", "url": url}
 
 
 def _list_dir(path: str = ".", pattern: str = "*", **kwargs) -> dict:
@@ -963,13 +1029,33 @@ def _patch_file(path: str, search: str, replace: str, **kwargs) -> dict:
 
 
 def _grep(pattern: str, path: str = ".", file_pattern: str = "*.py", **kwargs) -> dict:
+    """在文件中搜索匹配的文本行 — 纯 Python 正则 + pathlib，无 shell 调用"""
+    import re
     try:
-        result = subprocess.run(
-            f'grep -rn --include="{file_pattern}" "{pattern}" "{path}" 2>/dev/null | head -50',
-            shell=True, capture_output=True, text=True, timeout=10,
-        )
-        lines = result.stdout.strip().split("\n") if result.stdout.strip() else []
-        return {"matches": lines[:50], "count": len(lines)}
+        regex = re.compile(pattern)
+    except re.error as e:
+        return {"error": f"正则表达式无效: {e}"}
+
+    root = Path(path).resolve()
+    if not root.exists():
+        return {"error": f"路径不存在: {path}"}
+
+    matches: list[str] = []
+    try:
+        for file_path in root.rglob(file_pattern):
+            if not file_path.is_file():
+                continue
+            try:
+                text = file_path.read_text(encoding="utf-8", errors="ignore")
+            except (OSError, UnicodeDecodeError):
+                continue
+            rel = file_path.relative_to(root) if root.is_dir() else file_path.name
+            for line_no, line in enumerate(text.splitlines(), 1):
+                if regex.search(line):
+                    matches.append(f"{rel}:{line_no}:{line[:200]}")
+                    if len(matches) >= 50:
+                        return {"matches": matches, "count": len(matches)}
+        return {"matches": matches, "count": len(matches)}
     except Exception as e:
         return {"error": str(e)}
 

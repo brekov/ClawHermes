@@ -890,16 +890,53 @@ class TestMoreToolHandlers:
         from clawhermes.tools.builtin import _exec_command
         result = _exec_command(command="echo hello")
         assert isinstance(result, dict)
+        assert result.get("return_code") == 0
+        assert "hello" in result.get("stdout", "")
+        # 审计字段应回显执行的命令
+        assert result.get("command") == "echo hello"
 
     def test_exec_command_timeout(self):
         from clawhermes.tools.builtin import _exec_command
         result = _exec_command(command="sleep 10", timeout=1)
         assert isinstance(result, dict)
+        assert "error" in result
+        assert "超时" in result["error"]
+
+    def test_exec_command_blocks_dangerous_rm_rf(self):
+        """rm -rf / 必须被拒绝"""
+        from clawhermes.tools.builtin import _exec_command
+        result = _exec_command(command="rm -rf /")
+        assert isinstance(result, dict)
+        assert result.get("blocked") is True
+        assert "error" in result
+        assert "command" in result
+
+    def test_exec_command_blocks_dangerous_mkfs(self):
+        """mkfs 必须被拒绝"""
+        from clawhermes.tools.builtin import _exec_command
+        result = _exec_command(command="mkfs.ext4 /dev/sda1")
+        assert isinstance(result, dict)
+        assert result.get("blocked") is True
+
+    def test_exec_command_blocks_dangerous_fork_bomb(self):
+        """fork bomb 必须被拒绝"""
+        from clawhermes.tools.builtin import _exec_command
+        result = _exec_command(command=":(){:|:&};:")
+        assert isinstance(result, dict)
+        assert result.get("blocked") is True
+
+    def test_exec_command_blocks_dangerous_case_insensitive(self):
+        """危险命令检测应大小写不敏感"""
+        from clawhermes.tools.builtin import _exec_command
+        result = _exec_command(command="RM -RF /")
+        assert isinstance(result, dict)
+        assert result.get("blocked") is True
 
     def test_web_fetch_invalid_url(self):
         from clawhermes.tools.builtin import _web_fetch
         result = _web_fetch(url="not-a-valid-url")
         assert isinstance(result, dict)
+        assert "error" in result
 
     def test_patch_file(self, tmp_path):
         from clawhermes.tools.builtin import _patch_file
