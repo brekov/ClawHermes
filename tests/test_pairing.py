@@ -207,3 +207,98 @@ class TestPairingEdgeCases:
         sig1 = m1.sign_payload(payload)
         # m2 should NOT verify m1's signature
         assert not m2.verify_signature(payload, sig1)
+
+
+class TestPairingConcurrency:
+    """T1.6 并发安全测试 — 验证 threading.RLock 保护下的多线程访问"""
+
+    def test_concurrent_generate_code_no_collision(self):
+        """多线程并发生成配对码，不应产生 code 碰撞或 dict 损坏"""
+        import threading
+
+        manager = DMPairingManager("concurrent_key")
+        codes: list[str] = []
+        errors: list[Exception] = []
+
+        def _worker():
+            try:
+                for i in range(20):
+                    r = manager.generate_code(f"user_{threading.current_thread().name}_{i}", "test")
+                    codes.append(r.code)
+            except Exception as e:
+                errors.append(e)
+
+        threads = [threading.Thread(target=_worker, name=f"t{i}") for i in range(5)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        assert errors == [], f"并发产生异常: {errors}"
+        # 100 个 code 应全部唯一（无碰撞）
+        assert len(codes) == len(set(codes)), "配对码碰撞"
+
+    def test_concurrent_verify_and_revoke(self):
+        """并发 verify_code + revoke_pairing 不应导致 dict 损坏"""
+        import threading
+
+        manager = DMPairingManager("concurrent_key2")
+        # 预先生成一些配对请求
+        requests = []
+        for i in range(10):
+            r = manager.generate_code(f"user_{i}", "test")
+            requests.append(r)
+
+        errors: list[Exception] = []
+
+        def _verifier():
+            try:
+                for r in requests:
+                    try:
+                        expected = manager._compute_challenge_response(r.challenge)
+                        manager.verify_code(r.code, expected)
+                    except (PairingExpiredError, PairingInvalidError):
+                        pass  # 可能已被其他线程处理
+            except Exception as e:
+                errors.append(e)
+
+        def _revoker():
+            try:
+                for i in range(10):
+                    manager.revoke_pairing(f"user_{i}")
+            except Exception as e:
+                errors.append(e)
+
+        threads = [threading.Thread(target=_verifier), threading.Thread(target=_revoker)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        assert errors == [], f"并发产生异常: {errors}"
+
+    def test_concurrent_create_challenge(self):
+        """并发 create_challenge 不应导致 _challenges dict 损坏"""
+        import threading
+
+        manager = DMPairingManager("concurrent_key3")
+        challenges: list[str] = []
+        errors: list[Exception] = []
+
+        def _worker():
+            try:
+                for i in range(20):
+                    c = manager.create_challenge(f"user_{i}")
+                    challenges.append(c)
+            except Exception as e:
+                errors.append(e)
+
+        threads = [threading.Thread(target=_worker) for _ in range(5)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        assert errors == [], f"并发产生异常: {errors}"
+        # 100 个 challenge 应全部唯一
+        assert len(challenges) == len(set(challenges)), "挑战碰撞"
