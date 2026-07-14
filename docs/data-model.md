@@ -1,7 +1,7 @@
 # ClawHermes · 数据模型文档
 
-> 版本：v2.2（新增 ChannelConfig 实体）
-> 日期：2026-06-17
+> 版本：v2.3（v0.15.1 更新：并发安全模型）
+> 日期：2026-07-14
 
 ---
 
@@ -213,3 +213,31 @@ FAILED = "failed"      # 执行失败
 PAUSED = "paused"      # 已暂停
 CANCELLED = "cancelled" # 已取消
 ```
+
+## 4. 并发安全模型（v0.15.1+）
+
+### 4.1 锁机制映射
+
+| 模块 | 锁类型 | 保护资源 | 加锁范围 |
+|------|--------|----------|----------|
+| `DMPairingManager` | `threading.RLock` | `_pending` / `_paired` / `_challenges` | 12 个公开方法全部加锁 |
+| `SkillManager` | `threading.RLock` | `_skills` dict + .md/.json 文件 | _save_meta / create / update / record_usage |
+| `SessionManager` | `threading.Lock` | SQLite 连接（check_same_thread=False） | 所有方法加锁 |
+| `CronScheduler` | `asyncio.Lock` | `_jobs` dict + schedules.json | 读写操作加锁 |
+
+### 4.2 锁选择原则
+
+| 场景 | 推荐锁类型 | 原因 |
+|------|-----------|------|
+| 同步方法 + 方法间调用 | `threading.RLock` | 可重入，避免死锁 |
+| 同步方法 + 无嵌套调用 | `threading.Lock` | 更轻量 |
+| 异步方法 | `asyncio.Lock` | 不阻塞事件循环 |
+
+### 4.3 线程安全数据结构
+
+| 数据结构 | 使用模式 | 并发安全保障 |
+|----------|----------|--------------|
+| `dict` | 读/写 | 锁保护 |
+| SQLite | 单连接共享 | `check_same_thread=False` + 锁保护 |
+| JSON 文件 | 读写 | 锁保护 + 原子写入 |
+| `list` | 追加 | 锁保护 |
