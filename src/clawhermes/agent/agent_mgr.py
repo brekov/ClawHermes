@@ -18,6 +18,7 @@ from rich.prompt import Confirm
 from rich.table import Table
 
 from clawhermes.config import get_data_dir
+from clawhermes.util.scoped_path import ScopedPath
 
 console = Console()
 
@@ -50,7 +51,8 @@ def list_agents() -> list[str]:
 
 
 def agent_path(name: str) -> Path:
-    return get_agents_dir() / name
+    """返回 Agent 目录的绝对路径，校验 name 不含路径穿越字符"""
+    return ScopedPath(get_agents_dir()).resolve(name)
 
 
 def agent_exists(name: str) -> bool:

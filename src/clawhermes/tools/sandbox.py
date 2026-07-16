@@ -159,6 +159,13 @@ class DockerSandbox:
             "docker", "run", "--rm",
             f"--memory={self._memory}",
             f"--cpus={self._cpu}",
+            # 安全加固：非 root 用户 + 只读文件系统 + 资源限制
+            "--user", "65534:65534",
+            "--read-only",
+            "--tmpfs", "/tmp:rw,size=64m",
+            "--cap-drop=ALL",
+            "--security-opt=no-new-privileges",
+            "--pids-limit=64",
         ]
 
         if not self._network:

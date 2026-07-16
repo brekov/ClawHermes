@@ -24,7 +24,7 @@ MINIMAL_TOOLS = frozenset({
     "session_status", "read_file", "write_file", "exec", "get_time",
 })
 
-STANDARD_TOOLS = MINIMAL_TOOLS | frozenset({
+STANDARD_TOOLS = (MINIMAL_TOOLS - {"exec"}) | frozenset({
     "web_search", "memory_search", "memory_save", "delegate_task",
 })
 
@@ -42,17 +42,83 @@ PROFILE_MAP = {
     "full": FULL_TOOLS,
 }
 
-def _sqlite_query(db_path: str, query: str, params: list | None = None, **kwargs) -> dict:
-    """查询 SQLite 数据库"""
+# 文件大小上限
+_MAX_READ_BYTES = 1024 * 1024  # 1MB
+_MAX_WRITE_BYTES = 10 * 1024 * 1024  # 10MB
+
+# 系统目录黑名单 — workspace_root 未提供时回退到此清单
+_BLOCKED_SYSTEM_DIRS = (
+    "/etc", "/usr", "/bin", "/sbin", "/System", "/Library",
+    "/dev", "/proc", "/sys", "/boot", "/root",
+)
+
+
+def _validate_workspace_path(path: str, workspace_root: Path | str | None = None) -> Path:
+    """校验路径在 workspace root 内
+
+    workspace_root 提供时严格校验路径必须在其下；
+    未提供时回退到禁止系统目录的宽松校验（保护 /etc/passwd 等敏感路径）。
+    """
+    target = Path(path).resolve()
+    if workspace_root is not None:
+        root = Path(workspace_root).resolve()
+        if not target.is_relative_to(root):
+            raise ValueError(f"路径越界: {path} 不在 workspace {root} 内")
+    else:
+        for blocked in _BLOCKED_SYSTEM_DIRS:
+            if target.is_relative_to(Path(blocked)):
+                raise ValueError(f"路径越界: {path} 在系统目录 {blocked} 内")
+    return target
+
+
+def _validate_sqlite_path(db_path: str, data_dir: Path | str | None = None) -> Path:
+    """校验 SQLite db 路径在 data_dir 内或不在系统目录中"""
+    target = Path(db_path).resolve()
+    if data_dir is not None:
+        root = Path(data_dir).resolve()
+        if not target.is_relative_to(root):
+            raise ValueError(f"路径越界: {db_path} 不在 data_dir {root} 内")
+    else:
+        for blocked in _BLOCKED_SYSTEM_DIRS:
+            if target.is_relative_to(Path(blocked)):
+                raise ValueError(f"路径越界: {db_path} 在系统目录 {blocked} 内")
+    return target
+
+
+_SQLITE_DANGEROUS_KEYWORDS = ("DROP", "DELETE", "ATTACH", "DETACH")
+
+
+def _sqlite_query(
+    db_path: str,
+    query: str,
+    params: list | None = None,
+    allow_write: bool = False,
+    **kwargs,
+) -> dict:
+    """查询 SQLite 数据库
+
+    默认只读模式连接；危险操作（DROP/DELETE/ATTACH/DETACH）需 allow_write=True。
+    """
     import sqlite3
     try:
-        conn = sqlite3.connect(db_path)
+        target = _validate_sqlite_path(db_path, kwargs.get("data_dir"))
+
+        query_upper = query.strip().upper()
+        is_dangerous = any(kw in query_upper for kw in _SQLITE_DANGEROUS_KEYWORDS)
+        if is_dangerous and not allow_write:
+            return {"error": f"危险操作需 allow_write=True: {query}"}
+
+        if allow_write:
+            conn = sqlite3.connect(str(target))
+        else:
+            conn = sqlite3.connect(f"file:{target}?mode=ro", uri=True)
+
         cursor = conn.cursor()
         if params:
             cursor.execute(query, params)
         else:
             cursor.execute(query)
-        if query.strip().upper().startswith("SELECT") or query.strip().upper().startswith("PRAGMA"):
+        if query_upper.startswith("SELECT") or query_upper.startswith("PRAGMA"):
             rows = cursor.fetchall()
             columns = [d[0] for d in cursor.description] if cursor.description else []
             conn.close()
@@ -62,6 +128,8 @@ def _sqlite_query(db_path: str, query: str, params: list | None = None, **kwargs
             changes = conn.total_changes
             conn.close()
             return {"affected": changes}
+    except ValueError as e:
+        return {"error": str(e)}
     except Exception as e:
         return {"error": f"SQLite 查询失败: {e}"}
 
@@ -90,11 +158,14 @@ def _hash_file(path: str, algorithm: str = "sha256", **kwargs) -> dict:
     """计算文件哈希值"""
     import hashlib
     try:
+        p = _validate_workspace_path(path, kwargs.get("workspace_root"))
         h = hashlib.new(algorithm)
-        with open(path, "rb") as f:
+        with open(p, "rb") as f:
             for chunk in iter(lambda: f.read(8192), b""):
                 h.update(chunk)
         return {"algorithm": algorithm, "hash": h.hexdigest()}
+    except ValueError as e:
+        return {"error": str(e)}
     except Exception as e:
         return {"error": f"哈希计算失败: {e}"}
 
@@ -235,6 +306,7 @@ def register_builtin_tools(registry: ToolRegistry, profile: str = "standard"):
                 "required": ["path", "content"],
             },
             handler=_write_file,
+            require_confirm=True,
         ),
         ToolDef(
             name="exec",
@@ -688,27 +760,43 @@ def _session_status(**kwargs) -> dict:
 
 def _read_file(path: str, **kwargs) -> dict:
     try:
-        p = Path(path).resolve()
+        p = _validate_workspace_path(path, kwargs.get("workspace_root"))
         if not p.exists():
             return {"error": f"文件不存在: {path}"}
-        content = p.read_text(encoding="utf-8")
-        return {"content": content, "path": str(p), "size": len(content)}
+        raw = p.read_bytes()
+        truncated = False
+        if len(raw) > _MAX_READ_BYTES:
+            raw = raw[:_MAX_READ_BYTES]
+            truncated = True
+        content = raw.decode("utf-8", errors="ignore")
+        return {
+            "content": content,
+            "path": str(p),
+            "size": len(content),
+            "truncated": truncated,
+        }
+    except ValueError as e:
+        return {"error": str(e)}
     except Exception as e:
         return {"error": str(e)}
 
 
 def _write_file(path: str, content: str, **kwargs) -> dict:
     try:
-        p = Path(path).resolve()
+        p = _validate_workspace_path(path, kwargs.get("workspace_root"))
+        if len(content.encode("utf-8")) > _MAX_WRITE_BYTES:
+            return {"error": f"内容超过 {_MAX_WRITE_BYTES // (1024 * 1024)}MB 上限"}
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(content, encoding="utf-8")
         return {"success": True, "path": str(p), "size": len(content)}
+    except ValueError as e:
+        return {"error": str(e)}
     except Exception as e:
         return {"error": str(e)}
 
 
-# 危险命令模式 — 命中即拒绝执行（防误操作 + 提示注入兜底）
-# 注意：这不是完整沙箱，仅作兜底；require_confirm=True 仍是主防线
+# 危险命令模式 — 仅审计日志，无内建阻拦；主防线为 require_confirm + DockerSandbox
+# 当前实现仍保留兜底阻拦（命中即拒绝），以覆盖无 Docker 环境的回退路径
 _EXEC_DANGEROUS_PATTERNS = (
     "rm -rf /", "rm -rf ~", "rm -rf *", "rm -rf .",
     "mkfs", "dd of=/dev/sd", "dd of=/dev/nvme",
@@ -720,11 +808,10 @@ _EXEC_DANGEROUS_PATTERNS = (
 
 
 def _exec_command(command: str, timeout: int = 30, **kwargs) -> dict:
-    """执行 shell 命令 — 保留 shell 能力（Agent 设计意图），
-    但增加审计日志与危险命令兜底拒绝。"""
+    """执行 shell 命令 — 优先 Docker 沙箱，回退 subprocess（非沙箱模式）。"""
     _logger = logging.getLogger("clawhermes.tools.exec")
 
-    # 危险命令检测（大小写不敏感）
+    # 危险命令检测（大小写不敏感）— 兜底阻拦
     cmd_lower = command.lower().strip()
     for pattern in _EXEC_DANGEROUS_PATTERNS:
         if pattern in cmd_lower:
@@ -738,6 +825,26 @@ def _exec_command(command: str, timeout: int = 30, **kwargs) -> dict:
     # 审计日志（无论成功失败都记录）
     _logger.warning("exec_command: %r (timeout=%ds)", command, timeout)
 
+    # 优先使用 Docker 沙箱
+    try:
+        from clawhermes.tools.sandbox import DockerSandbox
+        if DockerSandbox.is_available():
+            sandbox = DockerSandbox()
+            result = sandbox.run_command(command, timeout=timeout)
+            if result.exit_code != -1:
+                return {
+                    "stdout": result.stdout[:5000],
+                    "stderr": result.stderr[:2000],
+                    "return_code": result.exit_code,
+                    "command": command,
+                    "sandbox": True,
+                }
+            _logger.warning("Sandbox execution failed (exit=-1), falling back to subprocess")
+    except Exception as e:
+        _logger.warning("Docker sandbox unavailable, falling back to subprocess: %s", e)
+
+    # 回退：非沙箱模式执行
+    _logger.warning("非沙箱模式执行: %r", command)
     try:
         result = subprocess.run(
             command, shell=True, capture_output=True,
@@ -748,6 +855,7 @@ def _exec_command(command: str, timeout: int = 30, **kwargs) -> dict:
             "stderr": result.stderr[:2000],
             "return_code": result.returncode,
             "command": command,
+            "sandbox": False,
         }
     except subprocess.TimeoutExpired:
         return {"error": f"命令超时 ({timeout}s)", "command": command}
@@ -1014,7 +1122,7 @@ def _list_dir(path: str = ".", pattern: str = "*", **kwargs) -> dict:
 
 def _patch_file(path: str, search: str, replace: str, **kwargs) -> dict:
     try:
-        p = Path(path).resolve()
+        p = _validate_workspace_path(path, kwargs.get("workspace_root"))
         if not p.exists():
             return {"error": f"文件不存在: {path}"}
         content = p.read_text(encoding="utf-8")
@@ -1023,6 +1131,8 @@ def _patch_file(path: str, search: str, replace: str, **kwargs) -> dict:
         new_content = content.replace(search, replace, 1)
         p.write_text(new_content, encoding="utf-8")
         return {"success": True, "path": str(p), "replacements": 1}
+    except ValueError as e:
+        return {"error": str(e)}
     except Exception as e:
         return {"error": str(e)}
 
@@ -1065,7 +1175,7 @@ def _grep(pattern: str, path: str = ".", file_pattern: str = "*.py", **kwargs) -
 
 def _search_replace(path: str, search: str, replace: str, all: bool = False, **kwargs) -> dict:
     try:
-        p = Path(path).resolve()
+        p = _validate_workspace_path(path, kwargs.get("workspace_root"))
         if not p.exists():
             return {"error": f"文件不存在: {path}"}
         content = p.read_text(encoding="utf-8")
@@ -1078,11 +1188,35 @@ def _search_replace(path: str, search: str, replace: str, all: bool = False, **k
             new_content = content.replace(search, replace, 1)
         p.write_text(new_content, encoding="utf-8")
         return {"success": True, "path": str(p), "replacements": count if all else 1}
+    except ValueError as e:
+        return {"error": str(e)}
     except Exception as e:
         return {"error": str(e)}
 
 
 def _code_eval(code: str, timeout: int = 10, **kwargs) -> dict:
+    """执行 Python 代码 — 优先 Docker 沙箱，回退 subprocess（非沙箱模式）。"""
+    _logger = logging.getLogger("clawhermes.tools.code_eval")
+
+    # 优先使用 Docker 沙箱
+    try:
+        from clawhermes.tools.sandbox import DockerSandbox
+        if DockerSandbox.is_available():
+            sandbox = DockerSandbox()
+            result = sandbox.run_python(code, timeout=timeout)
+            if result.exit_code != -1:
+                return {
+                    "stdout": result.stdout[:5000],
+                    "stderr": result.stderr[:2000],
+                    "return_code": result.exit_code,
+                    "sandbox": True,
+                }
+            _logger.warning("Sandbox execution failed (exit=-1), falling back to subprocess")
+    except Exception as e:
+        _logger.warning("Docker sandbox unavailable, falling back to subprocess: %s", e)
+
+    # 回退：非沙箱模式执行
+    _logger.warning("非沙箱模式执行 code_eval")
     try:
         result = subprocess.run(
             ["python3", "-c", code],
@@ -1092,6 +1226,7 @@ def _code_eval(code: str, timeout: int = 10, **kwargs) -> dict:
             "stdout": result.stdout[:5000],
             "stderr": result.stderr[:2000],
             "return_code": result.returncode,
+            "sandbox": False,
         }
     except subprocess.TimeoutExpired:
         return {"error": f"代码执行超时 ({timeout}s)"}
@@ -1101,14 +1236,19 @@ def _code_eval(code: str, timeout: int = 10, **kwargs) -> dict:
 
 def _compress_file(path: str, output: str = "", **kwargs) -> dict:
     try:
-        src = Path(path).resolve()
+        src = _validate_workspace_path(path, kwargs.get("workspace_root"))
         if not src.exists():
             return {"error": f"文件不存在: {path}"}
-        dst = Path(output) if output else src.with_suffix(src.suffix + ".gz")
+        if output:
+            dst = _validate_workspace_path(output, kwargs.get("workspace_root"))
+        else:
+            dst = src.with_suffix(src.suffix + ".gz")
         with open(src, "rb") as f_in:
             with gzip.open(dst, "wb") as f_out:
                 f_out.writelines(f_in)
         return {"success": True, "source": str(src), "output": str(dst), "size": dst.stat().st_size}
+    except ValueError as e:
+        return {"error": str(e)}
     except Exception as e:
         return {"error": str(e)}
 
