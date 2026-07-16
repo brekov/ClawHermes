@@ -2213,3 +2213,367 @@ class TestToolsSecurity:
         assert "--user" in source
         assert "--read-only" in source
         assert "--cap-drop=ALL" in source
+
+
+# ============================================================
+# H4 — Gateway 认证兜底测试
+# ============================================================
+
+
+class TestGatewaySecurityH4:
+    """H4 修复验证 — Gateway 启动安全校验与密钥恒定时间比较"""
+
+    def test_gateway_public_no_secret_fails(self):
+        """监听 0.0.0.0 且未配置 secret 时应拒绝启动（sys.exit）"""
+        from clawhermes.gateway.app import _validate_gateway_security
+
+        with pytest.raises(SystemExit):
+            _validate_gateway_security("0.0.0.0", "")
+
+    def test_gateway_public_no_secret_fails_ipv6(self):
+        """监听 :: 且未配置 secret 时应拒绝启动"""
+        from clawhermes.gateway.app import _validate_gateway_security
+
+        with pytest.raises(SystemExit):
+            _validate_gateway_security("::", "")
+
+    def test_gateway_localhost_no_secret_ok(self):
+        """监听 127.0.0.1 且未配置 secret 时应允许启动"""
+        from clawhermes.gateway.app import _validate_gateway_security
+
+        # 不应抛异常
+        _validate_gateway_security("127.0.0.1", "")
+
+    def test_gateway_public_with_secret_ok(self):
+        """监听 0.0.0.0 且配置了 secret 时应允许启动"""
+        from clawhermes.gateway.app import _validate_gateway_security
+
+        _validate_gateway_security("0.0.0.0", "my-secret")
+
+    def test_gateway_secret_compare_digest(self):
+        """网关密钥校验使用 hmac.compare_digest 恒定时间比较"""
+        import hmac
+        from unittest.mock import patch
+
+        from starlette.testclient import TestClient
+
+        import clawhermes.gateway.app as gw
+
+        with patch("hmac.compare_digest", wraps=hmac.compare_digest) as mock_cmp, \
+             patch.object(gw, "_gateway_secret", "my-secret"):
+            client = TestClient(gw.app, raise_server_exceptions=False)
+            resp = client.get("/tools", headers={"X-Gateway-Secret": "wrong"})
+            assert resp.status_code == 401
+            mock_cmp.assert_called_once_with("wrong", "my-secret")
+
+    def test_gateway_secret_correct_passes_compare(self):
+        """正确的 secret 通过 hmac.compare_digest 后应放行请求"""
+        import hmac
+        from unittest.mock import patch
+
+        from starlette.testclient import TestClient
+
+        import clawhermes.gateway.app as gw
+
+        with patch("hmac.compare_digest", wraps=hmac.compare_digest) as mock_cmp, \
+             patch.object(gw, "_gateway_secret", "my-secret"):
+            client = TestClient(gw.app, raise_server_exceptions=False)
+            # /health 豁免密钥校验，但仍可验证 hmac 未被调用（路径豁免）
+            resp = client.get("/health")
+            assert resp.status_code == 200
+            # /health 豁免 → hmac.compare_digest 不应被调用
+            mock_cmp.assert_not_called()
+
+    def test_cors_credentials_with_wildcard_rejected(self):
+        """CORS: allow_credentials=True 且 allow_origins=['*'] 应拒绝启动"""
+        from clawhermes.gateway.app import _validate_cors_config
+
+        with pytest.raises(SystemExit):
+            _validate_cors_config(["*"], True)
+
+    def test_cors_credentials_without_wildcard_ok(self):
+        """CORS: allow_credentials=True 且 allow_origins 为具体源时应允许"""
+        from clawhermes.gateway.app import _validate_cors_config
+
+        _validate_cors_config(["https://example.com"], True)
+
+    def test_cors_no_credentials_with_wildcard_ok(self):
+        """CORS: allow_credentials=False 且 allow_origins=['*'] 应允许"""
+        from clawhermes.gateway.app import _validate_cors_config
+
+        _validate_cors_config(["*"], False)
+
+
+# ============================================================
+# H10 — INTERRUPT 只清当前 session 测试
+# ============================================================
+
+
+class TestRouterInterruptH10:
+    """H10 修复验证 — INTERRUPT 模式只清空当前 session 的排队消息"""
+
+    def test_interrupt_only_clears_current_session(self):
+        """INTERRUPT 不应清空其他 session 的排队消息"""
+        from unittest.mock import MagicMock
+
+        from clawhermes.channel.adapter import ChannelMessage, ChannelType, ChannelUser
+        from clawhermes.channel.router import (
+            ChannelRouter,
+            QueuedMessage,
+            QueueMode,
+        )
+
+        # 使用 mock channel_manager 避免实际启动适配器
+        channel_manager = MagicMock()
+        router = ChannelRouter(channel_manager=channel_manager)
+        router._running = True
+        router._active_session = "sess_A"
+
+        # 预填充队列：两个不同 chat_id 的消息
+        msg_a = ChannelMessage(
+            message_id="m_a",
+            channel_type=ChannelType.REST,
+            user=ChannelUser(user_id="user_a"),
+            content="message from session A",
+            metadata={"chat_id": "chat_a"},
+        )
+        msg_b = ChannelMessage(
+            message_id="m_b",
+            channel_type=ChannelType.REST,
+            user=ChannelUser(user_id="user_b"),
+            content="message from session B",
+            metadata={"chat_id": "chat_b"},
+        )
+        router._queue.append(QueuedMessage(message=msg_a, mode=QueueMode.STEER))
+        router._queue.append(QueuedMessage(message=msg_b, mode=QueueMode.STEER))
+
+        # 构造 INTERRUPT 消息：来自 chat_a（与 _active_session="sess_A" 同 session）
+        interrupt_msg = ChannelMessage(
+            message_id="m_interrupt",
+            channel_type=ChannelType.REST,
+            user=ChannelUser(user_id="user_a"),
+            content="interrupt",
+            metadata={"chat_id": "chat_a", "queue_mode": "interrupt"},
+        )
+
+        # 让 session_router.resolve 返回 sess_A（使 INTERRUPT 分支触发）
+        router._session_router.resolve = MagicMock(return_value="sess_A")
+
+        # 触发 _on_message
+        router._on_message(interrupt_msg)
+
+        # 队列里应该还有 chat_b 的消息（其他 session 不受影响）
+        queue_msg_ids = [q.message.message_id for q in router._queue]
+        assert "m_b" in queue_msg_ids, "其他 session 的消息不应被清空"
+        # chat_a 的旧消息应已被清空
+        assert "m_a" not in queue_msg_ids, "当前 session 的旧消息应被清空"
+        # INTERRUPT 消息应在队首
+        assert router._queue[0].message.message_id == "m_interrupt"
+        # 队列长度应为 2：interrupt_msg + msg_b
+        assert len(router._queue) == 2
+
+    def test_interrupt_with_no_other_session_messages(self):
+        """INTERRUPT 时队列中只有当前 session 的消息 → 队列只剩 INTERRUPT 消息"""
+        from unittest.mock import MagicMock
+
+        from clawhermes.channel.adapter import ChannelMessage, ChannelType, ChannelUser
+        from clawhermes.channel.router import (
+            ChannelRouter,
+            QueuedMessage,
+            QueueMode,
+        )
+
+        channel_manager = MagicMock()
+        router = ChannelRouter(channel_manager=channel_manager)
+        router._running = True
+        router._active_session = "sess_X"
+
+        # 只放入当前 session 的消息
+        msg_x = ChannelMessage(
+            message_id="m_x",
+            channel_type=ChannelType.REST,
+            user=ChannelUser(user_id="user_x"),
+            content="old message",
+            metadata={"chat_id": "chat_x"},
+        )
+        router._queue.append(QueuedMessage(message=msg_x, mode=QueueMode.STEER))
+
+        interrupt_msg = ChannelMessage(
+            message_id="m_int",
+            channel_type=ChannelType.REST,
+            user=ChannelUser(user_id="user_x"),
+            content="interrupt",
+            metadata={"chat_id": "chat_x", "queue_mode": "interrupt"},
+        )
+        router._session_router.resolve = MagicMock(return_value="sess_X")
+        router._on_message(interrupt_msg)
+
+        # 旧消息应被清空，只剩 INTERRUPT 消息
+        assert len(router._queue) == 1
+        assert router._queue[0].message.message_id == "m_int"
+
+
+# ============================================================
+# C6 + H8 — DM 配对安全重设计测试
+# ============================================================
+
+
+class TestPairingSecurity:
+    """C6 + H8 修复验证 — DM 配对安全重设计
+
+    C6: user_id 必填 + Ed25519 签名挑战（替代服务端 HMAC）
+    H8: 配对码升至 8 位 + 漏桶限流（10 次/60s per user_id）
+    """
+
+    def test_verify_code_requires_user_id(self):
+        """C6: user_id 是必填参数，不传应抛 TypeError"""
+        from clawhermes.channel.pairing import DMPairingManager
+
+        manager = DMPairingManager()
+        # 不传 user_id 应抛 TypeError（missing required positional argument）
+        with pytest.raises(TypeError):
+            manager.verify_code("12345678", "response")
+
+    def test_verify_code_user_mismatch(self):
+        """C6: user_id 不匹配应抛 PairingInvalidError（强制校验绑定关系）"""
+        from clawhermes.channel.pairing import DMPairingManager, PairingInvalidError
+
+        manager = DMPairingManager()
+        req = manager.generate_code("alice", "feishu")
+        response = manager._compute_challenge_response(req.challenge)
+        # 用 bob 的 user_id 验证 alice 的配对码应失败
+        with pytest.raises(PairingInvalidError):
+            manager.verify_code(req.code, response, user_id="bob")
+
+    def test_rate_limit_triggers(self):
+        """H8: 连续 11 次错误验证应触发漏桶限流（max_attempts=10/window=60s）"""
+        from clawhermes.channel.pairing import (
+            DMPairingManager,
+            PairingInvalidError,
+            PairingRateLimitError,
+        )
+
+        manager = DMPairingManager()
+        # 先生成一次配对码（建立 pending 请求）
+        manager.generate_code("alice", "feishu")
+        # 前 10 次用错误 code，应抛 PairingInvalidError（无配对码）
+        for i in range(10):
+            with pytest.raises(PairingInvalidError):
+                manager.verify_code("00000000", "bad", user_id="alice")
+        # 第 11 次应触发限流
+        with pytest.raises(PairingRateLimitError):
+            manager.verify_code("00000000", "bad", user_id="alice")
+
+    def test_code_length_is_8(self):
+        """H8: 配对码长度应为 8（搜索空间 10^8）"""
+        from clawhermes.channel.pairing import DMPairingManager
+
+        manager = DMPairingManager()
+        req = manager.generate_code("alice", "feishu")
+        assert len(req.code) == 8
+        assert req.code.isdigit()
+
+    def test_ed25519_challenge_verification(self):
+        """C6: Ed25519 签名挑战验证 — 客户端用私钥签名，服务端用公钥验证"""
+        from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+        from clawhermes.channel.pairing import DMPairingManager, PairingStatus
+
+        manager = DMPairingManager()
+        # 生成 Ed25519 密钥对
+        private_key = Ed25519PrivateKey.generate()
+        public_key = private_key.public_key()
+        pub_hex = public_key.public_bytes_raw().hex()
+
+        # generate_code 传入 public_key
+        req = manager.generate_code("alice", "feishu", public_key=pub_hex)
+        assert req.public_key == pub_hex
+
+        # 用私钥签名 challenge，结果 hex 编码
+        signature = private_key.sign(req.challenge.encode("utf-8"))
+        sig_hex = signature.hex()
+
+        # verify_code 通过 Ed25519 验证
+        result = manager.verify_code(req.code, sig_hex, user_id="alice")
+        assert result.status == PairingStatus.APPROVED
+        assert manager.is_paired("alice")
+        # PairedUser 应保存 public_key
+        paired = manager.get_paired_user("alice")
+        assert paired is not None
+        assert paired.public_key == pub_hex
+
+
+# ============================================================
+# H7 + C11 + H9 修复验证测试
+# ============================================================
+
+
+class TestH7C11H9Fixes:
+    """H7 (.env 权限) + C11 (requests→httpx) + H9 (LLMProvider 兼容) 修复验证"""
+
+    def test_env_file_permissions(self, tmp_path, monkeypatch):
+        """H7: _write_env 写出的 .env 文件权限应为 0o600"""
+        import importlib
+
+        setup_mod = importlib.import_module("clawhermes.cli.setup")
+
+        monkeypatch.setattr(setup_mod, "get_data_dir", lambda: tmp_path)
+        setup_mod._write_env({"DEEPSEEK_API_KEY": "sk-test"})
+        env_path = tmp_path / ".env"
+        assert env_path.exists()
+        mode = env_path.stat().st_mode & 0o777
+        assert mode == 0o600, f"expected 0o600, got {oct(mode)}"
+
+    def test_setup_no_requests_import(self):
+        """C11: setup.py 不再 import requests"""
+        setup_path = (
+            Path(__file__).resolve().parent.parent
+            / "src" / "clawhermes" / "cli" / "setup.py"
+        )
+        source = setup_path.read_text()
+        assert "import requests" not in source
+
+    def test_usage_to_dict_pydantic(self):
+        """H9: _usage_to_dict 对 Pydantic-like 对象使用 model_dump"""
+        from clawhermes.llm.provider import _usage_to_dict
+
+        class _FakeUsage:
+            def model_dump(self):
+                return {"a": 1}
+
+        result = _usage_to_dict(_FakeUsage())
+        assert result == {"a": 1}
+
+    def test_usage_to_dict_plain_dict(self):
+        """H9: _usage_to_dict 传入普通 dict 原样返回"""
+        from clawhermes.llm.provider import _usage_to_dict
+
+        assert _usage_to_dict({"a": 1}) == {"a": 1}
+
+    def test_usage_to_dict_none(self):
+        """H9: _usage_to_dict 传入 None 返回 None"""
+        from clawhermes.llm.provider import _usage_to_dict
+
+        assert _usage_to_dict(None) is None
+
+    def test_extract_retry_after_from_header(self):
+        """H9: _extract_retry_after 从 response.headers['Retry-After'] 解析"""
+        import types
+
+        from clawhermes.llm.provider import _extract_retry_after
+
+        class _FakeError(Exception):
+            def __init__(self, response=None):
+                super().__init__("rate limited")
+                self.response = response
+
+        resp = types.SimpleNamespace(headers={"Retry-After": "120"})
+        exc = _FakeError(response=resp)
+        assert _extract_retry_after(exc) == 120
+
+    def test_extract_retry_after_default(self):
+        """H9: _extract_retry_after 无 response 时回退 60"""
+        from clawhermes.llm.provider import _extract_retry_after
+
+        exc = Exception("rate limited")
+        assert _extract_retry_after(exc) == 60

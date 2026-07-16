@@ -23,6 +23,40 @@ from clawhermes.agent.exceptions import (
 logger = logging.getLogger(__name__)
 
 
+def _usage_to_dict(usage: Any) -> dict | None:
+    """将 litellm 返回的 usage 对象转为 dict。
+
+    新版 litellm 使用 Pydantic 模型，``dict(usage)`` 会抛 TypeError；
+    旧版使用简单对象/NamedTuple，``dict(usage)`` 可正常工作。
+    本函数兼容两种形态。
+    """
+    if usage is None:
+        return None
+    if hasattr(usage, "model_dump"):
+        return usage.model_dump()
+    if hasattr(usage, "__dict__"):
+        return dict(vars(usage))
+    try:
+        return dict(usage)
+    except (TypeError, ValueError):
+        return None
+
+
+def _extract_retry_after(exc: Exception) -> int:
+    """从异常的 response headers 中解析 Retry-After，失败回退 60 秒。"""
+    retry_after = 60
+    try:
+        resp = getattr(exc, "response", None)
+        if resp is not None:
+            headers = getattr(resp, "headers", {}) or {}
+            ra = headers.get("Retry-After") or headers.get("retry-after")
+            if ra:
+                retry_after = int(ra)
+    except (ValueError, TypeError, AttributeError):
+        pass
+    return retry_after
+
+
 @dataclass
 class LLMResponse:
     content: str | None
@@ -164,7 +198,7 @@ class LLMProvider:
                     [tc.model_dump() for tc in choice.message.tool_calls]
                     if choice.message.tool_calls else None
                 ),
-                usage=dict(response.usage) if response.usage else None,
+                usage=_usage_to_dict(response.usage),
                 model=response.model,
                 duration_ms=duration,
                 raw=response,
@@ -173,7 +207,7 @@ class LLMProvider:
             if self.credential_pool and used_key:
                 self.credential_pool.mark_failed(used_key, 429)
             raise LLMRateLimitError(
-                f"速率限制: {e}", retry_after=60,
+                f"速率限制: {e}", retry_after=_extract_retry_after(e),
             ) from e
         except litellm.AuthenticationError as e:
             if self.credential_pool and used_key:
@@ -207,7 +241,7 @@ class LLMProvider:
                     [tc.model_dump() for tc in choice.message.tool_calls]
                     if choice.message.tool_calls else None
                 ),
-                usage=dict(response.usage) if response.usage else None,
+                usage=_usage_to_dict(response.usage),
                 model=response.model,
                 duration_ms=duration,
                 raw=response,
@@ -216,7 +250,7 @@ class LLMProvider:
             if self.credential_pool and used_key:
                 self.credential_pool.mark_failed(used_key, 429)
             raise LLMRateLimitError(
-                f"速率限制: {e}", retry_after=60,
+                f"速率限制: {e}", retry_after=_extract_retry_after(e),
             ) from e
         except litellm.AuthenticationError as e:
             if self.credential_pool and used_key:
@@ -278,7 +312,7 @@ class LLMProvider:
         async for chunk in response:
             # usage chunk（stream_options=include_usage 时单独出现）
             if hasattr(chunk, "usage") and chunk.usage:
-                final_usage = dict(chunk.usage)
+                final_usage = _usage_to_dict(chunk.usage)
 
             if not chunk.choices:
                 continue

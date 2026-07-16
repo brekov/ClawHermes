@@ -214,7 +214,12 @@ class ChannelRouter:
 
         if self._active_session is not None and session_id == self._active_session:
             if mode == QueueMode.INTERRUPT:
-                self._queue.clear()
+                # H10: 只清空当前 session 的排队消息，保留其他 session 的消息
+                chat_id = qm.message.metadata.get("chat_id", qm.message.user.user_id)
+                self._queue = [
+                    q for q in self._queue
+                    if q.message.metadata.get("chat_id", q.message.user.user_id) != chat_id
+                ]
                 self._queue.insert(0, qm)
             elif mode == QueueMode.STEER:
                 self._queue.append(qm)

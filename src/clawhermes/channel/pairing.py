@@ -39,6 +39,10 @@ class PairingDeniedError(PairingError):
     """配对被拒绝"""
 
 
+class PairingRateLimitError(PairingError):
+    """验证尝试过于频繁（触发漏桶限流）"""
+
+
 class PairingStatus(str, Enum):
     PENDING = "pending"
     APPROVED = "approved"
@@ -60,6 +64,8 @@ class PairingRequest:
     status: PairingStatus = PairingStatus.PENDING
     approved_by: str = ""
     approved_at: float = 0.0
+    # C6: 客户端 Ed25519 公钥（hex），非空时 verify_code 改用 Ed25519 签名验证挑战
+    public_key: str = ""
 
     @property
     def is_expired(self) -> bool:
@@ -79,6 +85,8 @@ class PairedUser:
     paired_at: float
     approved_by: str
     last_active: float = field(default_factory=time.time)
+    # C6: 客户端 Ed25519 公钥（hex），用于后续消息签名验证
+    public_key: str = ""
 
 
 class DMPairingManager:
@@ -92,8 +100,8 @@ class DMPairingManager:
     4. 已配对用户管理
     """
 
-    # 配对码长度
-    CODE_LENGTH: int = 6
+    # 配对码长度（H8: 6 -> 8，扩大搜索空间至 10^8）
+    CODE_LENGTH: int = 8
     # 配对码 TTL（秒）
     CODE_TTL: int = 300
     # 签名挑战 nonce TTL
@@ -106,6 +114,8 @@ class DMPairingManager:
         self._paired: dict[str, PairedUser] = {}            # user_id -> PairedUser
         self._challenges: dict[str, tuple[str, float]] = {}  # challenge -> (user_id, expires)
         self._allowlist: set[str] = set()                   # admin allowlist
+        # H8: 漏桶限流 — user_id -> [验证尝试时间戳]
+        self._rate_limiter: dict[str, list[float]] = {}
         self._lock = threading.RLock()  # 可重入锁，保护 _pending/_paired/_challenges
 
         # 从持久化存储加载 signing_key 和已配对用户
@@ -122,11 +132,12 @@ class DMPairingManager:
     # ── 配对码管理 ──────────────────────────────────────
 
     def generate_code(self, user_id: str, platform: str,
-                      device_family: str = "") -> PairingRequest:
+                      device_family: str = "", public_key: str = "") -> PairingRequest:
         """
         由管理员调用，为新用户生成配对码
 
-        返回 PairingRequest，code 为 6 位数字
+        返回 PairingRequest，code 为 8 位数字。
+        public_key 为可选的 Ed25519 公钥（hex），非空时验证改用签名校验。
         """
         with self._lock:
             code = secrets.randbelow(10 ** self.CODE_LENGTH)
@@ -140,6 +151,7 @@ class DMPairingManager:
                 user_id=user_id,
                 platform=platform,
                 device_family=device_family,
+                public_key=public_key,
             )
 
             self._pending[code_str] = request
@@ -150,13 +162,19 @@ class DMPairingManager:
             return request
 
     def verify_code(self, code: str, challenge_response: str,
-                    user_id: str | None = None) -> PairingRequest:
+                    user_id: str) -> PairingRequest:
         """
         用户提交配对码和挑战响应进行验证
+
+        C6: user_id 改为必填，强制校验配对码与用户绑定关系
+        H8: 调用前先经过漏桶限流（10 次/60s per user_id）
+        C6: 若 request.public_key 非空，改用 Ed25519 签名验证挑战；否则回退 HMAC
 
         验证通过后状态变为 APPROVED
         """
         with self._lock:
+            # H8: 漏桶限流 — 无论后续验证成功失败均记录本次尝试
+            self._check_rate_limit(user_id)
             self._cleanup_expired()
 
             request = self._pending.get(code)
@@ -169,13 +187,20 @@ class DMPairingManager:
                     raise PairingExpiredError(f"配对码已过期: {code}")
                 raise PairingInvalidError(f"配对码状态异常: {request.status}")
 
-            if user_id and request.user_id != user_id:
+            # C6: 强制校验 user_id 绑定（删除可选前缀）
+            if request.user_id != user_id:
                 raise PairingInvalidError("配对码与用户不匹配")
 
-            # 验证 HMAC 挑战响应
-            expected = self._compute_challenge_response(request.challenge)
-            if not hmac.compare_digest(challenge_response, expected):
-                raise PairingInvalidError("挑战响应验证失败")
+            # C6: 挑战响应验证 — Ed25519 优先，回退 HMAC（向后兼容）
+            if request.public_key:
+                if not self.verify_challenge_signature(
+                    request.challenge, challenge_response, request.public_key
+                ):
+                    raise PairingInvalidError("挑战响应验证失败")
+            else:
+                expected = self._compute_challenge_response(request.challenge)
+                if not hmac.compare_digest(challenge_response, expected):
+                    raise PairingInvalidError("挑战响应验证失败")
 
             request.status = PairingStatus.APPROVED
             request.approved_at = time.time()
@@ -187,6 +212,7 @@ class DMPairingManager:
                 device_family=request.device_family,
                 paired_at=time.time(),
                 approved_by=request.approved_by or "self",
+                public_key=request.public_key,
             )
 
             logger.info("Pairing verified: user=%s platform=%s", request.user_id, request.platform)
@@ -344,6 +370,55 @@ class DMPairingManager:
             hashlib.sha256,
         ).hexdigest()
 
+    def verify_challenge_signature(self, challenge: str, signature: str,
+                                   public_key: str) -> bool:
+        """
+        C6: 用 Ed25519 公钥验证挑战签名
+
+        - challenge: 原始挑战字符串
+        - signature: Ed25519 签名的 hex 编码
+        - public_key: Ed25519 公钥的 hex 编码
+
+        返回 True 表示签名有效，False 表示无效或格式错误。
+        """
+        try:
+            from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+
+            pub_bytes = bytes.fromhex(public_key)
+            sig_bytes = bytes.fromhex(signature)
+            pub_key = Ed25519PublicKey.from_public_bytes(pub_bytes)
+            pub_key.verify(sig_bytes, challenge.encode("utf-8"))
+            return True
+        except Exception as e:
+            logger.warning("Ed25519 challenge signature verification failed: %s", e)
+            return False
+
+    def _check_rate_limit(self, user_id: str, max_attempts: int = 10,
+                          window: int = 60) -> None:
+        """
+        H8: 漏桶限流 — 每个 user_id 在 window 秒内最多 max_attempts 次验证尝试
+
+        清理 window 外的旧时间戳；若当前窗口内已满 max_attempts 则抛
+        PairingRateLimitError；否则记录本次尝试时间戳。
+
+        无论后续验证成功失败，时间戳均在此记录（在 verify_code 开头调用）。
+        """
+        now = time.time()
+        timestamps = self._rate_limiter.get(user_id, [])
+        # 清理 window 外的旧时间戳
+        cutoff = now - window
+        timestamps = [ts for ts in timestamps if ts > cutoff]
+        # 当前窗口内已满则拒绝
+        if len(timestamps) >= max_attempts:
+            self._rate_limiter[user_id] = timestamps
+            raise PairingRateLimitError(
+                f"验证尝试过于频繁: user={user_id}, "
+                f"attempts={len(timestamps)}/{max_attempts} in {window}s"
+            )
+        # 记录本次尝试时间戳
+        timestamps.append(now)
+        self._rate_limiter[user_id] = timestamps
+
     def _cleanup_expired(self) -> None:
         """清理过期的 pending 配对请求"""
         expired_codes = [
@@ -381,6 +456,7 @@ class DMPairingManager:
                     paired_at=item["paired_at"],
                     approved_by=item.get("approved_by", ""),
                     last_active=item.get("last_active", item["paired_at"]),
+                    public_key=item.get("public_key", ""),
                 )
                 self._paired[user.user_id] = user
             logger.info("Loaded %d paired users from %s", len(self._paired), self._db_path)
@@ -402,6 +478,7 @@ class DMPairingManager:
                         "paired_at": u.paired_at,
                         "approved_by": u.approved_by,
                         "last_active": u.last_active,
+                        "public_key": u.public_key,
                     }
                     for u in self._paired.values()
                 ],

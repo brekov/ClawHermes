@@ -4,8 +4,10 @@ ClawHermes - Gateway HTTP API
 from __future__ import annotations
 
 import asyncio
+import hmac
 import logging
 import os
+import sys
 import time
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -331,11 +333,42 @@ async def lifespan(app: FastAPI):
 
 _cors_origins = [o.strip() for o in os.getenv("CH_CORS_ORIGINS", "*").split(",") if o.strip()]
 _gateway_secret = os.getenv("CH_GATEWAY_SECRET", "")
+
+
+def _validate_gateway_security(host: str, secret: str) -> None:
+    """fail-fast: 公网监听（0.0.0.0 / ::）必须配置网关密钥，否则拒绝启动。
+
+    防止用户在公网暴露无鉴权的 Gateway。在 __main__ 启动 uvicorn 前调用。
+    """
+    if not secret and host in ("0.0.0.0", "::"):
+        logger.error(
+            "CH_GATEWAY_SECRET 未配置且监听地址为 %s，拒绝启动（公网暴露无鉴权）", host
+        )
+        sys.exit(1)
+
+
+def _validate_cors_config(allow_origins: list[str], allow_credentials: bool) -> None:
+    """fail-fast: CORS 凭证与通配源互斥（浏览器规范禁止此组合）。
+
+    allow_credentials=True 且 allow_origins=['*'] 会被浏览器拒绝，
+    启动时直接报错而非运行时静默失效。
+    """
+    if allow_credentials and allow_origins == ["*"]:
+        logger.error(
+            "CORS 配置冲突：allow_credentials=True 与 allow_origins=['*'] 互斥，拒绝启动"
+        )
+        sys.exit(1)
+
+
+# CORS 配置：通配源时禁用 credentials（浏览器规范），并 fail-fast 校验互斥
+_cors_allow_credentials = _cors_origins != ["*"]
+_validate_cors_config(_cors_origins, _cors_allow_credentials)
+
 app = FastAPI(title="ClawHermes Gateway", version=__version__, lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_origins,
-    allow_credentials=(_cors_origins != ["*"]),
+    allow_credentials=_cors_allow_credentials,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -343,9 +376,13 @@ app.add_middleware(
 
 @app.middleware("http")
 async def _gateway_secret_middleware(request: Request, call_next):
-    """网关密钥校验：配置了 CH_GATEWAY_SECRET 时，除 /health 外所有请求需携带 X-Gateway-Secret 头"""
+    """网关密钥校验：配置了 CH_GATEWAY_SECRET 时，除 /health 外所有请求需携带 X-Gateway-Secret 头。
+
+    使用 hmac.compare_digest 进行恒定时间比较，避免计时侧信道攻击。
+    """
     if _gateway_secret and request.url.path != "/health":
-        if request.headers.get("X-Gateway-Secret") != _gateway_secret:
+        received = request.headers.get("X-Gateway-Secret", "")
+        if not hmac.compare_digest(received, _gateway_secret):
             return JSONResponse(status_code=401, content={"detail": "网关密钥无效或缺失"})
     return await call_next(request)
 
@@ -371,6 +408,9 @@ if __name__ == "__main__":
     parser.add_argument("--host", default=os.environ.get("CH_GATEWAY_HOST", "127.0.0.1"))
     parser.add_argument("--port", type=int, default=int(os.environ.get("CH_GATEWAY_PORT", "18789")))
     args = parser.parse_args()
+
+    # fail-fast: 公网监听必须配置 secret，防止无鉴权暴露
+    _validate_gateway_security(args.host, _gateway_secret)
 
     uvicorn.run(app, host=args.host, port=args.port, log_level="info")
 
