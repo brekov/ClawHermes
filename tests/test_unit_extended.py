@@ -108,7 +108,12 @@ class TestToolProfiles:
         assert "minimal" in PROFILE_MAP
         assert "standard" in PROFILE_MAP
         assert "full" in PROFILE_MAP
-        assert MINIMAL_TOOLS < STANDARD_TOOLS < FULL_TOOLS
+        # exec 仅在 minimal profile 中，standard/full 已移除（安全加固）
+        assert "exec" in MINIMAL_TOOLS
+        assert "exec" not in STANDARD_TOOLS
+        assert "exec" not in FULL_TOOLS
+        # minimal（去掉 exec 后）是 standard 的子集
+        assert (MINIMAL_TOOLS - {"exec"}) < STANDARD_TOOLS < FULL_TOOLS
 
     def test_minimal_profile(self):
         registry = ToolRegistry()
@@ -122,7 +127,7 @@ class TestToolProfiles:
         register_builtin_tools(registry, profile="standard")
         names = {t.name for t in registry.list()}
         assert names == STANDARD_TOOLS
-        assert len(names) == 9
+        assert len(names) == 8
 
     def test_full_profile(self):
         registry = ToolRegistry()
@@ -134,7 +139,7 @@ class TestToolProfiles:
     def test_default_profile_is_standard(self):
         registry = ToolRegistry()
         register_builtin_tools(registry)
-        assert len(registry.list()) == 9
+        assert len(registry.list()) == 8
 
 
 class TestBuiltinTools:
@@ -2071,3 +2076,140 @@ async def test_chat_stream_persists_messages():
 
     # 应有 done 事件
     assert events[-1]["event"] == "done"
+
+
+# ============================================================
+# H1 — ScopedPath 路径穿越防护测试
+# ============================================================
+
+
+class TestScopedPath:
+    """H1 修复验证 — ScopedPath 校验器与技能/Agent 名称加固"""
+
+    def test_scoped_path_valid(self, tmp_path):
+        """合法名称正常 resolve"""
+        from clawhermes.util.scoped_path import ScopedPath
+
+        scoped = ScopedPath(tmp_path)
+        path = scoped.resolve("my_skill", ".md")
+        assert path == tmp_path.resolve() / "my_skill.md"
+        assert path.is_relative_to(tmp_path.resolve())
+
+    def test_scoped_path_traversal(self, tmp_path):
+        """路径穿越名称应被拒绝"""
+        from clawhermes.util.scoped_path import ScopedPath
+
+        scoped = ScopedPath(tmp_path)
+        with pytest.raises(ConfigValidationError):
+            scoped.resolve("../../.ssh/authorized_keys", ".md")
+
+    def test_scoped_path_absolute(self, tmp_path):
+        """绝对路径名称应被拒绝"""
+        from clawhermes.util.scoped_path import ScopedPath
+
+        scoped = ScopedPath(tmp_path)
+        with pytest.raises(ConfigValidationError):
+            scoped.resolve("/etc/passwd")
+
+    def test_scoped_path_special_chars(self, tmp_path):
+        """含特殊字符/命令注入的名称应被拒绝"""
+        from clawhermes.util.scoped_path import ScopedPath
+
+        scoped = ScopedPath(tmp_path)
+        with pytest.raises(ConfigValidationError):
+            scoped.resolve("skill;rm -rf /")
+
+    def test_skill_manager_rejects_traversal(self, tmp_path):
+        """SkillManager.create 应拒绝路径穿越名称"""
+        from clawhermes.skills.manager import SkillManager
+
+        sm = SkillManager(tmp_path)
+        with pytest.raises(ConfigValidationError):
+            sm.create(name="../../.ssh/authorized_keys", content="evil", description="d")
+        # 确保没有文件被写到 skills_dir 之外
+        assert not (tmp_path.parent.parent / ".ssh").exists()
+
+    def test_agent_mgr_rejects_traversal(self, tmp_path, monkeypatch):
+        """create_agent 应拒绝路径穿越名称"""
+        from clawhermes.agent import agent_mgr
+
+        monkeypatch.setenv("CH_DATA_DIR", str(tmp_path))
+        with pytest.raises(ConfigValidationError):
+            agent_mgr.create_agent(name="../evil")
+        # 确保没有目录被写到 agents_dir 之外
+        assert not (tmp_path / "evil").exists()
+
+
+# ============================================================
+# H2 + H3 + C4 + C5 + M10 — 工具安全加固测试
+# ============================================================
+
+
+class TestToolsSecurity:
+    """工具安全加固验证：文件白名单、SQLite 只读、沙箱收敛"""
+
+    def test_read_file_workspace_escape(self, tmp_path):
+        """H2: read_file 拒绝 workspace 越界路径"""
+        from clawhermes.tools.builtin import _read_file
+
+        result = _read_file("/etc/passwd", workspace_root=str(tmp_path))
+        assert "error" in result
+        assert "越界" in result["error"]
+
+    def test_write_file_require_confirm(self):
+        """H2: write_file ToolDef 标记 require_confirm=True"""
+        registry = ToolRegistry()
+        register_builtin_tools(registry, profile="minimal")
+        tool = registry.get("write_file")
+        assert tool is not None
+        assert tool.require_confirm is True
+
+    def test_sqlite_default_readonly(self, tmp_path):
+        """H3: 默认只读模式不允许写操作"""
+        import sqlite3
+
+        from clawhermes.tools.builtin import _sqlite_query
+
+        db = tmp_path / "test.db"
+        # 先创建空数据库以通过 readonly 连接
+        conn = sqlite3.connect(str(db))
+        conn.close()
+        result = _sqlite_query(
+            db_path=str(db),
+            query="CREATE TABLE t(x)",
+            data_dir=str(tmp_path),
+        )
+        assert "error" in result
+
+    def test_sqlite_allow_write(self, tmp_path):
+        """H3: allow_write=True 时允许写操作"""
+        import sqlite3
+
+        from clawhermes.tools.builtin import _sqlite_query
+
+        db = tmp_path / "test.db"
+        conn = sqlite3.connect(str(db))
+        conn.close()
+        result = _sqlite_query(
+            db_path=str(db),
+            query="CREATE TABLE t(x)",
+            allow_write=True,
+            data_dir=str(tmp_path),
+        )
+        assert "error" not in result
+        assert "affected" in result
+
+    def test_standard_tools_no_exec(self):
+        """M10: exec 不在 STANDARD_TOOLS 中"""
+        assert "exec" not in STANDARD_TOOLS
+
+    def test_docker_sandbox_hardening_flags(self):
+        """C4+C5: DockerSandbox._run_container 含安全加固参数"""
+        import inspect
+
+        from clawhermes.tools.sandbox import DockerSandbox
+
+        source = inspect.getsource(DockerSandbox._run_container)
+        assert "--user" in source
+        assert "--read-only" in source
+        assert "--cap-drop=ALL" in source

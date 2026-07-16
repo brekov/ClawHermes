@@ -12,6 +12,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import List
 
+from clawhermes.util.scoped_path import ScopedPath
+
 logger = logging.getLogger(__name__)
 
 
@@ -36,6 +38,7 @@ class SkillManager:
     def __init__(self, skills_dir: str | Path):
         self.skills_dir = Path(skills_dir)
         self.skills_dir.mkdir(parents=True, exist_ok=True)
+        self._scoped = ScopedPath(self.skills_dir)
         self._skills: dict[str, Skill] = {}
         self._lock = threading.RLock()  # 保护 _skills dict 与文件 I/O（被 to_thread 并发调用）
         self._load_all()
@@ -69,7 +72,7 @@ class SkillManager:
     def _save_meta(self, skill: Skill):
         """保存技能元数据"""
         with self._lock:
-            meta_file = self.skills_dir / f"{skill.name}.json"
+            meta_file = self._scoped.resolve(skill.name, ".json")
             meta_file.write_text(json.dumps({
                 "description": skill.description,
                 "category": skill.category,
@@ -94,6 +97,7 @@ class SkillManager:
     def create(self, name: str, content: str, description: str = "", category: str = "general") -> Skill:
         """创建新技能"""
         with self._lock:
+            self._scoped.validate_name(name)
             skill = Skill(
                 name=name,
                 content=content,
@@ -102,7 +106,7 @@ class SkillManager:
                 created_at=time.time(),
                 source="user",
             )
-            skill_file = self.skills_dir / f"{name}.md"
+            skill_file = self._scoped.resolve(name, ".md")
             skill_file.write_text(content, encoding="utf-8")
             self._save_meta(skill)
             self._skills[name] = skill
@@ -112,6 +116,7 @@ class SkillManager:
     def update(self, name: str, **kwargs) -> Skill | None:
         """更新技能"""
         with self._lock:
+            self._scoped.validate_name(name)
             skill = self.get(name)
             if not skill:
                 return None
@@ -119,7 +124,7 @@ class SkillManager:
                 if hasattr(skill, k):
                     setattr(skill, k, v)
             if "content" in kwargs:
-                skill_file = self.skills_dir / f"{name}.md"
+                skill_file = self._scoped.resolve(name, ".md")
                 skill_file.write_text(kwargs["content"], encoding="utf-8")
             self._save_meta(skill)
             return skill

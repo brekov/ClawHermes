@@ -70,16 +70,16 @@ def test_tool_registry_and_dispatch():
     register_builtin_tools(registry)
 
     tools = registry.list()
-    assert len(tools) == 9
+    assert len(tools) == 8
     names = {t.name for t in tools}
     assert names == {
-        "session_status", "read_file", "write_file", "exec",
+        "session_status", "read_file", "write_file",
         "get_time", "web_search", "memory_search", "memory_save",
         "delegate_task",
     }
 
     schemas = registry.schemas()
-    assert len(schemas) == 9
+    assert len(schemas) == 8
     print(f"✅ 工具系统 OK → {len(tools)} 个工具")
 
 
@@ -91,7 +91,7 @@ def test_tool_profiles():
 
     registry_std = ToolRegistry()
     register_builtin_tools(registry_std, profile="standard")
-    assert len(registry_std.list()) == 9
+    assert len(registry_std.list()) == 8
 
     registry_full = ToolRegistry()
     register_builtin_tools(registry_full, profile="full")
@@ -104,7 +104,7 @@ def test_tool_profiles():
     assert "grep" in full_names
     assert "search_replace" in full_names
     assert "code_eval" in full_names
-    print("✅ 工具 profiles OK → minimal=5, standard=9, full=15")
+    print("✅ 工具 profiles OK → minimal=5, standard=8, full=15")
 
 
 def test_system_prompt_three_layers():
