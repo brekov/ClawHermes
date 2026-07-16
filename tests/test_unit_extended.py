@@ -14,6 +14,7 @@ import pytest
 
 from clawhermes.agent.exceptions import (
     ClawHermesError,
+    ClawHermesMemoryError,
     ConfigError,
     ConfigNotFoundError,
     ConfigValidationError,
@@ -21,7 +22,6 @@ from clawhermes.agent.exceptions import (
     LLMError,
     LLMRateLimitError,
     LLMResponseError,
-    MemoryError,
     MemorySearchError,
     MemoryStorageError,
     SessionError,
@@ -79,11 +79,11 @@ class TestExceptionHierarchy:
     def test_memory_exceptions(self):
         e = MemoryStorageError("store fail", provider="chromadb")
         assert e.provider == "chromadb"
-        assert isinstance(e, MemoryError)
+        assert isinstance(e, ClawHermesMemoryError)
 
         e = MemorySearchError("search fail", provider="json")
         assert e.provider == "json"
-        assert isinstance(e, MemoryError)
+        assert isinstance(e, ClawHermesMemoryError)
 
     def test_config_exceptions(self):
         e = ConfigValidationError("invalid", field="api_key")
@@ -1657,11 +1657,10 @@ class TestAgentConfig:
         from clawhermes.agent.loop import AgentConfig
         cfg = AgentConfig()
         assert cfg.max_iterations == 50
-        assert cfg.max_tool_calls_per_round == 10
 
     def test_agent_config_custom(self):
         from clawhermes.agent.loop import AgentConfig
-        cfg = AgentConfig(max_iterations=10, max_tool_calls_per_round=5)
+        cfg = AgentConfig(max_iterations=10)
         assert cfg.max_iterations == 10
 
     def test_agent_creation(self, tmp_path):
@@ -2577,3 +2576,183 @@ class TestH7C11H9Fixes:
 
         exc = Exception("rate limited")
         assert _extract_retry_after(exc) == 60
+
+
+# ============================================================
+# M2+M3+M4+M7+M11 修复验证测试
+# ============================================================
+
+
+class TestP1RobustnessFixes:
+    """M2+M3+M4+M7+M11 修复验证"""
+
+    def test_agent_config_no_dead_fields(self):
+        """M2: AgentConfig 不应再含 max_tool_calls_per_round / queue_mode 字段"""
+        from clawhermes.agent.loop import AgentConfig
+
+        cfg = AgentConfig()
+        assert not hasattr(cfg, "max_tool_calls_per_round")
+        assert not hasattr(cfg, "queue_mode")
+
+    def test_memory_error_renamed(self):
+        """M11: ClawHermesMemoryError 可正常 import"""
+        from clawhermes.agent.exceptions import ClawHermesMemoryError
+
+        assert issubclass(ClawHermesMemoryError, Exception)
+
+    def test_no_locals_pattern(self):
+        """M3: loop.py 源码不应再含 'result' in locals() 反模式"""
+        loop_path = (
+            Path(__file__).resolve().parent.parent
+            / "src" / "clawhermes" / "agent" / "loop.py"
+        )
+        source = loop_path.read_text()
+        assert "'result' in locals()" not in source
+
+    def test_no_get_event_loop(self):
+        """M4: loop.py 源码不应再含 get_event_loop() 过时 API"""
+        loop_path = (
+            Path(__file__).resolve().parent.parent
+            / "src" / "clawhermes" / "agent" / "loop.py"
+        )
+        source = loop_path.read_text()
+        assert "get_event_loop()" not in source
+
+    def test_atomic_write(self, tmp_path):
+        """M7: atomic_write 写入后内容正确且无 .tmp 残留"""
+        from clawhermes.util.atomic import atomic_write
+
+        target = tmp_path / "out.json"
+        atomic_write(target, '{"key": "value"}')
+        assert target.read_text() == '{"key": "value"}'
+        # 不应残留 .tmp 文件
+        assert not (tmp_path / "out.json.tmp").exists()
+
+    def test_atomic_write_preserves_on_failure(self, tmp_path):
+        """M7: os.replace 抛异常时原文件内容不变"""
+        from unittest.mock import patch
+
+        from clawhermes.util.atomic import atomic_write
+
+        target = tmp_path / "out.json"
+        # 先写入初始内容
+        target.write_text("original")
+        # mock os.replace 抛异常
+        with patch("clawhermes.util.atomic.os.replace", side_effect=OSError("boom")):
+            try:
+                atomic_write(target, "new content")
+            except OSError:
+                pass
+        # 原文件内容应保持不变
+        assert target.read_text() == "original"
+
+
+# ============================================================
+# M8 + M14 + H5 + H6 修复验证测试
+# ============================================================
+
+
+def test_http_request_uses_httpx():
+    """M8: _http_request 不再使用 curl 子进程，改用 httpx"""
+    import inspect
+
+    from clawhermes.tools.builtin import _http_request
+
+    source = inspect.getsource(_http_request)
+    assert "curl" not in source, "_http_request 源码不应再含 curl"
+    assert "httpx" in source, "_http_request 源码应使用 httpx"
+
+
+def test_gateway_health_degraded(monkeypatch):
+    """M14: _auto_init 失败后 /health 返回 degraded 状态"""
+    from starlette.testclient import TestClient
+
+    import clawhermes.gateway.app as gw
+
+    # 确保没有 API key 触发 _auto_init
+    monkeypatch.delenv("CH_GW_API_KEY", raising=False)
+    monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
+
+    saved_error = gw._state._init_error
+    saved_agent = gw._state.agent
+    try:
+        gw._state._init_error = "simulated init failure"
+        gw._state.agent = None  # 确保未初始化
+        client = TestClient(gw.app, raise_server_exceptions=False)
+        resp = client.get("/health")
+        assert resp.status_code == 503
+        data = resp.json()
+        assert data["status"] == "degraded"
+        assert "simulated init failure" in data.get("error", "")
+    finally:
+        gw._state._init_error = saved_error
+        gw._state.agent = saved_agent
+
+
+def test_session_read_no_lock():
+    """H5: Session 读操作不获取锁（SQLite WAL 并发读）"""
+    import inspect
+
+    from clawhermes.agent.session import SessionManager
+
+    # 读方法不应包含 self._lock
+    for method_name in ("get_session", "list_sessions", "get_messages"):
+        method = getattr(SessionManager, method_name)
+        source = inspect.getsource(method)
+        assert "self._lock" not in source, f"{method_name} 仍包含锁"
+
+    # 写方法应保留锁
+    for method_name in ("create_session", "add_message", "delete_session"):
+        method = getattr(SessionManager, method_name)
+        source = inspect.getsource(method)
+        assert "self._lock" in source, f"{method_name} 未保留锁"
+
+
+def test_skillhub_min_version_check(tmp_path):
+    """H6: min_clawhermes 版本不满足时拒绝安装"""
+    from clawhermes.skills.hub import SkillHub, SkillManifest
+    from clawhermes.skills.manager import SkillManager
+
+    sm = SkillManager(tmp_path / "skills")
+    hub = SkillHub(sm, tmp_path / "hub")
+
+    # min_clawhermes 过高 → 拒绝
+    manifest_high = SkillManifest(name="future", min_clawhermes="999.0.0")
+    assert hub._check_min_version(manifest_high) is False
+
+    # min_clawhermes 较低 → 允许
+    manifest_low = SkillManifest(name="old", min_clawhermes="0.1.0")
+    assert hub._check_min_version(manifest_low) is True
+
+
+def test_skillhub_no_manifest_rejected(tmp_path):
+    """H6: 无 manifest 的技能默认拒绝安装"""
+    from contextlib import contextmanager
+    from unittest.mock import patch
+
+    from clawhermes.skills.hub import SkillHub
+    from clawhermes.skills.manager import SkillManager
+
+    # 准备一个目录：有 skill.md 但无 manifest
+    src_dir = tmp_path / "src"
+    src_dir.mkdir()
+    (src_dir / "nomani.md").write_text("# skill content")
+
+    sm = SkillManager(tmp_path / "skills")
+    hub = SkillHub(sm, tmp_path / "hub")
+
+    @contextmanager
+    def fake_tmpdir():
+        yield src_dir
+
+    with patch("clawhermes.skills.hub.tempfile.TemporaryDirectory", fake_tmpdir), \
+         patch.object(SkillHub, "_is_git_url", return_value=False):
+        # 默认 allow_unverified=False → 拒绝
+        result = hub._install_from("nomani", "https://example.com/skills")
+        assert result is False
+
+        # allow_unverified=True → 允许
+        result = hub._install_from(
+            "nomani", "https://example.com/skills", allow_unverified=True,
+        )
+        assert result is True

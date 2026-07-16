@@ -103,10 +103,17 @@ class HookManager:
         if not self._async_hooks.get(point):
             return self.trigger(point, **kwargs)
         try:
-            loop = asyncio.get_event_loop()
+            asyncio.get_running_loop()
+            # 在运行中的事件循环内 — 不能 run_until_complete（会 raise），回退同步触发
+            return self.trigger(point, **kwargs)
         except RuntimeError:
-            return asyncio.run(self.trigger_async(point, timeout, **kwargs))
-        return loop.run_until_complete(self.trigger_async(point, timeout, **kwargs))
+            pass
+        # 无运行循环 — 创建新循环执行后关闭
+        loop = asyncio.new_event_loop()
+        try:
+            return loop.run_until_complete(self.trigger_async(point, timeout, **kwargs))
+        finally:
+            loop.close()
 
     def remove(self, point: str, handler: Callable) -> bool:
         for store in (self._hooks, self._async_hooks):
@@ -211,6 +218,7 @@ class ToolDispatcher:
             tool_context["_delegate_manager"] = context["_delegate_manager"]
 
         start_ms = time.monotonic() * 1000
+        result = None
         try:
             raw = tool_def.handler(**args, **tool_context)
             # 同步路径中工具可能返回协程 — chat() 被 asyncio.to_thread 包装在独立线程，
@@ -249,7 +257,7 @@ class ToolDispatcher:
             HookPoint.AFTER_TOOL_CALL,
             tool_name=name,
             tool_args=args,
-            tool_result=result if 'result' in locals() else None,
+            tool_result=result,
             duration_ms=duration_ms,
         )
 
@@ -291,6 +299,7 @@ class ToolDispatcher:
             tool_context["_delegate_manager"] = context["_delegate_manager"]
 
         start_ms = time.monotonic() * 1000
+        result = None
         try:
             if asyncio.iscoroutinefunction(tool_def.handler):
                 result = await tool_def.handler(**args, **tool_context)
@@ -317,7 +326,7 @@ class ToolDispatcher:
             HookPoint.AFTER_TOOL_CALL,
             tool_name=name,
             tool_args=args,
-            tool_result=result if 'result' in locals() else None,
+            tool_result=result,
             duration_ms=duration_ms,
         )
 
@@ -411,8 +420,6 @@ class ToolDispatcher:
 @dataclass
 class AgentConfig:
     max_iterations: int = 50
-    max_tool_calls_per_round: int = 10
-    queue_mode: str = "steer"
 
 
 class Agent:

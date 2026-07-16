@@ -180,7 +180,8 @@ def cmd_list():
     for name in agents:
         is_default = "✅" if name == default else ""
         persona = read_persona(name).split("\n")[0][:40] if read_persona(name) else ""
-        instr = read_instructions(name).split("\n")[1][:40] if read_instructions(name) else ""
+        lines = read_instructions(name).split("\n")
+        instr = lines[1][:40] if len(lines) > 1 else ""
         table.add_row(name, is_default, persona, instr)
 
     console.print(table)

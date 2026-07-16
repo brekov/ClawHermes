@@ -11,6 +11,7 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 
 from clawhermes.types import MemoryItem, MemoryScope
+from clawhermes.util.atomic import atomic_write
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +50,7 @@ class JSONMemoryProvider(MemoryProvider):
                 self._items = []
 
     def _save(self):
-        self._file.write_text(json.dumps(self._items, ensure_ascii=False, indent=2))
+        atomic_write(self._file, json.dumps(self._items, ensure_ascii=False, indent=2))
 
     def save(self, item: MemoryItem):
         self._items.append({

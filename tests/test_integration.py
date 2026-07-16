@@ -174,25 +174,25 @@ def test_credential_pool():
 def test_exception_hierarchy():
     """测试：自定义异常类层次"""
     from clawhermes.agent.exceptions import (
-        ClawHermesError,
-        ConfigError,
-        ConfigNotFoundError,
-        ConfigValidationError,
-        LLMConnectionError,
-        LLMError,
-        LLMRateLimitError,
-        LLMResponseError,
-        MemoryError,
-        MemorySearchError,
-        MemoryStorageError,
-        SessionError,
-        SessionExpiredError,
-        SessionNotFoundError,
-        ToolBlockedError,
-        ToolError,
-        ToolExecutionError,
-        ToolNotFoundError,
-    )
+    ClawHermesError,
+    ClawHermesMemoryError,
+    ConfigError,
+    ConfigNotFoundError,
+    ConfigValidationError,
+    LLMConnectionError,
+    LLMError,
+    LLMRateLimitError,
+    LLMResponseError,
+    MemorySearchError,
+    MemoryStorageError,
+    SessionError,
+    SessionExpiredError,
+    SessionNotFoundError,
+    ToolBlockedError,
+    ToolError,
+    ToolExecutionError,
+    ToolNotFoundError,
+)
 
     assert issubclass(LLMError, ClawHermesError)
     assert issubclass(LLMConnectionError, LLMError)
@@ -204,9 +204,9 @@ def test_exception_hierarchy():
     assert issubclass(ToolExecutionError, ToolError)
     assert issubclass(ToolBlockedError, ToolError)
 
-    assert issubclass(MemoryError, ClawHermesError)
-    assert issubclass(MemoryStorageError, MemoryError)
-    assert issubclass(MemorySearchError, MemoryError)
+    assert issubclass(ClawHermesMemoryError, ClawHermesError)
+    assert issubclass(MemoryStorageError, ClawHermesMemoryError)
+    assert issubclass(MemorySearchError, ClawHermesMemoryError)
 
     assert issubclass(ConfigError, ClawHermesError)
     assert issubclass(ConfigValidationError, ConfigError)

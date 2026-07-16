@@ -89,6 +89,8 @@ class GatewayState:
         self.qq_adapter: Any = None  # QQAdapter | None
         self._bg_tasks: set[asyncio.Task] = set()
         self._mcp_registry = None
+        # M14: _auto_init 失败时记录错误，/health 返回 degraded
+        self._init_error: str | None = None
 
     def is_initialized(self) -> bool:
         return self.agent is not None
@@ -316,9 +318,12 @@ async def _auto_init():
     profile = os.getenv("CH_TOOLS_PROFILE", "standard")
     try:
         await _state.initialize(api_key=api_key, model=model, profile=profile)
+        _state._init_error = None
     except ClawHermesError as e:
+        _state._init_error = str(e)
         logger.error("Auto-init failed: %s", e)
     except Exception as e:
+        _state._init_error = str(e)
         logger.error("Auto-init failed: %s", e)
 
 
@@ -372,6 +377,42 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# M14: 初始化守卫白名单 — /health（degraded 返回）和 /init（手动初始化入口）不受 503 阻断
+_INIT_GUARD_EXEMPT_PATHS = frozenset({"/health", "/init", "/docs", "/openapi.json", "/redoc"})
+
+
+@app.middleware("http")
+async def _init_guard_middleware(request: Request, call_next):
+    """初始化守卫：_auto_init 失败后非白名单端点返回 503，/health 返回 degraded 状态。
+
+    仅在 _init_error 被设置（auto-init 明确失败）时阻断，而非所有"未初始化"场景。
+    正常的未初始化场景（如未配置 API key）由各端点自行处理错误。
+    放在 _gateway_secret_middleware 之前定义（内层），使密钥校验先执行（外层）。
+    """
+    path = request.url.path
+    if path == "/health":
+        if _state._init_error:
+            return JSONResponse(
+                status_code=503,
+                content={
+                    "status": "degraded",
+                    "error": _state._init_error,
+                    "initialized": False,
+                    "uptime": round(time.time() - _state.start_time, 1),
+                },
+            )
+        return await call_next(request)
+    if _state._init_error and path not in _INIT_GUARD_EXEMPT_PATHS:
+        return JSONResponse(
+            status_code=503,
+            content={
+                "detail": f"Gateway 初始化失败: {_state._init_error}",
+                "status": "degraded",
+            },
+        )
+    return await call_next(request)
 
 
 @app.middleware("http")

@@ -76,43 +76,43 @@ class SessionManager:
             return session_id
 
     def get_session(self, session_id: str) -> dict[str, Any]:
-        with self._lock:
-            assert self._conn is not None
-            row = self._conn.execute(
-                "SELECT id, agent_name, created_at, updated_at, metadata FROM sessions WHERE id = ?",
-                (session_id,),
-            ).fetchone()
-            if not row:
-                raise SessionNotFoundError(f"会话不存在: {session_id}", session_id=session_id)
+        # H5: 读操作无需锁（SQLite WAL 模式支持并发读）
+        assert self._conn is not None
+        row = self._conn.execute(
+            "SELECT id, agent_name, created_at, updated_at, metadata FROM sessions WHERE id = ?",
+            (session_id,),
+        ).fetchone()
+        if not row:
+            raise SessionNotFoundError(f"会话不存在: {session_id}", session_id=session_id)
 
-            if time.time() - row[3] > self._max_age:
-                raise SessionExpiredError(f"会话已过期: {session_id}", session_id=session_id)
+        if time.time() - row[3] > self._max_age:
+            raise SessionExpiredError(f"会话已过期: {session_id}", session_id=session_id)
 
-            return {
-                "id": row[0],
-                "agent_name": row[1],
-                "created_at": row[2],
-                "updated_at": row[3],
-                "metadata": json.loads(row[4]),
-            }
+        return {
+            "id": row[0],
+            "agent_name": row[1],
+            "created_at": row[2],
+            "updated_at": row[3],
+            "metadata": json.loads(row[4]),
+        }
 
     def list_sessions(self, limit: int = 50) -> list[dict[str, Any]]:
-        with self._lock:
-            assert self._conn is not None
-            rows = self._conn.execute(
-                "SELECT id, agent_name, created_at, updated_at, metadata FROM sessions ORDER BY updated_at DESC LIMIT ?",
-                (limit,),
-            ).fetchall()
-            return [
-                {
-                    "id": r[0],
-                    "agent_name": r[1],
-                    "created_at": r[2],
-                    "updated_at": r[3],
-                    "metadata": json.loads(r[4]),
-                }
-                for r in rows
-            ]
+        # H5: 读操作无需锁（SQLite WAL 模式支持并发读）
+        assert self._conn is not None
+        rows = self._conn.execute(
+            "SELECT id, agent_name, created_at, updated_at, metadata FROM sessions ORDER BY updated_at DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+        return [
+            {
+                "id": r[0],
+                "agent_name": r[1],
+                "created_at": r[2],
+                "updated_at": r[3],
+                "metadata": json.loads(r[4]),
+            }
+            for r in rows
+        ]
 
     def delete_session(self, session_id: str) -> bool:
         with self._lock:
@@ -140,24 +140,24 @@ class SessionManager:
             self._conn.commit()
 
     def get_messages(self, session_id: str, limit: int = 100) -> list[dict[str, Any]]:
-        with self._lock:
-            assert self._conn is not None
-            rows = self._conn.execute(
-                "SELECT role, content, tool_calls, tool_call_id, name, timestamp "
-                "FROM messages WHERE session_id = ? ORDER BY timestamp ASC LIMIT ?",
-                (session_id, limit),
-            ).fetchall()
-            messages = []
-            for r in rows:
-                msg: dict[str, Any] = {"role": r[0], "content": r[1]}
-                if r[2]:
-                    msg["tool_calls"] = json.loads(r[2])
-                if r[3]:
-                    msg["tool_call_id"] = r[3]
-                if r[4]:
-                    msg["name"] = r[4]
-                messages.append(msg)
-            return messages
+        # H5: 读操作无需锁（SQLite WAL 模式支持并发读）
+        assert self._conn is not None
+        rows = self._conn.execute(
+            "SELECT role, content, tool_calls, tool_call_id, name, timestamp "
+            "FROM messages WHERE session_id = ? ORDER BY timestamp ASC LIMIT ?",
+            (session_id, limit),
+        ).fetchall()
+        messages = []
+        for r in rows:
+            msg: dict[str, Any] = {"role": r[0], "content": r[1]}
+            if r[2]:
+                msg["tool_calls"] = json.loads(r[2])
+            if r[3]:
+                msg["tool_call_id"] = r[3]
+            if r[4]:
+                msg["name"] = r[4]
+            messages.append(msg)
+        return messages
 
     def cleanup_expired(self) -> int:
         with self._lock:

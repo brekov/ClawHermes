@@ -57,11 +57,11 @@ class ToolBlockedError(ToolError):
         super().__init__(message, detail=detail)
 
 
-class MemoryError(ClawHermesError):
+class ClawHermesMemoryError(ClawHermesError):
     """记忆系统相关异常"""
 
 
-class MemoryStorageError(MemoryError):
+class MemoryStorageError(ClawHermesMemoryError):
     """记忆存储失败"""
 
     def __init__(self, message: str = "", *, provider: str = "", detail: str = ""):
@@ -69,7 +69,7 @@ class MemoryStorageError(MemoryError):
         super().__init__(message, detail=detail)
 
 
-class MemorySearchError(MemoryError):
+class MemorySearchError(ClawHermesMemoryError):
     """记忆搜索失败"""
 
     def __init__(self, message: str = "", *, provider: str = "", detail: str = ""):

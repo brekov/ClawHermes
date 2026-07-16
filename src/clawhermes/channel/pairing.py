@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from clawhermes.agent.exceptions import ClawHermesError
+from clawhermes.util.atomic import atomic_write
 
 logger = logging.getLogger(__name__)
 
@@ -483,6 +484,6 @@ class DMPairingManager:
                     for u in self._paired.values()
                 ],
             }
-            self._db_path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+            atomic_write(self._db_path, json.dumps(data, ensure_ascii=False, indent=2))
         except Exception as e:
             logger.error("Failed to save pairing state: %s", e)
