@@ -14,6 +14,8 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Callable
 
+from clawhermes.util.atomic import atomic_write
+
 logger = logging.getLogger(__name__)
 
 
@@ -366,8 +368,6 @@ class CronScheduler:
                 if not isinstance(item, dict):
                     continue
                 job = ScheduledJob.from_dict(item)
-                if job.status in (JobStatus.PENDING, JobStatus.PAUSED):
-                    job.status = JobStatus.PENDING if job.status != JobStatus.PAUSED else JobStatus.PAUSED
                 if job.status == JobStatus.RUNNING:
                     job.status = JobStatus.FAILED
                     job.last_error = "Interrupted by restart"
@@ -379,9 +379,9 @@ class CronScheduler:
     def _save_jobs(self) -> None:
         try:
             data = [j.to_dict() for j in self._jobs.values()]
-            self._db_path.write_text(
+            atomic_write(
+                self._db_path,
                 json.dumps(data, ensure_ascii=False, indent=2),
-                encoding="utf-8",
             )
         except Exception as e:
             logger.error("Failed to save jobs: %s", e)

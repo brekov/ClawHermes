@@ -9,12 +9,23 @@ import json
 import logging
 import subprocess
 import tempfile
+import urllib.parse
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 logger = logging.getLogger(__name__)
+
+
+def _get_clawhermes_version() -> str:
+    """读取当前 ClawHermes 版本号"""
+    try:
+        from clawhermes import __version__
+        return __version__
+    except Exception:
+        return "0.0.0"
+
 
 if TYPE_CHECKING:
     from clawhermes.skills.manager import SkillManager
@@ -104,20 +115,30 @@ class SkillHub:
                 logger.warning("Search failed for registry %s: %s", registry_name, e)
         return results
 
-    def install(self, name: str, registry: str = "", version: int | None = None) -> bool:
+    def install(
+        self,
+        name: str,
+        registry: str = "",
+        version: int | None = None,
+        allow_unverified: bool = False,
+    ) -> bool:
         """从远程仓库安装技能"""
         url = self._registries.get(registry, "") if registry else ""
         if not url and self._registries:
             for reg_name, reg_url in self._registries.items():
                 try:
-                    return self._install_from(name, reg_url, version)
+                    return self._install_from(
+                        name, reg_url, version, allow_unverified=allow_unverified,
+                    )
                 except Exception as e:
                     logger.debug("Failed from %s: %s", reg_name, e)
             logger.error("Skill '%s' not found in any registry", name)
             return False
         elif url:
             try:
-                return self._install_from(name, url, version)
+                return self._install_from(
+                    name, url, version, allow_unverified=allow_unverified,
+                )
             except Exception as e:
                 logger.error("Install failed: %s", e)
                 return False
@@ -154,11 +175,25 @@ class SkillHub:
         return True
 
     def verify(self, content: str, manifest: SkillManifest) -> bool:
-        """验证技能完整性"""
+        """验证技能完整性（checksum + 签名占位）"""
         actual = hashlib.sha256(content.encode()).hexdigest()
-        return actual == manifest.checksum
+        if actual != manifest.checksum:
+            return False
+        # H6: 签名校验占位 — 真正的 GPG/minisign 签名需 P2 阶段实现
+        if manifest.signature:
+            logger.warning(
+                "签名校验未完全实现（skill=%s, signature=%s...）",
+                manifest.name, manifest.signature[:16],
+            )
+        return True
 
-    def _install_from(self, name: str, url: str, version: int | None = None) -> bool:
+    def _install_from(
+        self,
+        name: str,
+        url: str,
+        version: int | None = None,
+        allow_unverified: bool = False,
+    ) -> bool:
         with tempfile.TemporaryDirectory() as tmpdir:
             tmp = Path(tmpdir)
 
@@ -178,6 +213,14 @@ class SkillHub:
                 if version and manifest.version != version:
                     return False
 
+                # H6: min_clawhermes 版本比对
+                if not self._check_min_version(manifest):
+                    logger.error(
+                        "Skill %s requires min_clawhermes=%s, current=%s",
+                        name, manifest.min_clawhermes, _get_clawhermes_version(),
+                    )
+                    return False
+
                 if skill_path.exists():
                     content = skill_path.read_text(encoding="utf-8")
                     if not self.verify(content, manifest):
@@ -193,10 +236,16 @@ class SkillHub:
                     logger.info("Skill installed: %s (v%d)", name, manifest.version)
                     return True
 
+            # H6: 无 manifest 的技能默认拒绝，除非 allow_unverified=True
             if skill_path.exists():
+                if not allow_unverified:
+                    logger.error(
+                        "Skill %s has no manifest, rejected (use allow_unverified=True)", name,
+                    )
+                    return False
                 content = skill_path.read_text(encoding="utf-8")
                 self._sm.create(name=name, content=content)
-                logger.info("Skill installed (no manifest): %s", name)
+                logger.warning("Skill installed (unverified, no manifest): %s", name)
                 return True
 
             return False
@@ -224,8 +273,33 @@ class SkillHub:
             return manifests
 
     @staticmethod
+    def _check_min_version(manifest: SkillManifest) -> bool:
+        """检查当前 ClawHermes 版本是否满足 manifest 的最低版本要求"""
+        current = _get_clawhermes_version()
+        try:
+            current_parts = tuple(int(p) for p in current.split("."))
+            min_parts = tuple(int(p) for p in manifest.min_clawhermes.split("."))
+            return current_parts >= min_parts
+        except (ValueError, AttributeError):
+            # 版本解析失败时保守允许，避免误阻断
+            return True
+
+    @staticmethod
     def _is_git_url(url: str) -> bool:
-        return url.startswith("git@") or url.startswith("https://") and ".git" in url
+        """判定 URL 是否为 Git 仓库地址
+
+        - git@host:path 格式（SSH 风格）
+        - git://host/path 格式（git 协议）
+        - http(s)://host/path 且以 .git 结尾（保持向后兼容）
+        """
+        if url.startswith("git@"):
+            return True
+        parsed = urllib.parse.urlparse(url)
+        if parsed.scheme == "git":
+            return True
+        if parsed.scheme in ("https", "http"):
+            return url.endswith(".git")
+        return False
 
     def _git_push(self, repo_url: str, manifest: SkillManifest, content: str) -> bool:
         with tempfile.TemporaryDirectory() as tmpdir:

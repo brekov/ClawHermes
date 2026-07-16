@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import List
 
+from clawhermes.util.atomic import atomic_write
 from clawhermes.util.scoped_path import ScopedPath
 
 logger = logging.getLogger(__name__)
@@ -73,7 +74,7 @@ class SkillManager:
         """保存技能元数据"""
         with self._lock:
             meta_file = self._scoped.resolve(skill.name, ".json")
-            meta_file.write_text(json.dumps({
+            atomic_write(meta_file, json.dumps({
                 "description": skill.description,
                 "category": skill.category,
                 "version": skill.version,

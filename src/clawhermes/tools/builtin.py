@@ -1254,24 +1254,18 @@ def _compress_file(path: str, output: str = "", **kwargs) -> dict:
 
 
 def _http_request(url: str, method: str = "GET", data: str = "", headers: dict | None = None, **kwargs) -> dict:
+    """发送 HTTP GET/POST 请求 — 纯 httpx 实现，无子进程依赖"""
+    import httpx
     try:
-        cmd = ["curl", "-sL", "-X", method, "--max-time", "30"]
-        if headers:
-            for k, v in headers.items():
-                cmd.extend(["-H", f"{k}: {v}"])
-        if method == "POST" and data:
-            cmd.extend(["-d", data])
-        cmd.append(url)
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=35)
-        return {
-            "status": "ok" if result.returncode == 0 else "error",
-            "body": result.stdout[:5000],
-            "stderr": result.stderr[:2000] if result.stderr else None,
-        }
-    except subprocess.TimeoutExpired:
-        return {"error": "HTTP 请求超时 (30s)"}
+        with httpx.Client(timeout=30) as client:
+            resp = client.request(method, url, headers=headers, content=data if data else None)
+            return {
+                "status_code": resp.status_code,
+                "headers": dict(resp.headers),
+                "body": resp.text[:5000],
+            }
     except Exception as e:
-        return {"error": str(e)}
+        return {"error": f"HTTP 请求失败: {e}"}
 
 
 def _json_query(json_str: str, path: str = "", **kwargs) -> dict:
