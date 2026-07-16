@@ -24,7 +24,7 @@ class TestDMPairingManager:
 
     def test_generate_code_creates_valid_request(self, manager):
         req = manager.generate_code("user_001", "feishu", "ios")
-        assert len(req.code) == 6
+        assert len(req.code) == 8
         assert req.code.isdigit()
         assert req.user_id == "user_001"
         assert req.platform == "feishu"
@@ -50,18 +50,18 @@ class TestDMPairingManager:
         req = manager.generate_code("user_003", "feishu")
         response = manager._compute_challenge_response(req.challenge)
 
-        result = manager.verify_code(req.code, response)
+        result = manager.verify_code(req.code, response, "user_003")
         assert result.status == PairingStatus.APPROVED
         assert manager.is_paired("user_003")
 
     def test_verify_invalid_code_raises(self, manager):
         with pytest.raises(PairingInvalidError):
-            manager.verify_code("000000", "bad_response")
+            manager.verify_code("00000000", "bad_response", "user_bad")
 
     def test_verify_wrong_challenge_response_raises(self, manager):
         req = manager.generate_code("user_004", "feishu")
         with pytest.raises(PairingInvalidError):
-            manager.verify_code(req.code, "wrong_response")
+            manager.verify_code(req.code, "wrong_response", "user_004")
 
     def test_verify_wrong_user_id_raises(self, manager):
         req = manager.generate_code("user_005", "feishu")
@@ -75,9 +75,9 @@ class TestDMPairingManager:
         req.expires_at = time.time() - 10
         response = manager._compute_challenge_response(req.challenge)
         with pytest.raises(PairingExpiredError):
-            manager.verify_code(req.code, response)
+            manager.verify_code(req.code, response, "user_006")
 
-    # ── Reject ───────────────────────────────────────────
+    # ── Reject
 
     def test_reject_code(self, manager):
         req = manager.generate_code("user_007", "feishu")
@@ -117,13 +117,13 @@ class TestDMPairingManager:
         assert not manager.is_paired("user_010")
         req = manager.generate_code("user_010", "feishu")
         response = manager._compute_challenge_response(req.challenge)
-        manager.verify_code(req.code, response)
+        manager.verify_code(req.code, response, "user_010")
         assert manager.is_paired("user_010")
 
     def test_revoke_pairing(self, manager):
         req = manager.generate_code("user_011", "feishu")
         response = manager._compute_challenge_response(req.challenge)
-        manager.verify_code(req.code, response)
+        manager.verify_code(req.code, response, "user_011")
         assert manager.is_paired("user_011")
 
         revoked = manager.revoke_pairing("user_011")
@@ -138,7 +138,7 @@ class TestDMPairingManager:
             uid = f"user_list_{i}"
             req = manager.generate_code(uid, "feishu")
             resp = manager._compute_challenge_response(req.challenge)
-            manager.verify_code(req.code, resp)
+            manager.verify_code(req.code, resp, uid)
 
         users = manager.list_paired_users()
         assert len(users) == 3
@@ -146,7 +146,7 @@ class TestDMPairingManager:
     def test_touch_user_updates_last_active(self, manager):
         req = manager.generate_code("user_touch", "wechat")
         resp = manager._compute_challenge_response(req.challenge)
-        manager.verify_code(req.code, resp)
+        manager.verify_code(req.code, resp, "user_touch")
 
         before = manager.get_paired_user("user_touch")
         assert before is not None
@@ -167,7 +167,7 @@ class TestDMPairingManager:
     def test_get_pairing_status_approved(self, manager):
         req = manager.generate_code("user_approved", "feishu")
         resp = manager._compute_challenge_response(req.challenge)
-        manager.verify_code(req.code, resp)
+        manager.verify_code(req.code, resp, "user_approved")
         status = manager.get_pairing_status("user_approved")
         assert status is not None
         assert status["status"] == "approved"
@@ -256,7 +256,7 @@ class TestPairingConcurrency:
                 for r in requests:
                     try:
                         expected = manager._compute_challenge_response(r.challenge)
-                        manager.verify_code(r.code, expected)
+                        manager.verify_code(r.code, expected, r.user_id)
                     except (PairingExpiredError, PairingInvalidError):
                         pass  # 可能已被其他线程处理
             except Exception as e:

@@ -937,12 +937,12 @@ def _verify_feishu_event_subscriptions(client) -> None:
     """验证飞书应用已订阅必要的事件类型"""
     console.print("  📋 正在检查事件订阅...")
     try:
-        import requests
+        import httpx
         from lark_oapi.core.const import FEISHU_DOMAIN
 
         # 获取 tenant_access_token
         token_url = f"{FEISHU_DOMAIN}/open-apis/auth/v3/tenant_access_token/internal"
-        token_resp = requests.post(token_url, json={
+        token_resp = httpx.post(token_url, json={
             "app_id": client.app_id,
             "app_secret": client.app_secret,
         }, timeout=10)
@@ -956,7 +956,7 @@ def _verify_feishu_event_subscriptions(client) -> None:
 
         # 查询已订阅的事件
         sub_url = f"{FEISHU_DOMAIN}/open-apis/event/v1/app/event_subscription/list"
-        sub_resp = requests.get(sub_url, headers={
+        sub_resp = httpx.get(sub_url, headers={
             "Authorization": f"Bearer {token}",
         }, timeout=10)
         if sub_resp.status_code != 200:
@@ -977,8 +977,6 @@ def _verify_feishu_event_subscriptions(client) -> None:
             console.print("  🔗 请在飞书开放平台 → 事件订阅 中添加")
         else:
             console.print(f"  ✅ 事件订阅正常 ({len(subscribed)} 个)")
-    except ImportError:
-        console.print("  ⚠️  requests 未安装，跳过事件订阅检查")
     except Exception as e:
         console.print(f"  ⚠️  事件订阅检查失败: {e}")
 
@@ -1069,6 +1067,8 @@ def _write_env(vars_dict: dict[str, str]):
     if blocked_count:
         console.print(f"  ⚠️  已阻断 {blocked_count} 个危险环境变量，防止子进程注入")
     env_path.write_text("\n".join(lines_out) + "\n")
+    # 含密钥的 .env 必须仅属主可读写
+    env_path.chmod(0o600)
 
 
 def _copy_and_populate_channel(example_path: str, dest_dir: Path, ch_id: str, env_vars: dict[str, str]):
