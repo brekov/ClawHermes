@@ -24,6 +24,19 @@ from clawhermes.llm.provider import LLMProvider, LLMResponse
 logger = logging.getLogger(__name__)
 
 
+def _is_in_running_loop() -> bool:
+    """检测当前是否在运行中的事件循环内。
+
+    用于同步路径（execute / _execute_single_tool）的安全检查：若已在运行循环内，
+    调用 asyncio.run 会抛 RuntimeError，因此应改用 execute_async。
+    """
+    try:
+        asyncio.get_running_loop()
+        return True
+    except RuntimeError:
+        return False
+
+
 class HookPoint:
     BEFORE_TOOL_CALL = "before_tool_call"
     AFTER_TOOL_CALL = "after_tool_call"
@@ -158,6 +171,13 @@ class ToolDispatcher:
         return tool_def.parallel_safe
 
     def _execute_single_tool(self, tc: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
+        """同步执行单个工具调用。
+
+        .. note::
+           仅用于无事件循环的上下文（如 CLI 或 asyncio.to_thread 包装的线程）。
+           若工具 handler 返回协程且检测到运行中的事件循环（如 FastAPI 误用同步
+           execute），将抛 RuntimeError 提示改用 execute_async。
+        """
         name = tc.get("function", {}).get("name", "")
         args_str = tc.get("function", {}).get("arguments", "{}")
         tool_id = tc.get("id", "")
@@ -194,8 +214,17 @@ class ToolDispatcher:
         try:
             raw = tool_def.handler(**args, **tool_context)
             # 同步路径中工具可能返回协程 — chat() 被 asyncio.to_thread 包装在独立线程，
-            # 无运行中的事件循环，可安全 asyncio.run
-            result = asyncio.run(raw) if asyncio.iscoroutine(raw) else raw
+            # 无运行中的事件循环时可安全 asyncio.run；若检测到运行中的循环
+            # （如 FastAPI 误用同步 execute），抛明确异常提示改用 execute_async
+            if asyncio.iscoroutine(raw):
+                if _is_in_running_loop():
+                    raise RuntimeError(
+                        "同步 execute() 不能在运行中的事件循环内调用；请改用 execute_async() "
+                        "或通过 asyncio.to_thread() 包装"
+                    )
+                result = asyncio.run(raw)
+            else:
+                result = raw
             duration_ms = time.monotonic() * 1000 - start_ms
             result_data = {
                 "role": "tool",
@@ -204,6 +233,12 @@ class ToolDispatcher:
                 "content": json.dumps(result, ensure_ascii=False),
             }
         except ClawHermesError as e:
+            duration_ms = time.monotonic() * 1000 - start_ms
+            result_data = self._error_result(tool_id, name, str(e))
+        except RuntimeError as e:
+            # C8: 事件循环检测的 RuntimeError 透传给调用者，不被吞为 error_result
+            if "execute_async" in str(e):
+                raise
             duration_ms = time.monotonic() * 1000 - start_ms
             result_data = self._error_result(tool_id, name, str(e))
         except Exception as e:
@@ -289,6 +324,13 @@ class ToolDispatcher:
         return result_data
 
     def execute(self, tool_calls: list[dict], context: dict) -> list[dict]:
+        """同步执行工具调用。
+
+        .. note::
+           仅用于无事件循环的上下文（如 CLI）。FastAPI/asyncio 上下文必须用
+           ``execute_async()``，否则并行工具路径会因检测到运行中的事件循环而抛
+           RuntimeError。
+        """
         parallel_safe_calls = []
         serial_calls = []
 
@@ -307,18 +349,22 @@ class ToolDispatcher:
             results.append(result)
 
         if len(parallel_safe_calls) > 1:
+            # C7: 同步 execute 不能在运行中的事件循环内调用 — asyncio.run 会崩溃，
+            # 且 new_event_loop 会阻塞外层循环。检测到运行循环时抛明确异常
+            if _is_in_running_loop():
+                raise RuntimeError(
+                    "同步 execute() 不能在运行中的事件循环内调用；请改用 execute_async()"
+                )
+
             async def _run_parallel():
                 return await asyncio.gather(*[
                     self._execute_single_tool_async(tc, context)
                     for tc in parallel_safe_calls
                 ])
 
-            loop = asyncio.new_event_loop()
-            try:
-                parallel_results = loop.run_until_complete(_run_parallel())
-                results.extend(parallel_results)
-            finally:
-                loop.close()
+            # 无运行循环时 asyncio.run 自建临时循环并清理
+            parallel_results = asyncio.run(_run_parallel())
+            results.extend(parallel_results)
         else:
             for tc in parallel_safe_calls:
                 result = self._execute_single_tool(tc, context)
@@ -563,8 +609,11 @@ class Agent:
     ) -> AsyncGenerator[dict, None]:
         """流式聊天 — 以 SSE 事件流逐块返回响应。
 
-        与 chat_async() 使用相同的 Agent 循环逻辑，
-        但通过 LLMProvider.chat_stream() 获取流式 token，
+        复用 _build_messages / _should_loop_continue / _finalize_response 辅助方法，
+        确保 user/assistant 消息持久化到 session_mgr 并触发 hooks
+        （与 chat/chat_async 行为一致）。
+
+        通过 LLMProvider.chat_stream() 获取流式 token，
         每个完成块即时 yield 为 SSE 事件：
 
         - {"event":"text","data":"..."}    内容块（800-1200 chars）
@@ -573,33 +622,20 @@ class Agent:
         - {"event":"error","data":"..."}    错误
         - {"event":"done","data":{...}}     完成（含 usage）
         """
-        messages: list[dict] = []
-        messages.append({
-            "role": "system",
-            "content": self.prompt.build(),
-        })
-        messages.append({"role": "user", "content": user_message})
+        messages = self._build_messages(user_message, session_id)
 
         for iteration in range(self.config.max_iterations):
-            hook_result = self.hooks.trigger(
-                HookPoint.BEFORE_AGENT_RUN,
-                messages=messages,
-                iteration=iteration,
-            )
-            if hook_result.get("abort"):
-                yield {"event": "text", "data": str(hook_result.get("response", ""))}
-                yield {"event": "done", "data": {"aborted": True}}
+            # 复用 _should_loop_continue：触发 BEFORE_AGENT_RUN hook、处理 abort / interrupt / 压缩
+            early = self._should_loop_continue(messages, iteration)
+            if early is not None:
+                # 区分 interrupt 与 abort：stream 需 yield 不同 done 事件
+                if self._interrupt.is_set():
+                    yield {"event": "text", "data": early}
+                    yield {"event": "done", "data": {"interrupted": True}}
+                else:
+                    yield {"event": "text", "data": early}
+                    yield {"event": "done", "data": {"aborted": True}}
                 return
-
-            if self._interrupt.is_set():
-                yield {"event": "text", "data": "（已中断）"}
-                yield {"event": "done", "data": {"interrupted": True}}
-                return
-
-            if self.context_engine and iteration > 1:
-                prompt_tokens = sum(len(m.get("content", "")) for m in messages)
-                if self.context_engine.should_compress(prompt_tokens):
-                    messages = self.context_engine.compress(messages, prompt_tokens)
 
             self.hooks.trigger(HookPoint.MODEL_CALL_STARTED)
 
@@ -650,17 +686,10 @@ class Agent:
             }
             messages.append(assistant_msg)
 
-            # 无工具调用 → 完成
+            # 无工具调用 → 完成：复用 _finalize_response 持久化 assistant 消息并触发 hooks
             if not stream_tool_calls:
-                hook_result = self.hooks.trigger(
-                    HookPoint.BEFORE_AGENT_REPLY,
-                    response="".join(text_parts),
-                )
-                self._last_conversation = [
-                    {"role": m["role"], "content": str(m.get("content", ""))[:500]}
-                    for m in messages[-6:]
-                ]
-                self.hooks.trigger(HookPoint.AFTER_AGENT_END, messages=messages)
+                content = "".join(text_parts)
+                self._finalize_response(messages, content, session_id)
                 yield {
                     "event": "done",
                     "data": {

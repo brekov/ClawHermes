@@ -1827,3 +1827,247 @@ class TestAgentStreaming:
         assert len(events) == 2
         assert events[1]["event"] == "done"
         assert events[1]["data"].get("interrupted")
+
+
+class TestSchedulerNonBlocking:
+    """C2 修复验证 — 调度器执行同步阻塞作业时不应冻结事件循环"""
+
+    async def test_scheduler_non_blocking(self):
+        """阻塞 executor 执行期间，并发 asyncio 任务应能在 1 秒内完成"""
+        import asyncio
+
+        from clawhermes.agent.scheduler import CronScheduler, ScheduleSpec
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            scheduler = CronScheduler(tmpdir)
+
+            # 模拟 agent.chat 的阻塞 IO（sleep 3 秒）
+            def blocking_executor(task: str, session_id: str) -> str:
+                time.sleep(3)
+                return "done"
+
+            scheduler.set_executor(blocking_executor)
+
+            # 创建一个 oneshot 作业（next_run 已为当前时间，会被视为 ready）
+            job = scheduler.create_job(
+                name="blocking-job",
+                task="block",
+                spec=ScheduleSpec.oneshot(delay_seconds=0),
+            )
+
+            # 记录快速任务完成时间
+            quick_done_at: list[float] = []
+
+            async def quick_task() -> None:
+                await asyncio.sleep(0.1)
+                quick_done_at.append(time.time())
+
+            start = time.time()
+            # 并发执行：阻塞作业 + 快速任务
+            await asyncio.gather(
+                scheduler._execute_job(job.job_id),
+                quick_task(),
+            )
+            elapsed = time.time() - start
+
+            # 快速任务应已完成
+            assert len(quick_done_at) == 1, "快速任务未完成，事件循环被冻结"
+            # 快速任务应在 1 秒内完成（远小于阻塞 executor 的 3 秒）
+            assert quick_done_at[0] - start < 1.0, (
+                f"事件循环被阻塞：快速任务耗时 {quick_done_at[0] - start:.2f}s"
+            )
+            # 整体应等待阻塞作业完成（约 3 秒）
+            assert elapsed >= 2.5, f"阻塞作业未完整执行：elapsed={elapsed:.2f}s"
+
+
+class TestLLMCompressorThreshold:
+    """C3 — should_compress 判据基于 max_context_tokens"""
+
+    def test_compress_below_threshold(self):
+        from clawhermes.agent.context import LLMCompressor
+
+        c = LLMCompressor(llm_provider=None, max_context_tokens=10000)
+        # 7000 < 10000 * 0.75 = 7500 → 不应压缩
+        assert c.should_compress(7000) is False
+
+    def test_compress_above_threshold(self):
+        from clawhermes.agent.context import LLMCompressor
+
+        c = LLMCompressor(llm_provider=None, max_context_tokens=10000)
+        # 8000 > 10000 * 0.75 = 7500 → 应触发压缩
+        assert c.should_compress(8000) is True
+
+    def test_compress_none_returns_false(self):
+        from clawhermes.agent.context import LLMCompressor
+
+        c = LLMCompressor(llm_provider=None, max_context_tokens=10000)
+        assert c.should_compress(None) is False
+
+
+def test_delegate_consecutive_calls():
+    """连续两次调用 delegate 不应抛 RuntimeError（线程池已销毁）"""
+    from unittest.mock import patch
+
+    from clawhermes.agent.delegate import DelegateManager
+    from tests.mock_provider import MockProvider
+
+    provider = MockProvider(["模拟响应"] * 4)
+    dm = DelegateManager(llm_provider=provider, tool_registry=None)
+
+    def _fake_run_sub_agent(task, depth, context):
+        return {
+            "task_id": task.get("id", ""),
+            "result": f"已处理: {task.get('description', '')}",
+            "error": "",
+        }
+
+    with patch.object(dm, "_run_sub_agent", side_effect=_fake_run_sub_agent):
+        tasks = [
+            {"id": "t1", "description": "任务一", "instructions": "do 1"},
+            {"id": "t2", "description": "任务二", "instructions": "do 2"},
+        ]
+
+        results1 = dm.delegate(tasks, parent_depth=0)
+        assert len(results1) == 2
+        assert all(r["error"] == "" for r in results1)
+
+        results2 = dm.delegate(tasks, parent_depth=0)
+        assert len(results2) == 2
+        assert all(r["error"] == "" for r in results2)
+
+    dm.shutdown(wait=True)
+
+
+# ============================================================
+# C7 / C8 / M1 修复验证测试
+# ============================================================
+
+
+@pytest.mark.asyncio
+async def test_sync_execute_in_running_loop_raises():
+    """C7 修复验证 — 在运行中的事件循环内调用同步 execute() 应抛 RuntimeError。
+
+    构造 2 个 parallel_safe 工具触发并行路径（execute 中需 asyncio.run），
+    在 async 测试函数（已有运行循环）内通过 agent.chat 同步调用，
+    应检测到运行循环并抛含 "execute_async" 的 RuntimeError。
+    """
+    from clawhermes.agent.loop import Agent, AgentConfig, ToolDef, ToolRegistry
+    from clawhermes.llm.provider import LLMResponse
+    from tests.mock_provider import MockProvider
+
+    registry = ToolRegistry()
+    registry.register(ToolDef(
+        name="parallel_a",
+        description="并行工具 A",
+        parameters={"type": "object", "properties": {}},
+        handler=lambda **kw: {"ok": True},
+        parallel_safe=True,
+    ))
+    registry.register(ToolDef(
+        name="parallel_b",
+        description="并行工具 B",
+        parameters={"type": "object", "properties": {}},
+        handler=lambda **kw: {"ok": True},
+        parallel_safe=True,
+    ))
+
+    class _ParallelToolProvider(MockProvider):
+        def chat(self, messages, tools=None):
+            return LLMResponse(
+                content=None,
+                tool_calls=[
+                    {"id": "tc1", "function": {"name": "parallel_a", "arguments": "{}"}},
+                    {"id": "tc2", "function": {"name": "parallel_b", "arguments": "{}"}},
+                ],
+                model="mock",
+            )
+
+    provider = _ParallelToolProvider()
+    agent = Agent(
+        llm_provider=provider,
+        tool_registry=registry,
+        config=AgentConfig(max_iterations=1),
+    )
+
+    # 在 async 上下文（已有运行循环）内同步调用 agent.chat → dispatcher.execute
+    with pytest.raises(RuntimeError, match="execute_async"):
+        agent.chat("trigger parallel tools", session_id="test_c7")
+
+
+@pytest.mark.asyncio
+async def test_execute_async_tool_coroutine():
+    """C8 修复验证 — async handler 工具通过 execute_async 正常执行。
+
+    确认协程 handler 在异步路径下被 await 执行，返回正确结果，
+    不受同步路径 _is_in_running_loop 检测影响。
+    """
+    from clawhermes.agent.loop import HookManager, ToolDef, ToolDispatcher, ToolRegistry
+
+    registry = ToolRegistry()
+
+    async def async_handler(**kwargs):
+        return {"async_result": "ok"}
+
+    registry.register(ToolDef(
+        name="async_tool",
+        description="异步工具",
+        parameters={"type": "object", "properties": {}},
+        handler=async_handler,
+        parallel_safe=False,
+    ))
+
+    hm = HookManager()
+    dispatcher = ToolDispatcher(registry, hm)
+
+    results = await dispatcher.execute_async([
+        {"id": "tc1", "function": {"name": "async_tool", "arguments": "{}"}},
+    ], context={})
+
+    assert len(results) == 1
+    parsed = json.loads(results[0]["content"])
+    assert parsed["async_result"] == "ok"
+
+
+@pytest.mark.asyncio
+async def test_chat_stream_persists_messages():
+    """M1 修复验证 — chat_stream 完成后 user/assistant 消息应持久化到 session_mgr。
+
+    复用 _build_messages / _finalize_response 后：
+    - user 消息通过 _build_messages 持久化
+    - assistant 消息通过 _finalize_response 持久化
+    - AFTER_AGENT_END hook 应被触发
+    """
+    from unittest.mock import MagicMock
+
+    from clawhermes.agent.loop import Agent, AgentConfig, HookPoint
+    from tests.mock_provider import MockProvider
+
+    session_mgr = MagicMock()
+    provider = MockProvider(["这是一条测试回复。"])
+    agent = Agent(
+        llm_provider=provider,
+        config=AgentConfig(max_iterations=3),
+        session_mgr=session_mgr,
+    )
+
+    # 注册 AFTER_AGENT_END hook 以验证触发
+    after_end_calls = []
+    agent.hooks.register(
+        HookPoint.AFTER_AGENT_END, lambda **kw: after_end_calls.append(kw)
+    )
+
+    events = []
+    async for evt in agent.chat_stream("你好", session_id="sess_m1"):
+        events.append(evt)
+
+    # user + assistant 消息都应持久化
+    assert session_mgr.add_message.call_count >= 2
+    roles = [call.args[1] for call in session_mgr.add_message.call_args_list]
+    assert "user" in roles
+    assert "assistant" in roles
+
+    # AFTER_AGENT_END hook 应被触发（_finalize_response 调用）
+    assert len(after_end_calls) >= 1
+
+    # 应有 done 事件
+    assert events[-1]["event"] == "done"
