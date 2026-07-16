@@ -21,10 +21,12 @@ SUMMARY_PREFIX = (
 class ContextEngine(ABC):
     """上下文引擎抽象基类 — 可插拔（来自 Hermes）"""
 
-    last_prompt_tokens: int = 0
     threshold_percent: float = 0.75
     protect_first_n: int = 3
     protect_last_n: int = 6
+
+    def __init__(self, max_context_tokens: int = 120000) -> None:
+        self.max_context_tokens = max_context_tokens
 
     @abstractmethod
     def should_compress(self, prompt_tokens: int | None = None) -> bool: ...
@@ -41,7 +43,13 @@ class ContextEngine(ABC):
 class LLMCompressor(ContextEngine):
     """基于 LLM 摘要的上下文压缩器"""
 
-    def __init__(self, llm_provider, config: dict | None = None):
+    def __init__(
+        self,
+        llm_provider,
+        config: dict | None = None,
+        max_context_tokens: int = 120000,
+    ) -> None:
+        super().__init__(max_context_tokens=max_context_tokens)
         self.llm = llm_provider
         self.summary_ratio = (config or {}).get("summary_ratio", 0.20)
         self.summary_tokens_ceiling = (config or {}).get("summary_tokens_ceiling", 12000)
@@ -50,7 +58,7 @@ class LLMCompressor(ContextEngine):
     def should_compress(self, prompt_tokens: int | None = None) -> bool:
         if prompt_tokens is None:
             return False
-        return prompt_tokens > self.last_prompt_tokens * self.threshold_percent
+        return prompt_tokens > self.max_context_tokens * self.threshold_percent
 
     def compress(
         self,
@@ -141,6 +149,9 @@ class LLMCompressor(ContextEngine):
 
 class NoopCompressor(ContextEngine):
     """空操作压缩器 — 不压缩"""
+
+    def __init__(self, max_context_tokens: int = 120000) -> None:
+        super().__init__(max_context_tokens=max_context_tokens)
 
     def should_compress(self, prompt_tokens: int | None = None) -> bool:
         return False

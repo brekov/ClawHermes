@@ -241,8 +241,9 @@ class CronScheduler:
                 else:
                     sleep_for = 5.0
 
-            for job in ready:
-                await self._execute_job(job.job_id)
+            if ready:
+                # 并发执行所有就绪作业，避免单个作业阻塞其他作业
+                await asyncio.gather(*[self._execute_job(j.job_id) for j in ready])
 
             await asyncio.sleep(sleep_for)
 
@@ -267,7 +268,8 @@ class CronScheduler:
 
         try:
             if self._executor:
-                result = self._executor(job.task, job.session_id)
+                # 将同步阻塞 IO（如 agent.chat）放到独立线程，避免冻结事件循环
+                result = await asyncio.to_thread(self._executor, job.task, job.session_id)
                 logger.info("Job executed: %s → %s", job_id, result[:80] if result else "")
             else:
                 logger.warning("No executor set for job %s", job_id)

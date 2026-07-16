@@ -65,33 +65,32 @@ class DelegateManager:
             } for t in tasks]
 
         results = []
-        with self._pool as executor:
-            future_map = {}
-            for task in tasks:
-                if self._paused.is_set():
-                    results.append({
-                        "task_id": task.get("id", ""),
-                        "result": "",
-                        "error": "委派已暂停",
-                    })
-                    continue
+        future_map = {}
+        for task in tasks:
+            if self._paused.is_set():
+                results.append({
+                    "task_id": task.get("id", ""),
+                    "result": "",
+                    "error": "委派已暂停",
+                })
+                continue
 
-                future = executor.submit(
-                    self._run_sub_agent, task, depth, context or {},
-                )
-                future_map[future] = task.get("id", "")
+            future = self._pool.submit(
+                self._run_sub_agent, task, depth, context or {},
+            )
+            future_map[future] = task.get("id", "")
 
-            for future in as_completed(future_map):
-                task_id = future_map[future]
-                try:
-                    result = future.result()
-                    results.append(result)
-                except Exception as e:
-                    results.append({
-                        "task_id": task_id,
-                        "result": "",
-                        "error": str(e),
-                    })
+        for future in as_completed(future_map):
+            task_id = future_map[future]
+            try:
+                result = future.result()
+                results.append(result)
+            except Exception as e:
+                results.append({
+                    "task_id": task_id,
+                    "result": "",
+                    "error": str(e),
+                })
 
         return results
 
@@ -138,3 +137,12 @@ class DelegateManager:
     def resume(self):
         """恢复委派"""
         self._paused.clear()
+
+    def shutdown(self, wait: bool = True) -> None:
+        """关闭线程池，释放资源。
+
+        应在应用关闭时调用（例如 GatewayState.shutdown 中），
+        避免线程池在进程退出前仍持有工作线程。
+        :param wait: 是否等待已提交任务完成
+        """
+        self._pool.shutdown(wait=wait)

@@ -287,6 +287,12 @@ class GatewayState:
                 await self.channel_router.stop()
             except Exception as e:
                 logger.error("Channel router stop failed: %s", e)
+        # C1 完善：关闭 DelegateManager 线程池，避免进程退出前仍持有工作线程
+        if self.delegate_manager:
+            try:
+                self.delegate_manager.shutdown(wait=True)
+            except Exception as e:
+                logger.error("Delegate manager shutdown failed: %s", e)
         for task in self._bg_tasks:
             if not task.done():
                 task.cancel()
