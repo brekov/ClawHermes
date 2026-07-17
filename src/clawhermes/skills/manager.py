@@ -42,33 +42,44 @@ class SkillManager:
         self._scoped = ScopedPath(self.skills_dir)
         self._skills: dict[str, Skill] = {}
         self._lock = threading.RLock()  # 保护 _skills dict 与文件 I/O（被 to_thread 并发调用）
-        self._load_all()
+        self._load_lock = threading.Lock()  # 保护懒加载（双重检查锁定）
+        self._loaded: bool = False
 
-    def _load_all(self):
+    def _ensure_loaded(self) -> None:
+        """懒加载：首次访问时加载所有技能（线程安全，双重检查锁定）。"""
+        if self._loaded:
+            return
+        with self._load_lock:
+            if not self._loaded:
+                self._load_all()
+                self._loaded = True
+
+    def _load_all(self) -> None:
         """从 skills_dir 加载所有技能"""
-        self._skills.clear()
-        for f in self.skills_dir.glob("*.md"):
-            name = f.stem
-            meta_file = f.with_suffix(".json")
-            meta = {}
-            if meta_file.exists():
-                try:
-                    meta = json.loads(meta_file.read_text())
-                except Exception as e:
-                    logger.warning("Failed to load skill meta %s: %s", meta_file, e)
+        with self._lock:
+            self._skills.clear()
+            for f in self.skills_dir.glob("*.md"):
+                name = f.stem
+                meta_file = f.with_suffix(".json")
+                meta = {}
+                if meta_file.exists():
+                    try:
+                        meta = json.loads(meta_file.read_text())
+                    except Exception as e:
+                        logger.warning("Failed to load skill meta %s: %s", meta_file, e)
 
-            self._skills[name] = Skill(
-                name=name,
-                content=f.read_text(encoding="utf-8"),
-                description=meta.get("description", ""),
-                category=meta.get("category", "general"),
-                version=meta.get("version", 1),
-                usage_count=meta.get("usage_count", 0),
-                last_used=meta.get("last_used", 0.0),
-                created_at=meta.get("created_at", time.time()),
-                status=meta.get("status", "active"),
-                source=meta.get("source", "user"),
-            )
+                self._skills[name] = Skill(
+                    name=name,
+                    content=f.read_text(encoding="utf-8"),
+                    description=meta.get("description", ""),
+                    category=meta.get("category", "general"),
+                    version=meta.get("version", 1),
+                    usage_count=meta.get("usage_count", 0),
+                    last_used=meta.get("last_used", 0.0),
+                    created_at=meta.get("created_at", time.time()),
+                    status=meta.get("status", "active"),
+                    source=meta.get("source", "user"),
+                )
 
     def _save_meta(self, skill: Skill):
         """保存技能元数据"""
@@ -87,16 +98,19 @@ class SkillManager:
 
     def list(self, status: str | None = None) -> list[Skill]:
         """列出技能"""
+        self._ensure_loaded()
         skills = list(self._skills.values())
         if status:
             skills = [s for s in skills if s.status == status]
         return sorted(skills, key=lambda s: s.usage_count, reverse=True)
 
     def get(self, name: str) -> Skill | None:
+        self._ensure_loaded()
         return self._skills.get(name)
 
     def create(self, name: str, content: str, description: str = "", category: str = "general") -> Skill:
         """创建新技能"""
+        self._ensure_loaded()
         with self._lock:
             self._scoped.validate_name(name)
             skill = Skill(
@@ -116,6 +130,7 @@ class SkillManager:
 
     def update(self, name: str, **kwargs) -> Skill | None:
         """更新技能"""
+        self._ensure_loaded()
         with self._lock:
             self._scoped.validate_name(name)
             skill = self.get(name)
@@ -132,6 +147,7 @@ class SkillManager:
 
     def record_usage(self, name: str):
         """记录技能使用"""
+        self._ensure_loaded()
         with self._lock:
             skill = self.get(name)
             if skill:
@@ -141,6 +157,7 @@ class SkillManager:
 
     def get_context(self, active_skills: List[str] | None = None) -> str:
         """生成技能上下文（供 System Prompt 使用）"""
+        self._ensure_loaded()
         if active_skills:
             skills = [self._skills[n] for n in active_skills if n in self._skills]
         else:

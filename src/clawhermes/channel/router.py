@@ -5,7 +5,6 @@ ClawHermes - Channel Router
 from __future__ import annotations
 
 import asyncio
-import enum
 import logging
 import time
 import uuid
@@ -19,15 +18,9 @@ from clawhermes.channel.adapter import (
     ChannelType,
 )
 from clawhermes.channel.pairing import DMPairingManager
+from clawhermes.types import QueueMode
 
 logger = logging.getLogger(__name__)
-
-
-class QueueMode(str, enum.Enum):
-    STEER = "steer"
-    FOLLOWUP = "followup"
-    COLLECT = "collect"
-    INTERRUPT = "interrupt"
 
 
 @dataclass

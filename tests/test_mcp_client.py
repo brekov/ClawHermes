@@ -432,9 +432,15 @@ class TestMCPStdioTransport:
 # ---------------------------------------------------------------------------
 
 class _FakeHttpResponse:
-    def __init__(self, payload: dict, status: int = 200):
+    def __init__(
+        self,
+        payload: dict,
+        status: int = 200,
+        headers: dict[str, str] | None = None,
+    ):
         self._payload = payload
         self.status_code = status
+        self.headers = headers if headers is not None else {"content-type": "application/json"}
 
     def raise_for_status(self) -> None:
         if self.status_code >= 400:

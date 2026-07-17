@@ -2756,3 +2756,677 @@ def test_skillhub_no_manifest_rejected(tmp_path):
             "nomani", "https://example.com/skills", allow_unverified=True,
         )
         assert result is True
+
+
+# ============================================================
+# M5 — JSONMemoryProvider 并发安全 + SQLiteMemoryProvider 测试
+# ============================================================
+
+
+class TestM5MemoryProvider:
+    """M5 修复验证 — JSONMemoryProvider 并发安全与 FIFO 淘汰，
+    以及 SQLiteMemoryProvider 基本功能。"""
+
+    def test_concurrent_save_no_corruption(self, tmp_path):
+        """JSON: 10 线程并发各 save 100 条，结果总数 = 1000，无损坏。"""
+        import threading
+
+        from clawhermes.agent.memory import JSONMemoryProvider
+        from clawhermes.types import MemoryItem, MemoryScope
+
+        provider = JSONMemoryProvider(tmp_path, max_items=10000)
+        errors: list[Exception] = []
+
+        def _worker(thread_id: int):
+            try:
+                for i in range(100):
+                    provider.save(MemoryItem(
+                        content=f"t{thread_id}-msg{i}",
+                        scope=MemoryScope.USER,
+                        importance=0.5,
+                    ))
+            except Exception as e:
+                errors.append(e)
+
+        threads = [threading.Thread(target=_worker, args=(t,)) for t in range(10)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        assert errors == [], f"并发 save 产生异常: {errors}"
+        all_items = provider.get_all()
+        assert len(all_items) == 1000, f"期望 1000 条，实际 {len(all_items)}"
+
+    def test_fifo_eviction(self, tmp_path):
+        """JSON: max_items=10，save 15 条后只保留最近 10 条。"""
+        from clawhermes.agent.memory import JSONMemoryProvider
+        from clawhermes.types import MemoryItem, MemoryScope
+
+        provider = JSONMemoryProvider(tmp_path, max_items=10)
+        for i in range(15):
+            provider.save(MemoryItem(
+                content=f"item-{i}",
+                scope=MemoryScope.USER,
+                importance=0.5,
+            ))
+
+        all_items = provider.get_all()
+        assert len(all_items) == 10, f"期望淘汰后剩 10 条，实际 {len(all_items)}"
+        # 最旧的 5 条（item-0 ~ item-4）应已被淘汰
+        contents = [item.content for item in all_items]
+        for i in range(5):
+            assert f"item-{i}" not in contents, f"item-{i} 应已被淘汰"
+        # 最近的 10 条（item-5 ~ item-14）应保留
+        for i in range(5, 15):
+            assert f"item-{i}" in contents, f"item-{i} 应保留"
+
+    def test_json_persistence_after_eviction(self, tmp_path):
+        """JSON: 淘汰后落盘再加载，数据一致。"""
+        from clawhermes.agent.memory import JSONMemoryProvider
+        from clawhermes.types import MemoryItem, MemoryScope
+
+        p1 = JSONMemoryProvider(tmp_path, max_items=5)
+        for i in range(8):
+            p1.save(MemoryItem(content=f"persist-{i}", scope=MemoryScope.USER))
+        assert len(p1.get_all()) == 5
+
+        # 重新加载
+        p2 = JSONMemoryProvider(tmp_path, max_items=5)
+        assert len(p2.get_all()) == 5
+
+    def test_sqlite_provider_basic(self, tmp_path):
+        """SQLite: 基本 写/读/搜。"""
+        from clawhermes.agent.memory import SQLiteMemoryProvider
+        from clawhermes.types import MemoryItem, MemoryScope
+
+        provider = SQLiteMemoryProvider(tmp_path, max_items=1000)
+        provider.save(MemoryItem(
+            content="hello world",
+            scope=MemoryScope.USER,
+            importance=0.9,
+        ))
+        provider.save(MemoryItem(
+            content="foo bar",
+            scope=MemoryScope.GLOBAL,
+            importance=0.5,
+        ))
+
+        # 搜索
+        results = provider.search("hello")
+        assert len(results) == 1
+        assert results[0].content == "hello world"
+        assert results[0].importance == 0.9
+
+        # 子串搜索（大小写不敏感）
+        results = provider.search("FOO")
+        assert len(results) == 1
+        assert results[0].content == "foo bar"
+
+        # get_recent
+        recent = provider.get_recent(limit=10)
+        assert len(recent) == 2
+
+        # get_all
+        all_items = provider.get_all()
+        assert len(all_items) == 2
+
+        provider.close()
+
+    def test_sqlite_concurrent_save(self, tmp_path):
+        """SQLite: 并发 save 不损坏。"""
+        import threading
+
+        from clawhermes.agent.memory import SQLiteMemoryProvider
+        from clawhermes.types import MemoryItem, MemoryScope
+
+        provider = SQLiteMemoryProvider(tmp_path, max_items=10000)
+        errors: list[Exception] = []
+
+        def _worker(thread_id: int):
+            try:
+                for i in range(100):
+                    provider.save(MemoryItem(
+                        content=f"sqlite-t{thread_id}-{i}",
+                        scope=MemoryScope.USER,
+                        importance=0.5,
+                    ))
+            except Exception as e:
+                errors.append(e)
+
+        threads = [threading.Thread(target=_worker, args=(t,)) for t in range(10)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        assert errors == [], f"并发 save 产生异常: {errors}"
+        all_items = provider.get_all()
+        assert len(all_items) == 1000, f"期望 1000 条，实际 {len(all_items)}"
+        provider.close()
+
+    def test_sqlite_fifo_eviction(self, tmp_path):
+        """SQLite: max_items=10，save 15 条后只保留最近 10 条。"""
+        from clawhermes.agent.memory import SQLiteMemoryProvider
+        from clawhermes.types import MemoryItem, MemoryScope
+
+        provider = SQLiteMemoryProvider(tmp_path, max_items=10)
+        for i in range(15):
+            provider.save(MemoryItem(
+                content=f"sqlite-item-{i}",
+                scope=MemoryScope.USER,
+                importance=0.5,
+            ))
+
+        all_items = provider.get_all()
+        assert len(all_items) == 10, f"期望淘汰后剩 10 条，实际 {len(all_items)}"
+        contents = [item.content for item in all_items]
+        for i in range(5):
+            assert f"sqlite-item-{i}" not in contents, f"sqlite-item-{i} 应已被淘汰"
+        for i in range(5, 15):
+            assert f"sqlite-item-{i}" in contents, f"sqlite-item-{i} 应保留"
+        provider.close()
+
+
+# ============================================================
+# M9 — _patch_file 描述语义修正测试
+# ============================================================
+
+
+class TestM9PatchFileDescription:
+    """M9 修复验证 — _patch_file 描述与实现语义一致。
+
+    实现仅做 `content.replace(search, replace, 1)`（替换第一处），
+    描述应与之匹配，不得声称"差异补丁/diff apply/全文替换"。
+    """
+
+    def test_description_does_not_claim_diff_or_global(self):
+        """描述不应包含 '差异补丁' 或 '全文' 等误导性措辞"""
+        registry = ToolRegistry()
+        register_builtin_tools(registry, profile="full")
+        tool = registry.get("patch_file")
+        assert tool is not None
+        desc = tool.description
+        # 不应再出现"差异补丁"误导
+        assert "差异补丁" not in desc
+        # 应明确"第一处"语义
+        assert "第一处" in desc
+
+    def test_patch_file_description_matches_behavior(self):
+        """描述声称仅替换第一处 → 实际行为应只替换第一处匹配"""
+        registry = ToolRegistry()
+        register_builtin_tools(registry, profile="full")
+        tool = registry.get("patch_file")
+        assert tool is not None
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            filepath = os.path.join(tmpdir, "multi.txt")
+            # 文件含 2 处 old_text
+            Path(filepath).write_text("AAA marker BBB marker CCC", encoding="utf-8")
+
+            # patch 后只替换第一处
+            result = tool.handler(
+                path=filepath, search="marker", replace="REPLACED",
+            )
+            assert result.get("success") is True
+            assert result.get("replacements") == 1
+            content = Path(filepath).read_text(encoding="utf-8")
+            # 第一处被替换，第二处保留
+            assert content == "AAA REPLACED BBB marker CCC"
+
+    def test_patch_file_no_match_returns_failure(self):
+        """未匹配到 search 文本时应返回失败，且文件不被修改"""
+        registry = ToolRegistry()
+        register_builtin_tools(registry, profile="full")
+        tool = registry.get("patch_file")
+        assert tool is not None
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            filepath = os.path.join(tmpdir, "nomatch.txt")
+            original = "hello world"
+            Path(filepath).write_text(original, encoding="utf-8")
+
+            result = tool.handler(
+                path=filepath, search="notexist", replace="x",
+            )
+            # 未匹配返回失败状态
+            assert "error" in result
+            assert result.get("success") is None
+            # 文件不被修改
+            assert Path(filepath).read_text(encoding="utf-8") == original
+
+
+# ============================================================
+# M13 — chat_stream 连接泄漏清理测试
+# ============================================================
+
+
+class TestM13ChatStreamCleanup:
+    """M13 修复验证 — chat_stream 异常路径下 response.aclose() 被调用。"""
+
+    @pytest.mark.asyncio
+    async def test_chat_stream_aclose_on_exception(self):
+        """流式响应迭代抛异常时，response.aclose() 必须被调用以释放连接。"""
+        from unittest.mock import AsyncMock, patch
+
+        from clawhermes.llm.provider import LLMProvider
+
+        provider = LLMProvider(model="m", api_key="k")
+
+        aclose_mock = AsyncMock()
+
+        class _FailingStream:
+            """模拟流式响应：迭代时抛异常，附带 aclose 方法。"""
+
+            def __aiter__(self):
+                return self
+
+            async def __anext__(self):
+                raise RuntimeError("stream boom")
+
+        mock_resp = _FailingStream()
+        mock_resp.aclose = aclose_mock  # type: ignore[attr-defined]
+
+        with patch(
+            "clawhermes.llm.provider.litellm.acompletion",
+            new=AsyncMock(return_value=mock_resp),
+        ):
+            with pytest.raises(RuntimeError, match="stream boom"):
+                async for _ in provider.chat_stream(
+                    [{"role": "user", "content": "hi"}],
+                ):
+                    pass
+
+        aclose_mock.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_chat_stream_aclose_on_normal_completion(self):
+        """正常完成路径下 response.aclose() 也应被调用。"""
+        from types import SimpleNamespace
+        from unittest.mock import AsyncMock, patch
+
+        from clawhermes.llm.provider import LLMProvider
+
+        provider = LLMProvider(model="m", api_key="k")
+        aclose_mock = AsyncMock()
+
+        class _NormalStream:
+            def __aiter__(self):
+                self._idx = 0
+                return self
+
+            async def __anext__(self):
+                if self._idx == 0:
+                    self._idx += 1
+                    return SimpleNamespace(
+                        choices=[
+                            SimpleNamespace(
+                                delta=SimpleNamespace(content="hi", tool_calls=None),
+                                finish_reason="stop",
+                            ),
+                        ],
+                        usage=None,
+                        model="m",
+                    )
+                raise StopAsyncIteration
+
+        mock_resp = _NormalStream()
+        mock_resp.aclose = aclose_mock  # type: ignore[attr-defined]
+
+        with patch(
+            "clawhermes.llm.provider.litellm.acompletion",
+            new=AsyncMock(return_value=mock_resp),
+        ):
+            results = []
+            async for chunk in provider.chat_stream(
+                [{"role": "user", "content": "hi"}],
+            ):
+                results.append(chunk)
+
+        aclose_mock.assert_called_once()
+        # 正常完成应有 done 事件
+        assert results[-1].kind == "done"
+
+
+# ============================================================
+# M17 — Skills 懒加载测试
+# ============================================================
+
+
+class TestM17SkillsLazyLoad:
+    """M17 修复验证 — SkillManager 懒加载，冷启动不扫描技能目录。"""
+
+    def test_skills_lazy_load_not_loaded_on_init(self, tmp_path):
+        """构造 SkillManager 后 _loaded 应为 False（未触发加载）。"""
+        from clawhermes.skills.manager import SkillManager
+
+        # 预放一些技能文件，验证构造时不被加载
+        (tmp_path / "skill_a.md").write_text("# A")
+        (tmp_path / "skill_b.md").write_text("# B")
+
+        sm = SkillManager(tmp_path)
+        assert sm._loaded is False
+        # 构造后 _skills 应为空（未加载）
+        assert len(sm._skills) == 0
+
+    def test_skills_lazy_load_on_first_access(self, tmp_path):
+        """首次 list() 触发加载，_loaded 变为 True。"""
+        from clawhermes.skills.manager import SkillManager
+
+        (tmp_path / "skill_a.md").write_text("# A")
+
+        sm = SkillManager(tmp_path)
+        assert sm._loaded is False
+
+        skills = sm.list()
+        # 加载后应能读到预放的技能
+        assert sm._loaded is True
+        assert len(skills) == 1
+        assert skills[0].name == "skill_a"
+
+    def test_skills_lazy_load_only_once(self, tmp_path, monkeypatch):
+        """多次 list() 只触发一次 _load_all。"""
+        from clawhermes.skills.manager import SkillManager
+
+        sm = SkillManager(tmp_path)
+
+        call_count = 0
+        original_load_all = sm._load_all
+
+        def counting_load_all():
+            nonlocal call_count
+            call_count += 1
+            original_load_all()
+
+        monkeypatch.setattr(sm, "_load_all", counting_load_all)
+
+        sm.list()
+        sm.list()
+        sm.list()
+
+        assert call_count == 1
+
+    def test_skills_lazy_load_on_get(self, tmp_path):
+        """首次 get() 也触发加载。"""
+        from clawhermes.skills.manager import SkillManager
+
+        (tmp_path / "skill_x.md").write_text("# X")
+
+        sm = SkillManager(tmp_path)
+        assert sm._loaded is False
+
+        skill = sm.get("skill_x")
+        assert sm._loaded is True
+        assert skill is not None
+        assert skill.name == "skill_x"
+
+    def test_skills_lazy_load_on_create(self, tmp_path):
+        """首次 create() 也触发加载（加载已有技能后再追加）。"""
+        from clawhermes.skills.manager import SkillManager
+
+        (tmp_path / "existing.md").write_text("# existing")
+
+        sm = SkillManager(tmp_path)
+        assert sm._loaded is False
+
+        sm.create("new_skill", "content", "desc")
+        assert sm._loaded is True
+        # 加载已有 + 新创建
+        all_skills = sm.list()
+        names = {s.name for s in all_skills}
+        assert "existing" in names
+        assert "new_skill" in names
+
+
+# ============================================================
+# M18 — MCP Streamable-HTTP SSE 响应流支持测试
+# ============================================================
+
+
+class _SseHttpResponse:
+    """模拟 httpx SSE 响应（content-type=text/event-stream）。"""
+
+    def __init__(self, text: str, status: int = 200):
+        self.text = text
+        self.status_code = status
+        self.headers = {"content-type": "text/event-stream"}
+
+    def raise_for_status(self) -> None:
+        if self.status_code >= 400:
+            raise RuntimeError(f"HTTP {self.status_code}")
+
+    def json(self) -> dict:
+        raise NotImplementedError("SSE response has no .json()")
+
+
+class _JsonHttpResponse:
+    """模拟 httpx JSON 响应（content-type=application/json）。"""
+
+    def __init__(self, payload: dict, status: int = 200):
+        self._payload = payload
+        self.status_code = status
+        self.headers = {"content-type": "application/json"}
+
+    def raise_for_status(self) -> None:
+        if self.status_code >= 400:
+            raise RuntimeError(f"HTTP {self.status_code}")
+
+    def json(self) -> dict:
+        return self._payload
+
+
+class _CapturingSession:
+    """模拟 httpx.AsyncClient，按顺序返回预设响应。"""
+
+    def __init__(self, responses: list):
+        self._responses = list(responses)
+        self.posts: list[dict] = []
+        self.closed = False
+
+    async def post(self, path: str, json: dict):
+        self.posts.append(json)
+        return self._responses.pop(0)
+
+    async def aclose(self):
+        self.closed = True
+
+
+class TestM18McpSseResponse:
+    """M18 修复验证 — MCP Streamable-HTTP SSE 响应流解析。"""
+
+    @pytest.mark.asyncio
+    async def test_mcp_http_sse_response_parsed(self):
+        """SSE 响应含心跳注释 + event 行 + data 行，应正确解析出 result。"""
+        from clawhermes.mcp.client import MCPClient, MCPServerSpec
+
+        client = MCPClient(MCPServerSpec(name="s", transport="http", url="http://srv"))
+        sse_body = (
+            "\n"
+            ": heartbeat\n"
+            "\n"
+            "event: message\n"
+            'data: {"jsonrpc":"2.0","id":1,"result":{"tools":[]}}\n'
+            "\n"
+        )
+        client._session = _CapturingSession([_SseHttpResponse(sse_body)])
+        client._connected = True
+
+        result = await client._send_request_http("tools/list", {})
+        assert result == {"tools": []}
+
+    @pytest.mark.asyncio
+    async def test_mcp_http_sse_multi_data_lines(self):
+        """多行 data 应用 \\n 连接后再 JSON parse。"""
+        from clawhermes.mcp.client import MCPClient, MCPServerSpec
+
+        client = MCPClient(MCPServerSpec(name="s", transport="http", url="http://srv"))
+        sse_body = (
+            'data: {"jsonrpc":"2.0","id":1,\n'
+            'data: "result":{"tools":[1,2]}}\n'
+        )
+        client._session = _CapturingSession([_SseHttpResponse(sse_body)])
+        client._connected = True
+
+        result = await client._send_request_http("tools/list", {})
+        assert result == {"tools": [1, 2]}
+
+    @pytest.mark.asyncio
+    async def test_mcp_http_json_response_unchanged(self):
+        """content-type=application/json 时行为不变，走 .json() 路径。"""
+        from clawhermes.mcp.client import MCPClient, MCPServerSpec
+
+        client = MCPClient(MCPServerSpec(name="s", transport="http", url="http://srv"))
+        payload = {"jsonrpc": "2.0", "id": 1, "result": {"tools": [{"name": "t"}]}}
+        client._session = _CapturingSession([_JsonHttpResponse(payload)])
+        client._connected = True
+
+        result = await client._send_request_http("tools/list", {})
+        assert result == {"tools": [{"name": "t"}]}
+
+
+# ============================================================
+# M10 补充 — DockerSandbox 默认禁用网络测试
+# ============================================================
+
+
+class TestM10DockerSandboxNetwork:
+    """M10 补充修复验证 — DockerSandbox 默认禁用网络（最小权限原则）。"""
+
+    def test_sandbox_default_network_disabled(self):
+        """构造 DockerSandbox() 默认 network_enabled 为 False。"""
+        from clawhermes.tools.sandbox import DockerSandbox
+
+        sb = DockerSandbox()
+        assert sb._network is False
+
+    def test_sandbox_run_container_includes_network_none(self, monkeypatch):
+        """network_enabled=False 时 docker run 参数含 --network none。"""
+        from unittest.mock import MagicMock
+
+        from clawhermes.tools.sandbox import DockerSandbox
+
+        captured_args: list[str] = []
+
+        def _fake_run(args, **kwargs):
+            captured_args.extend(args)
+            return MagicMock(returncode=0, stdout="", stderr="")
+
+        monkeypatch.setattr(
+            "clawhermes.tools.sandbox.shutil.which",
+            lambda *a, **kw: "/usr/bin/docker",
+        )
+        monkeypatch.setattr("clawhermes.tools.sandbox.subprocess.run", _fake_run)
+
+        sb = DockerSandbox()  # 默认 network_enabled=False
+        sb.run_command("echo hello")
+
+        assert "--network" in captured_args
+        idx = captured_args.index("--network")
+        assert captured_args[idx + 1] == "none"
+
+    def test_sandbox_network_enabled_omits_network_none(self, monkeypatch):
+        """network_enabled=True 时参数不含 --network none。"""
+        from unittest.mock import MagicMock
+
+        from clawhermes.tools.sandbox import DockerSandbox
+
+        captured_args: list[str] = []
+
+        def _fake_run(args, **kwargs):
+            captured_args.extend(args)
+            return MagicMock(returncode=0, stdout="", stderr="")
+
+        monkeypatch.setattr(
+            "clawhermes.tools.sandbox.shutil.which",
+            lambda *a, **kw: "/usr/bin/docker",
+        )
+        monkeypatch.setattr("clawhermes.tools.sandbox.subprocess.run", _fake_run)
+
+        sb = DockerSandbox(network_enabled=True)
+        sb.run_command("echo hello")
+
+        assert "--network" not in captured_args
+
+
+# ============================================================
+# Task 5.8 — QueueMode 重复定义收敛验证
+# ============================================================
+
+
+class TestQueueModeConvergence:
+    """Task 5.8 — QueueMode 应只在 clawhermes.types 中定义一次。"""
+
+    def test_queue_mode_single_definition(self):
+        """src/clawhermes 中 QueueMode 应只有一处 class 定义（types.py）。"""
+        import ast
+        from pathlib import Path
+
+        src_root = Path(__file__).resolve().parent.parent / "src" / "clawhermes"
+        definitions: list[str] = []
+        for py_file in src_root.rglob("*.py"):
+            try:
+                tree = ast.parse(py_file.read_text(encoding="utf-8"))
+            except SyntaxError:
+                continue
+            for node in ast.walk(tree):
+                if isinstance(node, ast.ClassDef) and node.name == "QueueMode":
+                    definitions.append(str(py_file))
+        assert len(definitions) == 1, (
+            f"QueueMode 应只有一处 class 定义，实际找到: {definitions}"
+        )
+        assert definitions[0].endswith("types.py"), (
+            f"QueueMode 应定义在 types.py，实际在: {definitions[0]}"
+        )
+
+    def test_queue_mode_importable_from_types(self):
+        """QueueMode 可从 clawhermes.types 导入，且枚举值正确。"""
+        from clawhermes.types import QueueMode
+
+        assert QueueMode.STEER == "steer"
+        assert QueueMode.FOLLOWUP == "followup"
+        assert QueueMode.COLLECT == "collect"
+        assert QueueMode.INTERRUPT == "interrupt"
+
+    def test_queue_mode_reexported_from_router(self):
+        """向后兼容：clawhermes.channel.router 仍可导入 QueueMode，且与 types 中为同一对象。"""
+        from clawhermes.channel.router import QueueMode as RouterQueueMode
+        from clawhermes.types import QueueMode as TypesQueueMode
+
+        assert RouterQueueMode is TypesQueueMode
+
+    def test_queue_mode_reexported_from_channel_init(self):
+        """向后兼容：clawhermes.channel 仍可导入 QueueMode。"""
+        from clawhermes.channel import QueueMode as ChannelQueueMode
+        from clawhermes.types import QueueMode as TypesQueueMode
+
+        assert ChannelQueueMode is TypesQueueMode
+
+
+# ============================================================
+# Task 5.10 — pyproject 版本号修正验证
+# ============================================================
+
+
+class TestPyprojectVersion:
+    """Task 5.10 — 版本号应同步至 0.15.2（PR1-PR5 安全修复批次）。"""
+
+    def test_version_bumped_to_0_15_2(self):
+        """clawhermes.__version__ 应为 0.15.2。"""
+        from clawhermes import __version__
+
+        assert __version__ == "0.15.2"
+
+    def test_pyproject_version_matches_package_version(self):
+        """pyproject.toml 中的 version 应与 __version__ 一致。"""
+        import re
+        from pathlib import Path
+
+        from clawhermes import __version__
+
+        pyproject = Path(__file__).resolve().parent.parent / "pyproject.toml"
+        content = pyproject.read_text(encoding="utf-8")
+        match = re.search(r'^version\s*=\s*"([^"]+)"', content, re.MULTILINE)
+        assert match is not None, "pyproject.toml 缺少 version 字段"
+        assert match.group(1) == __version__, (
+            f"pyproject.toml 版本 ({match.group(1)}) 与 __version__ ({__version__}) 不一致"
+        )

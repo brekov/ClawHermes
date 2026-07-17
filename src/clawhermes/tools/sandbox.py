@@ -66,7 +66,7 @@ class DockerSandbox:
     - Shell 命令执行
     - 超时控制
     - 内存限制
-    - 网络隔离
+    - 网络隔离（默认禁用网络，遵循最小权限原则）
     - 文件挂载
     """
 
@@ -78,7 +78,7 @@ class DockerSandbox:
         timeout_seconds: int = 30,
         memory_limit: str = "256m",
         cpu_limit: str = "1.0",
-        network_enabled: bool = True,
+        network_enabled: bool = False,
         work_dir: str | Path | None = None,
     ):
         self._image = image or self.DEFAULT_IMAGE
@@ -169,7 +169,7 @@ class DockerSandbox:
         ]
 
         if not self._network:
-            cmd.append("--network=none")
+            cmd.extend(["--network", "none"])
 
         if mounts:
             for host_path, container_path in mounts:

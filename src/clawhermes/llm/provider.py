@@ -309,75 +309,84 @@ class LLMProvider:
         final_model = ""
         tool_call_acc: dict[int, dict] = {}  # index → partial tool_call
 
-        async for chunk in response:
-            # usage chunk（stream_options=include_usage 时单独出现）
-            if hasattr(chunk, "usage") and chunk.usage:
-                final_usage = _usage_to_dict(chunk.usage)
+        try:
+            async for chunk in response:
+                # usage chunk（stream_options=include_usage 时单独出现）
+                if hasattr(chunk, "usage") and chunk.usage:
+                    final_usage = _usage_to_dict(chunk.usage)
 
-            if not chunk.choices:
-                continue
+                if not chunk.choices:
+                    continue
 
-            choice = chunk.choices[0]
-            final_model = chunk.model or final_model
+                choice = chunk.choices[0]
+                final_model = chunk.model or final_model
 
-            delta = choice.delta if hasattr(choice, "delta") else None
-            if delta is None:
-                continue
+                delta = choice.delta if hasattr(choice, "delta") else None
+                if delta is None:
+                    continue
 
-            # 文本内容
-            if delta.content:
-                buffer.append(delta.content)
-                buffer_len += len(delta.content)
-                finish = getattr(choice, "finish_reason", None)
-                # >= 800 chars 或遇到 finish_reason 时 flush
-                if buffer_len >= 800 or finish:
-                    yield StreamChunk(
-                        kind="text",
-                        content="".join(buffer),
-                        model=final_model,
-                    )
-                    buffer.clear()
-                    buffer_len = 0
+                # 文本内容
+                if delta.content:
+                    buffer.append(delta.content)
+                    buffer_len += len(delta.content)
+                    finish = getattr(choice, "finish_reason", None)
+                    # >= 800 chars 或遇到 finish_reason 时 flush
+                    if buffer_len >= 800 or finish:
+                        yield StreamChunk(
+                            kind="text",
+                            content="".join(buffer),
+                            model=final_model,
+                        )
+                        buffer.clear()
+                        buffer_len = 0
 
-            # 工具调用（累积）
-            if delta.tool_calls:
-                for tc in delta.tool_calls:
-                    idx = tc.index if hasattr(tc, "index") else 0
-                    if idx not in tool_call_acc:
-                        tool_call_acc[idx] = {
-                            "id": "",
-                            "type": "function",
-                            "function": {"name": "", "arguments": ""},
-                        }
-                    if hasattr(tc, "id") and tc.id:
-                        tool_call_acc[idx]["id"] = tc.id
-                    if hasattr(tc, "function"):
-                        if hasattr(tc.function, "name") and tc.function.name:
-                            tool_call_acc[idx]["function"]["name"] += tc.function.name
-                        if hasattr(tc.function, "arguments") and tc.function.arguments:
-                            tool_call_acc[idx]["function"]["arguments"] += tc.function.arguments
+                # 工具调用（累积）
+                if delta.tool_calls:
+                    for tc in delta.tool_calls:
+                        idx = tc.index if hasattr(tc, "index") else 0
+                        if idx not in tool_call_acc:
+                            tool_call_acc[idx] = {
+                                "id": "",
+                                "type": "function",
+                                "function": {"name": "", "arguments": ""},
+                            }
+                        if hasattr(tc, "id") and tc.id:
+                            tool_call_acc[idx]["id"] = tc.id
+                        if hasattr(tc, "function"):
+                            if hasattr(tc.function, "name") and tc.function.name:
+                                tool_call_acc[idx]["function"]["name"] += tc.function.name
+                            if hasattr(tc.function, "arguments") and tc.function.arguments:
+                                tool_call_acc[idx]["function"]["arguments"] += tc.function.arguments
 
-        # flush 残留 buffer
-        if buffer:
+            # flush 残留 buffer
+            if buffer:
+                yield StreamChunk(
+                    kind="text",
+                    content="".join(buffer),
+                    model=final_model,
+                )
+
+            # 发出累积的工具调用
+            if tool_call_acc:
+                accumulated_tool_calls = [
+                    tool_call_acc[i] for i in sorted(tool_call_acc)
+                ]
+                yield StreamChunk(
+                    kind="tool_calls",
+                    tool_calls=accumulated_tool_calls,
+                    model=final_model,
+                )
+
             yield StreamChunk(
-                kind="text",
-                content="".join(buffer),
+                kind="done",
+                usage=final_usage,
                 model=final_model,
             )
-
-        # 发出累积的工具调用
-        if tool_call_acc:
-            accumulated_tool_calls = [
-                tool_call_acc[i] for i in sorted(tool_call_acc)
-            ]
-            yield StreamChunk(
-                kind="tool_calls",
-                tool_calls=accumulated_tool_calls,
-                model=final_model,
-            )
-
-        yield StreamChunk(
-            kind="done",
-            usage=final_usage,
-            model=final_model,
-        )
+        finally:
+            # 确保异常/正常路径下 response 都被关闭，避免 httpx 连接泄漏
+            aclose = getattr(response, "aclose", None)
+            if aclose is not None:
+                try:
+                    await aclose()
+                except Exception:
+                    logger.debug("Failed to aclose stream response", exc_info=True)

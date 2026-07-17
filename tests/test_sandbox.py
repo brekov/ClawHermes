@@ -58,7 +58,7 @@ class TestDockerSandbox:
         assert sb._timeout == 30
         assert sb._memory == "256m"
         assert sb._cpu == "1.0"
-        assert sb._network is True
+        assert sb._network is False
 
     def test_custom_config(self):
         sb = DockerSandbox(
