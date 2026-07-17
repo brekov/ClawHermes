@@ -1,5 +1,177 @@
 # Changelog
 
+## v0.15.2 (2026-07-16)
+
+基于 `review.md` 全面代码评审的系统性安全修复版本，35 项问题分 5 个 PR 阶段合入 main，外加 1 个 CI 修复 PR。9 Critical + 10 High + 16 Medium 全部修复。
+
+### PR1 (#55) — Agent 核心修复（P0）
+
+#### C1 委派线程池销毁
+- **问题**：`DelegateManager` 使用 `with self._pool as executor` 触发 `shutdown()` 销毁池，第二次 `delegate()` 报 `RuntimeError: cannot schedule new futures after shutdown`
+- **方案**：移除 `with` 上下文，改 `submit` 直调 + `as_completed`，新增 `DelegateManager.shutdown()` 方法在应用关闭时调用
+
+#### C2 调度器非阻塞执行
+- **问题**：`CronScheduler._execute_job` 直接 `self._executor.submit(job.func)`，executor 满载时 `_run_loop` 阻塞，`/health` 无响应
+- **方案**：`asyncio.to_thread` 包装 executor 调用 + `asyncio.gather` 并发执行 ready 作业
+
+#### C3 上下文压缩判据
+- **问题**：`should_compress` 用 `last_prompt_tokens` 相对增量判定，但该字段从未被赋值，永远不触发压缩
+- **方案**：删除 `last_prompt_tokens`，改 `max_context_tokens` 绝对阈值 `prompt_tokens > max_context_tokens * threshold_percent`
+
+#### C7/C8 同步路径事件循环崩溃
+- **问题**：`execute` 在运行中的事件循环内调用 `asyncio.run()` 抛 `RuntimeError: asyncio.run() cannot be called from a running event loop`；`_execute_single_tool` 协程 handler 在运行循环内崩溃
+- **方案**：`_execute_single_tool` 检测运行中循环，协程 handler 走 `run_coroutine_threadsafe`；`execute` 移除 `new_event_loop`，文档化"同步 execute 不得在运行循环内调用"
+
+#### M1 chat_stream 复用辅助方法
+- **问题**：`chat_stream` 重复实现 `_build_messages`/`_should_loop_continue`/`_finalize_response` 逻辑
+- **方案**：统一调用三个辅助方法，stream 完成后正确触发 `AFTER_AGENT_END` hook
+
+### PR2 (#56) — 工具安全加固（P0）
+
+#### H1 ScopedPath 路径校验
+- **方案**：新建 `src/clawhermes/util/scoped_path.py` `ScopedPath` 类，名称正则 `re.fullmatch(r"[A-Za-z0-9_\-]{1,64}", name)` + `is_relative_to()` 双层防御
+- **应用**：`SkillManager.create/update/_save_meta`、`AgentManager.agent_path/create_agent/delete_agent/write_*` 全部校验
+- **测试**：`"../../.ssh/authorized_keys"`、`/etc/passwd`、`evil\x00.txt` 抛 `ConfigValidationError`
+
+#### H2 文件工具白名单与限制
+- **方案**：`_read_file`/`_write_file`/`_patch_file`/`_search_replace`/`_hash_file`/`_compress_file` 加 workspace root 校验
+- **限制**：`_read_file` 1MB 上限截断；`_write_file` `require_confirm=True` + 10MB 上限
+
+#### H3 SQLite 工具限制
+- **方案**：`_sqlite_query` `db_path` 限定 data_dir；默认 `mode=ro` URI；写操作需 `allow_write=True`
+
+#### C4/C5/M10 沙箱硬化
+- **方案**：`DockerSandbox._run_container` 追加 `--user 65534:65534 --read-only --tmpfs /tmp --cap-drop=ALL --security-opt=no-new-privileges --pids-limit=64`
+- **接入**：`_exec_command`/`_code_eval` 检测 `DockerSandbox.is_available()`，可用走沙箱，不可用回退 + 日志注明
+- **收敛**：`STANDARD_TOOLS` 移除 `exec`（仅 full profile 可用）
+
+### PR3 (#57) — 基础设施安全（P0）
+
+#### C6/H8 DM 配对重设计
+- **问题**：`verify_code` 不校验 user_id，A 用户可用 B 用户的 code 完成配对；CODE_LENGTH=6 碰撞概率高；HMAC 共享密钥模型不可扩展
+- **方案**：
+  - `verify_code` `user_id` 改必填，与配对码绑定校验
+  - 挑战验证改 **Ed25519 公钥签名**（服务端存公钥，客户端私钥签名），HMAC 向后兼容
+  - 新增**漏桶限流** 10/min/user_id，超限抛 `PairingRateLimitError`
+  - `CODE_LENGTH` 升至 8
+
+#### H4 Gateway 认证兜底
+- **方案**：
+  - 启动 fail-fast：`CH_GATEWAY_SECRET` 空 + host in {0.0.0.0, ::} → `sys.exit(1)`
+  - `_gateway_secret_middleware` 改 `hmac.compare_digest` 恒定时间比较
+  - CORS credentials+wildcard 互斥校验
+
+#### H7 .env 权限
+- **方案**：`_write_env` 后 `env_path.chmod(0o600)`
+
+#### H10 INTERRUPT 只清当前 session
+- **问题**：`channel/router.py` INTERRUPT 分支清空整个队列，session A 的 INTERRUPT 影响 session B
+- **方案**：按 `chat_id` 过滤，仅清当前 session 队列
+
+#### C11 requests 依赖修复
+- **问题**：`cli/setup.py:940` `import requests` 但 `requests` 不在依赖中，且 `ImportError` 分支误导
+- **方案**：改用 `httpx`，移除误导性 ImportError 分支
+
+#### H9 LLMProvider 兼容性
+- **问题**：`dict(usage)` 在新版 litellm（Pydantic 模型）抛 `TypeError`；`retry_after` 未解析 `Retry-After` 头
+- **方案**：新增 `_usage_to_dict(usage)` 兼容 Pydantic `model_dump`；`retry_after` 解析 `Retry-After` 头
+
+### PR4 (#58) — 健壮性提升（P1）
+
+#### M2/M6/M11 Dead Code 清理
+- 删除 `AgentConfig.max_tool_calls_per_round`/`queue_mode` 死字段
+- 删除 `scheduler._load_jobs` 中恒等赋值分支
+- `MemoryError` → `ClawHermesMemoryError`，避免遮蔽内置 `MemoryError`
+
+#### M3/M12 异常处理规范化
+- `loop.py` `locals()` 判定改 `result = None` 前置
+- `agent_mgr.py` `split("\n")[1]` 加长度判断，单行指令不抛 IndexError
+
+#### M4 asyncio API 现代化
+- `asyncio.get_event_loop()` → `get_running_loop()` 检测 + `new_event_loop()` 创建，消除 Python 3.12 DeprecationWarning
+
+#### M7 原子文件写
+- 新建 `src/clawhermes/util/atomic.py` `atomic_write`：tmp 文件 + `os.replace` 原子替换
+- `scheduler`/`pairing`/`memory`/`skills/manager` 全部 `_save_*` 方法替换
+- 失败时原文件保持完整
+
+#### M8 \_http\_request 改 httpx
+- 从 curl 子进程改为 `httpx.Client`，消除 shell 注入风险
+
+#### M14 gateway \_auto\_init 健壮性
+- `_auto_init` 失败后 `_state._init_error`，`/health` 返回 degraded
+- 非 health 端点未初始化返回 503
+- 白名单含 `/health`、`/init`、`/docs`、`/openapi.json`、`/redoc`
+
+#### H5 Session 锁优化
+- `SessionManager` 读操作（`get_session`/`list_sessions`/`get_messages`）移除 `with self._lock:`，仅写操作加锁
+
+#### H6 SkillHub 安全补齐
+- `verify` 增加签名校验
+- `_install_from` 增加 `min_clawhermes` 版本比对
+- 无 manifest 默认拒绝，需 `allow_unverified=True`
+- `_is_git_url` 改用 `urllib.parse.urlparse`
+
+### PR5 (#59) — 长期改进（P2）
+
+#### M5 JSONMemoryProvider 重构
+- `JSONMemoryProvider`：增加 `threading.RLock` 保护所有读写，新增 `max_items=1000` FIFO 淘汰
+- 新增 `SQLiteMemoryProvider`：基于 `sqlite3` 标准库，WAL 模式，大小写不敏感 LIKE 子串匹配
+
+#### M9 \_patch\_file 语义修正
+- 描述与实现一致 — "仅查找第一处出现并替换"
+
+#### M13 chat\_stream 连接清理
+- `chat_stream` 用 `try/finally` 包裹流式消费，确保异常路径下 `await response.aclose()` 被调用
+
+#### M17 Skills 懒加载
+- `SkillManager.__init__` 移除 `_load_all()` 调用，改为 `_ensure_loaded()` 双重检查锁定懒加载
+
+#### M18 MCP Streamable-HTTP SSE 支持
+- `_send_request_http` 检查 `Content-Type`，若为 `text/event-stream` 走 SSE 解析路径（多行 data 用 `\n` 连接）
+
+#### M10 补充 DockerSandbox 默认禁用网络
+- `network_enabled` 默认 `False`，`_run_container` 默认追加 `--network none`
+
+#### Task 5.8 收敛 QueueMode 重复定义
+- `types.py` 保留唯一定义，`router.py` 改 `from clawhermes.types import QueueMode`
+
+#### Task 5.10 版本号修正
+- `pyproject.toml` + `__init__.py` 同步 `0.15.2`
+
+#### Task 5.11 新建 test\_security.py 负例套件
+- 14 个用例：路径穿越（4）/ SQL 注入（3）/ 配对绕过（4）/ CORS Gateway（3）
+
+### PR6 (#60) — CI 修复
+
+#### Test 修复
+- `DockerSandbox.run_python` 临时脚本 `os.chmod(0o644)` 让 nobody 可读，解决 CI 上 Permission denied
+- `pyproject.toml` 添加 `cryptography>=42.0` 显式依赖（PR3 C6 Ed25519 用）
+
+#### Mypy 修复
+- `provider.py` `_usage_to_dict` 返回 `dict(usage.model_dump())` 显式转 dict
+- `builtin.py` subprocess fallback 路径改用 `sub_result` 变量名，消除 SandboxResult vs CompletedProcess 类型混淆
+- `dm.py` `dm_pair_verify` `user_id` 改必填 `str`，与 C6 安全语义一致
+
+### 推迟到 v0.16.0
+
+- Task 5.7: 重构 `agent/loop.py` 拆分为 4 文件 + 统一 `_iterate` generator — 高风险重构
+- Task 5.9: ruff 开启 `S`/`B006`/`ASYNC` 严格规则 — 改动面大
+
+### 质量指标
+
+| 指标 | v0.15.1 | v0.15.2 | 变化 |
+|:---|:---|:---|:---|
+| 测试用例 | 659 | 755 | +96 |
+| 源文件 | 44 | 48 | +4 |
+| 内置工具 | 35 | 35 | — |
+| API 端点 | 33 | 33 | — |
+| ruff | 0 | 0 | ✅ |
+| mypy | 0 | 0 | ✅ |
+| 安全测试套件 | 0 | 14 | +14（path traversal/SQL 注入/配对绕过/CORS bypass） |
+
+---
+
 ## v0.15.1 (2026-07-14)
 
 基于全面代码评审的安全修复与质量加固版本，6 个 PR 全部合入 main。

@@ -1,16 +1,17 @@
 # ClawHermes
 
 > 融合 **Hermes** 自进化能力与 **OpenClaw** Gateway 体系的 Python AI Agent 框架
-> v0.15.1 · 44 个源文件 + 3 个子仓库 · 659 个测试 · 35 个工具 · 飞书/微信/QQ 渠道 · 安全加固
+> v0.15.2 · 48 个源文件 + 3 个子仓库 · 755 个测试 · 35 个工具 · 飞书/微信/QQ 渠道 · 系统性安全加固（35 项评审修复）
 
 ---
 
 <div>
   <a href="https://github.com/brekov/ClawHermes"><img src="https://img.shields.io/badge/python-3.12%2B-blue" alt="Python 3.12+"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="MIT"></a>
-  <img src="https://img.shields.io/badge/tests-659%2F659-brightgreen" alt="tests 659/659">
+  <img src="https://img.shields.io/badge/tests-755%2F755-brightgreen" alt="tests 755/755">
   <img src="https://img.shields.io/badge/coverage-73%25-yellow" alt="coverage 73%">
-  <a href="https://github.com/brekov/ClawHermes/releases"><img src="https://img.shields.io/github/v/release/brekov/ClawHermes" alt="release v0.15.1"></a>
+  <img src="https://img.shields.io/badge/security-14%20neg--tests-blue" alt="security 14 neg-tests">
+  <a href="https://github.com/brekov/ClawHermes/releases"><img src="https://img.shields.io/github/v/release/brekov/ClawHermes" alt="release v0.15.2"></a>
 </div>
 
 ---
@@ -29,10 +30,11 @@ clawhermes chat
 |:---|:---|
 | **Agent 核心** | 多 LLM 接入(132)、三层 Prompt、ACE 自适应压缩、子 Agent 委派、多 Agent |
 | **工具系统** | 35 个内置工具、3 级 Profile、MCP 动态工具发现、钩子系统(async + 超时)、并行/串行调度、AST 白名单求值器、危险命令黑名单 |
-| **记忆系统** | JSON + ChromaDB 双存储、语义搜索、跨会话持久化 |
+| **记忆系统** | JSON + SQLite + ChromaDB 三存储、FIFO 淘汰、语义搜索、跨会话持久化 |
 | **技能系统** | SkillManager + Background Review(自进化) + Curator(维护) + SkillHub(发布) |
-| **基础设施** | Cron 调度器、Docker 沙箱、Channel SDK + 飞书/微信/QQ 适配器、mypy 严格类型、并发锁保护 |
+| **基础设施** | Cron 调度器、Docker 沙箱（默认禁网）、Channel SDK + 飞书/微信/QQ 适配器、mypy 严格类型、并发锁保护 |
 | **渠道配置** | YAML ${VAR} 单一来源、权限门控、Webhook 签名校验、消息去重 LRU |
+| **安全加固** | ScopedPath 路径校验、文件工具限制、SQLite 只读、沙箱硬化、Ed25519 配对、Gateway fail-fast、原子文件写、安全负例套件 |
 
 ## 三、部署
 
@@ -76,4 +78,4 @@ bash <(curl -fsSL https://raw.githubusercontent.com/brekov/ClawHermes/main/scrip
 
 ---
 
-*ClawHermes · 融合 Hermes 与 OpenClaw 的 AI Agent 框架 · v0.15.1 · MIT License*
+*ClawHermes · 融合 Hermes 与 OpenClaw 的 AI Agent 框架 · v0.15.2 · MIT License*
