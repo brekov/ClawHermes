@@ -1,7 +1,54 @@
 # ClawHermes · 完整功能介绍
 
-> 版本：v0.15.1 | 源文件：44 个 + 3 个子仓库 | 测试：659/659 ✅
+> 版本：v0.15.2 | 源文件：48 个 + 3 个子仓库 | 测试：755/755 ✅ | 安全测试套件：14
 > GitHub：https://github.com/brekov/ClawHermes
+
+---
+
+## 〇、安全加固（v0.15.2 新增）
+
+基于 `review.md` 全面代码评审，35 项问题（9 Critical + 10 High + 16 Medium）系统性修复，6 个 PR 分阶段合入。
+
+### 0.1 路径穿越防护（H1）
+- **ScopedPath 类**（`util/scoped_path.py`）：名称正则 `re.fullmatch(r"[A-Za-z0-9_\-]{1,64}", name)` + `is_relative_to()` 双层防御
+- **应用范围**：`SkillManager.create/update/_save_meta`、`AgentManager.agent_path/create_agent/delete_agent/write_*`
+- **拦截用例**：`../../.ssh/authorized_keys` / `/etc/passwd` / `evil\x00.txt` → `ConfigValidationError`
+
+### 0.2 文件工具限制（H2）
+- 6 个工具加 workspace root 校验：`_read_file`/`_write_file`/`_patch_file`/`_search_replace`/`_hash_file`/`_compress_file`
+- `_read_file` 1MB 上限截断；`_write_file` `require_confirm=True` + 10MB 上限
+
+### 0.3 SQLite 工具限制（H3）
+- `db_path` 限定 data_dir；默认 `mode=ro` URI；写操作需 `allow_write=True`
+
+### 0.4 Docker 沙箱硬化（C4/C5/M10）
+- `DockerSandbox._run_container` 参数：`--user 65534:65534 --read-only --tmpfs /tmp --cap-drop=ALL --security-opt=no-new-privileges --pids-limit=64 --network none`
+- `_exec_command`/`_code_eval` 优先走沙箱，不可用回退 + 日志注明
+- `STANDARD_TOOLS` 移除 `exec`（仅 full profile 可用）
+
+### 0.5 DM 配对安全（C6/H8）
+- `verify_code` `user_id` 必填，与配对码绑定校验
+- **Ed25519 公钥签名**挑战验证（服务端存公钥，客户端私钥签名），HMAC 向后兼容
+- **漏桶限流** 10/min/user_id，超限抛 `PairingRateLimitError`
+- `CODE_LENGTH = 8`
+
+### 0.6 Gateway 认证（H4）
+- 启动 fail-fast：`CH_GATEWAY_SECRET` 空 + host in {0.0.0.0, ::} → `sys.exit(1)`
+- `_gateway_secret_middleware` 用 `hmac.compare_digest` 恒定时间比较
+- CORS credentials+wildcard 互斥校验
+
+### 0.7 其它安全
+- **H7**：`.env` 文件 `chmod 0o600`
+- **H10**：INTERRUPT 按 `chat_id` 过滤，仅清当前 session 队列
+- **H6**：SkillHub Ed25519 签名校验 + `min_clawhermes` 版本比对 + 无 manifest 默认拒绝
+- **M11**：`MemoryError` → `ClawHermesMemoryError`，避免遮蔽内置异常
+
+### 0.8 安全测试套件（`tests/test_security.py`）
+14 个负例用例，4 大类：
+- 路径穿越（4）：`../../.ssh/authorized_keys` / `/etc/passwd` / null 字节 / agent 路径
+- SQL 注入（3）：默认只读拒 DROP / data_dir 外拒 / 写操作需 `allow_write=True`
+- 配对绕过（4）：缺 user_id / 错误 user_id / 限流 / code 长度
+- CORS Gateway（3）：wildcard+credentials 互斥 / `compare_digest` / init 失败 503
 
 ---
 
@@ -50,13 +97,14 @@
 - `POST /chat/stream` SSE 端点 — `text/event-stream` + 首字延迟降低 50%+
 - 事件类型：`text` | `tool_call` | `tool_result` | `error` | `done`
 
-### 1.9 DM 配对安全（M3.6d）✅
+### 1.9 DM 配对安全（M3.6d + C6/H8 v0.15.2 加固）✅
 - `POST /dm/pair/generate` — 生成配对码（8位，1小时有效）
-- `POST /dm/pair/verify` — HMAC 挑战验证
+- `POST /dm/pair/verify` — Ed25519 公钥签名挑战验证（v0.15.2，HMAC 向后兼容），**user_id 必填**
 - `GET /dm/pair/status` — 查询配对状态
 - `GET /dm/pair/list` — 列出已配对用户
 - `DELETE /dm/pair/{user_id}` — 撤销配对
 - `ADMIN_KEY` 环境变量鉴权，管理员审批放行
+- **漏桶限流**：10 次/min/user_id（v0.15.2 新增）
 
 ---
 
@@ -69,7 +117,7 @@
 |:---|:---|
 | `session_status` / `read_file` / `write_file` / `exec` / `get_time` |
 
-#### standard（9 个）— minimal + 4
+#### standard（8 个）— minimal + 4（v0.15.2: 移除 exec，仅 full 可用）
 | 工具 | 说明 |
 |:---|:---|
 | `web_search` / `memory_search` / `memory_save` / `delegate_task` |
@@ -253,8 +301,9 @@ bash <(curl -fsSL https://raw.githubusercontent.com/brekov/ClawHermes/main/scrip
 
 ### 9. 测试
 
-- 659 个测试，全部通过 ✅
+- 755 个测试，全部通过 ✅（v0.15.2: +96 个）
 - ruff 0 errors | mypy 0 errors（6 strict checks）
 - 覆盖率 73%（核心模块 > 80%）
 - GitHub Actions CI：lint + typecheck + test + build
-- v0.15.1 新增 20 个回归测试（RCE 逃逸/并发/安全加固场景）
+- v0.15.1：+20 个回归测试（RCE 逃逸/并发/安全加固场景）
+- v0.15.2：+96 个测试，含 14 个 `test_security.py` 负例套件（路径穿越/SQL 注入/配对绕过/CORS bypass）
