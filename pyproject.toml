@@ -24,6 +24,9 @@ dependencies = [
     "python-dotenv>=1.1",
     "pyyaml>=6.0",
 
+    # === 安全 (C6: Ed25519 挑战签名验证) ===
+    "cryptography>=42.0",
+
     # === CLI ===
     "rich>=13.0",
     "questionary>=2.0",

@@ -849,14 +849,14 @@ def _exec_command(command: str, timeout: int = 30, **kwargs) -> dict:
     # 回退：非沙箱模式执行
     _logger.warning("非沙箱模式执行: %r", command)
     try:
-        result = subprocess.run(
+        sub_result = subprocess.run(
             command, shell=True, capture_output=True,
             text=True, timeout=timeout,
         )
         return {
-            "stdout": result.stdout[:5000],
-            "stderr": result.stderr[:2000],
-            "return_code": result.returncode,
+            "stdout": sub_result.stdout[:5000],
+            "stderr": sub_result.stderr[:2000],
+            "return_code": sub_result.returncode,
             "command": command,
             "sandbox": False,
         }
@@ -1221,14 +1221,14 @@ def _code_eval(code: str, timeout: int = 10, **kwargs) -> dict:
     # 回退：非沙箱模式执行
     _logger.warning("非沙箱模式执行 code_eval")
     try:
-        result = subprocess.run(
+        sub_result = subprocess.run(
             ["python3", "-c", code],
             capture_output=True, text=True, timeout=timeout,
         )
         return {
-            "stdout": result.stdout[:5000],
-            "stderr": result.stderr[:2000],
-            "return_code": result.returncode,
+            "stdout": sub_result.stdout[:5000],
+            "stderr": sub_result.stderr[:2000],
+            "return_code": sub_result.returncode,
             "sandbox": False,
         }
     except subprocess.TimeoutExpired:

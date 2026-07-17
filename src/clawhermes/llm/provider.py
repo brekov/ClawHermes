@@ -33,7 +33,7 @@ def _usage_to_dict(usage: Any) -> dict | None:
     if usage is None:
         return None
     if hasattr(usage, "model_dump"):
-        return usage.model_dump()
+        return dict(usage.model_dump())
     if hasattr(usage, "__dict__"):
         return dict(vars(usage))
     try:

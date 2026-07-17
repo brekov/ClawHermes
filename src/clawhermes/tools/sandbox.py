@@ -5,6 +5,7 @@ ClawHermes - Docker 沙箱执行环境
 from __future__ import annotations
 
 import logging
+import os
 import shutil
 import subprocess
 import tempfile
@@ -125,6 +126,10 @@ class DockerSandbox:
         ) as f:
             f.write(code)
             script_path = f.name
+
+        # 容器内以 nobody(65534) 用户执行，宿主机 tempfile 默认 0o600，
+        # nobody 无读权限会导致 "Permission denied"。放宽到 0o644 让 nobody 可读。
+        os.chmod(script_path, 0o644)
 
         try:
             return self._run_container(

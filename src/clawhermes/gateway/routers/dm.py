@@ -46,8 +46,11 @@ def dm_pair_generate(user_id: str, platform: str, device_family: str = "", admin
 
 
 @router.post("/dm/pair/verify")
-def dm_pair_verify(code: str, response: str, user_id: str | None = None):
-    """用户提交配对码 + 挑战响应进行验证"""
+def dm_pair_verify(code: str, response: str, user_id: str):
+    """用户提交配对码 + 挑战响应进行验证
+
+    C6: user_id 必填，与配对码绑定校验，防止 A 用户用 B 用户的 code 完成配对。
+    """
     if _gw._state.pairing_manager is None:
         raise HTTPException(500, "Pairing Manager 未初始化")
     try:
