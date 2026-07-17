@@ -418,13 +418,16 @@ def register_builtin_tools(registry: ToolRegistry, profile: str = "standard"):
         ),
         ToolDef(
             name="patch_file",
-            description="对文件应用差异补丁（搜索旧内容并替换为新内容）",
+            description=(
+                "对文件执行一次搜索-替换：仅查找 search 文本的第一处出现并替换为 replace 文本。"
+                "若未匹配到则返回失败，不做任何修改。"
+            ),
             parameters={
                 "type": "object",
                 "properties": {
                     "path": {"type": "string", "description": "文件路径"},
-                    "search": {"type": "string", "description": "要搜索的旧内容"},
-                    "replace": {"type": "string", "description": "替换的新内容"},
+                    "search": {"type": "string", "description": "要搜索的文本（仅替换第一处匹配）"},
+                    "replace": {"type": "string", "description": "替换为的新文本"},
                 },
                 "required": ["path", "search", "replace"],
             },

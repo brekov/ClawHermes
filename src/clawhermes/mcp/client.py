@@ -204,7 +204,7 @@ class MCPClient:
         return result
 
     async def _send_request_http(self, method: str, params: dict) -> dict[str, Any]:
-        """通过 HTTP 发送 JSON-RPC 请求"""
+        """通过 HTTP 发送 JSON-RPC 请求（兼容 Streamable-HTTP SSE 响应）"""
         if not self._session:
             raise RuntimeError("MCP http not connected")
 
@@ -216,10 +216,67 @@ class MCPClient:
         }
         resp = await self._session.post("/", json=request)
         resp.raise_for_status()
+
+        content_type = resp.headers.get("content-type", "")
+        if "text/event-stream" in content_type:
+            logger.debug("MCP http SSE response detected")
+            return self._parse_sse_response(resp.text)
+
         data = resp.json()
         if "error" in data:
             raise RuntimeError(f"MCP error: {data['error']}")
         result: dict[str, Any] = data.get("result", {})
+        return result
+
+    def _parse_sse_response(self, text: str) -> dict[str, Any]:
+        """解析 SSE (text/event-stream) 响应文本。
+
+        按 SSE 规范逐行处理：跳过注释行(``: ...``)、``event:``/``id:`` 行与空行；
+        累积 ``data:`` 行，多行 data 用 ``\\n`` 连接；遇到事件边界（空行或文本结束）
+        时尝试 JSON 解析，返回第一个含 ``id`` 字段的 JSON-RPC response 对象的 ``result``。
+        """
+        data_lines: list[str] = []
+        for line in text.splitlines():
+            if not line:
+                # 空行：事件边界，尝试解析已累积的 data
+                if data_lines:
+                    parsed = self._try_parse_sse_event(data_lines)
+                    if parsed is not None:
+                        return parsed
+                    data_lines = []
+                continue
+            if line.startswith(":"):
+                # 注释行（如心跳）
+                continue
+            if line.startswith("event:") or line.startswith("id:"):
+                continue
+            if line.startswith("data:"):
+                payload = line[5:]
+                if payload.startswith(" "):
+                    payload = payload[1:]
+                data_lines.append(payload)
+        # 末尾未以空行结束的事件
+        if data_lines:
+            parsed = self._try_parse_sse_event(data_lines)
+            if parsed is not None:
+                return parsed
+        raise RuntimeError("MCP SSE: no valid JSON-RPC response found")
+
+    def _try_parse_sse_event(self, data_lines: list[str]) -> dict[str, Any] | None:
+        """尝试将一个 SSE 事件的 data 行（多行用 ``\\n`` 连接）解析为 JSON-RPC response。
+
+        :return: 若为含 ``id`` 字段的 response 对象则返回其 ``result``；否则返回 None。
+        """
+        joined = "\n".join(data_lines)
+        try:
+            obj = json.loads(joined)
+        except ValueError:
+            return None
+        if not isinstance(obj, dict) or "id" not in obj:
+            return None
+        if "error" in obj:
+            raise RuntimeError(f"MCP error: {obj['error']}")
+        result: dict[str, Any] = obj.get("result", {})
         return result
 
     @property

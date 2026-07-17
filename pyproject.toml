@@ -1,6 +1,6 @@
 [project]
 name = "clawhermes"
-version = "0.15.0"
+version = "0.15.2"
 description = "融合 Hermes 自进化能力与 OpenClaw Gateway 体系的 Python AI Agent 框架"
 requires-python = ">=3.12"
 authors = [
