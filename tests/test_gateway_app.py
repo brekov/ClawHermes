@@ -738,7 +738,7 @@ class TestDMPairingEndpoints:
     def test_verify_no_pairing_manager(self, fresh_state):
         fresh_state.pairing_manager = None
         client = TestClient(app, raise_server_exceptions=False)
-        resp = client.post("/dm/pair/verify?code=c&response=r")
+        resp = client.post("/dm/pair/verify?code=c&response=r&user_id=u1")
         assert resp.status_code == 500
 
     def test_status_no_pairing_manager(self, fresh_state):
