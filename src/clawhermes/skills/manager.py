@@ -260,23 +260,41 @@ Rules:
         """审查并应用结果"""
         result = self.review(conversation)
         for m in result.get("memories", []):
+            # 逐项容错：缺失 content 字段时跳过该项，避免整个背景审查崩溃
+            try:
+                content = m["content"]
+            except (KeyError, TypeError) as e:
+                logger.warning("跳过格式错误的 memory 项: %s", e)
+                continue
             self.memory.save(
-                content=m["content"],
+                content=content,
                 importance=m.get("importance", 0.5),
             )
-            logger.info("背景审查 → 新记忆: %s", m["content"][:60])
+            logger.info("背景审查 → 新记忆: %s", content[:60])
         for s in result.get("skills", []):
-            existing = self.skills.get(s["name"])
+            # 逐项容错：缺失 name 字段时跳过该项，避免整个背景审查崩溃
+            try:
+                name = s["name"]
+            except (KeyError, TypeError) as e:
+                logger.warning("跳过格式错误的 skill 项: %s", e)
+                continue
+            existing = self.skills.get(name)
             if existing:
-                self.skills.update(s["name"], usage_count=existing.usage_count + 1)
-                logger.info("背景审查 → 技能更新: %s", s["name"])
+                # 同步更新 LLM 生成的新内容/描述，避免仅累加 usage_count 而丢弃更新
+                update_kwargs = {"usage_count": existing.usage_count + 1}
+                if "content" in s and s["content"]:
+                    update_kwargs["content"] = s["content"]
+                if "description" in s and s["description"]:
+                    update_kwargs["description"] = s["description"]
+                self.skills.update(name, **update_kwargs)
+                logger.info("背景审查 → 技能更新: %s", name)
             else:
                 self.skills.create(
-                    name=s["name"],
+                    name=name,
                     content=s.get("content", s.get("description", "")),
                     description=s.get("description", ""),
                 )
-                logger.info("背景审查 → 新技能: %s", s["name"])
+                logger.info("背景审查 → 新技能: %s", name)
 
 
 class Curator:

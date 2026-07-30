@@ -88,6 +88,9 @@ class GatewayState:
         self.wecom_adapter: Any = None  # WeComAdapter | None
         self.qq_adapter: Any = None  # QQAdapter | None
         self._bg_tasks: set[asyncio.Task] = set()
+        # P2: 主事件循环引用 — 渠道/Cron 经 to_thread 在 worker 线程触发 _on_end 钩子时，
+        # 线程内无运行循环，需用 run_coroutine_threadsafe 把 BackgroundReview 投递回主循环
+        self._main_loop: asyncio.AbstractEventLoop | None = None
         self._mcp_registry = None
         # M14: _auto_init 失败时记录错误，/health 返回 degraded
         self._init_error: str | None = None
@@ -117,6 +120,8 @@ class GatewayState:
         max_iterations: int = 50,
         profile: str = "standard",
     ):
+        # P2: 在 async 上下文中捕获主事件循环，供 worker 线程中的 _on_end 钩子投递后台任务
+        self._main_loop = asyncio.get_running_loop()
         data_dir = get_data_dir()
         provider = LLMProvider(model=model, api_key=api_key, base_url=base_url)
         registry = ToolRegistry()
@@ -157,12 +162,24 @@ class GatewayState:
         def _on_end(**kw):
             convo = agent.get_conversation()
             if convo:
-                task = asyncio.create_task(
-                    asyncio.to_thread(reviewer.apply, convo),
-                    name="background_review",
-                )
-                self._bg_tasks.add(task)
-                task.add_done_callback(self._bg_tasks.discard)
+                try:
+                    # 在事件循环内（HTTP /chat 路径）：直接创建任务
+                    asyncio.get_running_loop()
+                    task = asyncio.create_task(
+                        asyncio.to_thread(reviewer.apply, convo),
+                        name="background_review",
+                    )
+                    self._bg_tasks.add(task)
+                    task.add_done_callback(self._bg_tasks.discard)
+                except RuntimeError:
+                    # 不在事件循环内（渠道/Cron 经 to_thread 的 worker 线程）：
+                    # asyncio.create_task 会抛 RuntimeError 被 HookManager 静默吞掉，
+                    # 改用 run_coroutine_threadsafe 把任务投递回主循环
+                    if self._main_loop is not None and self._main_loop.is_running():
+                        asyncio.run_coroutine_threadsafe(
+                            asyncio.to_thread(reviewer.apply, convo),
+                            self._main_loop,
+                        )
         agent.hooks.register(HookPoint.AFTER_AGENT_END, _on_end)
 
         # Curator：每小时运行，纯 asyncio 循环

@@ -122,8 +122,10 @@ class ChannelRouter:
         self._agent_handler: Callable[..., Any] | None = None
         self._session_creator: Callable[..., str] | None = None
         self._running = False
-        self._active_session: str | None = None
-        self._active_lock = asyncio.Lock()
+        # P1: 按 session_id 分锁，替代全局串行锁，避免慢 LLM 调用跨 session 阻塞
+        self._session_locks: dict[str, asyncio.Lock] = {}
+        # 活跃 session 集合：多 session 可同时处理；INTERRUPT 检查用 set 查询
+        self._active_sessions: set[str] = set()
         self._queue: list[QueuedMessage] = []
         self._allowlist: set[str] | None = None
         self._collect_buffer: list[ChannelMessage] = []
@@ -143,6 +145,43 @@ class ChannelRouter:
     def set_pairing_required(self, required: bool) -> None:
         """显式启用/禁用 DM 配对门控"""
         self._pairing_required = required
+
+    def _get_session_lock(self, session_id: str) -> asyncio.Lock:
+        """获取指定 session 的锁（按 session_id 分锁）。
+
+        同一 session 串行（保留 STEER/FOLLOWUP/COLLECT/INTERRUPT 语义），
+        不同 session 并发，避免慢 LLM 调用跨 session 阻塞。
+        锁不主动删除：session 数量有限，内存可接受；且 INTERRUPT 可能在处理中
+        向同一 session 投递消息，过早删除会丢失串行保护。
+        """
+        lock = self._session_locks.get(session_id)
+        if lock is None:
+            lock = asyncio.Lock()
+            self._session_locks[session_id] = lock
+        return lock
+
+    @property
+    def _active_session(self) -> str | None:
+        """向后兼容：返回任意一个活跃 session（无则 None）。
+
+        多 session 并发时返回值不确定，仅供单 session 场景与历史测试使用；
+        生产逻辑应直接查询 ``self._active_sessions`` 集合。
+        """
+        if self._active_sessions:
+            return next(iter(self._active_sessions))
+        return None
+
+    @_active_session.setter
+    def _active_session(self, value: str | None) -> None:
+        """向后兼容：设置/清除活跃 session。
+
+        设为字符串等价于将该 session 加入活跃集合；
+        设为 None 等价于清空整个活跃集合（单 session 场景的语义）。
+        """
+        if value is None:
+            self._active_sessions.clear()
+        else:
+            self._active_sessions.add(value)
 
     @property
     def session_router(self) -> SessionRouter:
@@ -205,7 +244,7 @@ class ChannelRouter:
 
         qm = QueuedMessage(message=message, mode=mode)
 
-        if self._active_session is not None and session_id == self._active_session:
+        if session_id in self._active_sessions:
             if mode == QueueMode.INTERRUPT:
                 # H10: 只清空当前 session 的排队消息，保留其他 session 的消息
                 chat_id = qm.message.metadata.get("chat_id", qm.message.user.user_id)
@@ -279,20 +318,19 @@ class ChannelRouter:
         if not self._queue:
             return
 
-        async with self._active_lock:
-            if not self._queue:
-                return
+        # 先 pop 消息（同步操作，无 await，asyncio 单线程下不会被打断）
+        qm = self._queue.pop(0)
+        message = qm.message
+        chat_id = message.metadata.get("chat_id", message.user.user_id)
+        session_id = self._session_router.resolve(message.channel_type, chat_id)
 
-            qm = self._queue.pop(0)
-            message = qm.message
-            chat_id = message.metadata.get("chat_id", message.user.user_id)
-            session_id = self._session_router.resolve(message.channel_type, chat_id)
+        if session_id is None:
+            session_id = self._session_router.create(message.channel_type, chat_id)
 
-            if session_id is None:
-                session_id = self._session_router.create(message.channel_type, chat_id)
-
-            self._active_session = session_id
-
+        # P1: 按 session_id 分锁 — 同一 session 串行（保留 4 种队列模式语义），
+        # 不同 session 并发，避免慢 LLM 调用跨 session 阻塞
+        async with self._get_session_lock(session_id):
+            self._active_sessions.add(session_id)
             try:
                 if self._agent_handler:
                     # 支持 sync 和 async 两种 handler（async 优先）
@@ -317,7 +355,7 @@ class ChannelRouter:
             except Exception:
                 logger.exception("Error processing message %s", message.message_id)
             finally:
-                self._active_session = None
+                self._active_sessions.discard(session_id)
 
     async def route_message(
         self,
