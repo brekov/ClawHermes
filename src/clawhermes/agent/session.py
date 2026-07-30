@@ -67,7 +67,7 @@ class SessionManager:
             session_id = f"sess_{uuid.uuid4().hex[:12]}"
             now = time.time()
             meta_json = json.dumps(metadata or {}, ensure_ascii=False)
-            assert self._conn is not None
+            assert self._conn is not None  # noqa: S101  mypy 类型收窄
             self._conn.execute(
                 "INSERT INTO sessions (id, agent_name, created_at, updated_at, metadata) VALUES (?, ?, ?, ?, ?)",
                 (session_id, agent_name, now, now, meta_json),
@@ -77,7 +77,7 @@ class SessionManager:
 
     def get_session(self, session_id: str) -> dict[str, Any]:
         # H5: 读操作无需锁（SQLite WAL 模式支持并发读）
-        assert self._conn is not None
+        assert self._conn is not None  # noqa: S101  mypy 类型收窄
         row = self._conn.execute(
             "SELECT id, agent_name, created_at, updated_at, metadata FROM sessions WHERE id = ?",
             (session_id,),
@@ -98,7 +98,7 @@ class SessionManager:
 
     def list_sessions(self, limit: int = 50) -> list[dict[str, Any]]:
         # H5: 读操作无需锁（SQLite WAL 模式支持并发读）
-        assert self._conn is not None
+        assert self._conn is not None  # noqa: S101  mypy 类型收窄
         rows = self._conn.execute(
             "SELECT id, agent_name, created_at, updated_at, metadata FROM sessions ORDER BY updated_at DESC LIMIT ?",
             (limit,),
@@ -116,7 +116,7 @@ class SessionManager:
 
     def delete_session(self, session_id: str) -> bool:
         with self._lock:
-            assert self._conn is not None
+            assert self._conn is not None  # noqa: S101  mypy 类型收窄
             cursor = self._conn.execute("DELETE FROM sessions WHERE id = ?", (session_id,))
             self._conn.commit()
             return cursor.rowcount > 0
@@ -125,7 +125,7 @@ class SessionManager:
                     tool_calls: list | None = None, tool_call_id: str | None = None,
                     name: str | None = None):
         with self._lock:
-            assert self._conn is not None
+            assert self._conn is not None  # noqa: S101  mypy 类型收窄
             now = time.time()
             tc_json = json.dumps(tool_calls, ensure_ascii=False) if tool_calls else None
             self._conn.execute(
@@ -141,7 +141,7 @@ class SessionManager:
 
     def get_messages(self, session_id: str, limit: int = 100) -> list[dict[str, Any]]:
         # H5: 读操作无需锁（SQLite WAL 模式支持并发读）
-        assert self._conn is not None
+        assert self._conn is not None  # noqa: S101  mypy 类型收窄
         rows = self._conn.execute(
             "SELECT role, content, tool_calls, tool_call_id, name, timestamp "
             "FROM messages WHERE session_id = ? ORDER BY timestamp ASC LIMIT ?",
@@ -161,7 +161,7 @@ class SessionManager:
 
     def cleanup_expired(self) -> int:
         with self._lock:
-            assert self._conn is not None
+            assert self._conn is not None  # noqa: S101  mypy 类型收窄
             cutoff = time.time() - self._max_age
             cursor = self._conn.execute(
                 "DELETE FROM sessions WHERE updated_at < ?", (cutoff,)

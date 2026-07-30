@@ -52,7 +52,8 @@ line-length = 100
 target-version = "py312"
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "N", "W"]
+# S: flake8-bandit 安全规则；B006: 可变默认参数；ASYNC: flake8-async 异步规则
+select = ["E", "F", "I", "N", "W", "S", "B006", "ASYNC"]
 ignore = ["E501"]
 
 [tool.mypy]

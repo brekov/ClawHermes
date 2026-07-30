@@ -115,7 +115,7 @@ class CredentialPool:
                 key = available[self._index % len(available)]
                 self._index += 1
             elif self.strategy == self.STRATEGY_RANDOM:
-                key = random.choice(available)
+                key = random.choice(available)  # noqa: S311  非加密用途：API key 负载均衡
             elif self.strategy == self.STRATEGY_LEAST_USED:
                 key = min(available, key=lambda k: self._used_count[k])
             else:

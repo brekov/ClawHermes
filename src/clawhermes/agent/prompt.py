@@ -35,7 +35,7 @@ class StableLayer:
             self.agent_name = agent_name
             self.identity = build_persona_prompt(agent_name)
             get_agent_config(agent_name)
-        except Exception:
+        except Exception:  # noqa: S110  persona 加载失败时静默回退到默认身份
             pass
 
     def render(self) -> str:
