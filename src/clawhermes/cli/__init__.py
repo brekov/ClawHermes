@@ -22,10 +22,11 @@ def _load_dotenv():
 
 
 def _create_agent(api_key=None, model=None):
-    from clawhermes.agent.loop import Agent, AgentConfig, ToolRegistry
+    from clawhermes.agent.loop import Agent, AgentConfig
     from clawhermes.agent.memory import JSONMemoryProvider, MemoryManager
     from clawhermes.llm.provider import LLMProvider
     from clawhermes.tools.builtin import register_builtin_tools
+    from clawhermes.tools.registry import ToolRegistry
     provider = LLMProvider(
         model=model or os.getenv("CH_DEFAULT_MODEL", "deepseek/deepseek-chat"),
         api_key=api_key or os.getenv("DEEPSEEK_API_KEY"),

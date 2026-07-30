@@ -18,7 +18,7 @@ import urllib.parse
 from pathlib import Path
 from typing import Any
 
-from clawhermes.agent.loop import ToolDef, ToolRegistry
+from clawhermes.tools.registry import ToolDef, ToolRegistry
 
 MINIMAL_TOOLS = frozenset({
     "session_status", "read_file", "write_file", "exec", "get_time",
