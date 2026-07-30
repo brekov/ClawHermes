@@ -23,7 +23,8 @@ from clawhermes.agent.exceptions import (
     ClawHermesError,
     SessionNotFoundError,
 )
-from clawhermes.agent.loop import Agent, AgentConfig, HookPoint, ToolRegistry
+from clawhermes.agent.hook_manager import HookPoint
+from clawhermes.agent.loop import Agent, AgentConfig
 from clawhermes.agent.memory import JSONMemoryProvider, MemoryManager
 from clawhermes.agent.scheduler import CronScheduler
 from clawhermes.agent.session import SessionManager
@@ -48,6 +49,7 @@ from clawhermes.gateway.routers.misc import router as misc_router
 from clawhermes.gateway.routers.sessions import router as sessions_router
 from clawhermes.llm.provider import LLMProvider
 from clawhermes.tools.builtin import register_builtin_tools
+from clawhermes.tools.registry import ToolRegistry
 
 # 加载 $CH_DATA_DIR/.env → os.environ（不覆盖已存在的环境变量）
 load_env()

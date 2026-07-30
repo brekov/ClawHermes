@@ -295,7 +295,7 @@ class MCPRegistry:
         """
         :param tool_registry: clawhermes.agent.loop.ToolRegistry 实例
         """
-        from clawhermes.agent.loop import ToolDef
+        from clawhermes.tools.registry import ToolDef
         self._tool_registry = tool_registry
         self._ToolDef = ToolDef
         self._clients: dict[str, MCPClient] = {}
