@@ -9,29 +9,13 @@ import logging
 import sqlite3
 import threading
 import uuid
-from abc import ABC, abstractmethod
 from pathlib import Path
 
+from clawhermes.storage.base import MemoryProvider  # noqa: F401
 from clawhermes.types import MemoryItem, MemoryScope
 from clawhermes.util.atomic import atomic_write
 
 logger = logging.getLogger(__name__)
-
-
-class MemoryProvider(ABC):
-    """记忆提供者抽象"""
-
-    @abstractmethod
-    def save(self, item: MemoryItem):
-        """保存一条记忆"""
-
-    @abstractmethod
-    def search(self, query: str, limit: int = 5) -> list[MemoryItem]:
-        """搜索相关记忆"""
-
-    @abstractmethod
-    def get_recent(self, limit: int = 10) -> list[MemoryItem]:
-        """获取最近记忆"""
 
 
 class JSONMemoryProvider(MemoryProvider):
