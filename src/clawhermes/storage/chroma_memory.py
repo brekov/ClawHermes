@@ -7,7 +7,7 @@ import logging
 import uuid
 from pathlib import Path
 
-from clawhermes.agent.memory import MemoryProvider
+from clawhermes.storage.base import MemoryProvider
 from clawhermes.types import MemoryItem, MemoryScope
 
 logger = logging.getLogger(__name__)
