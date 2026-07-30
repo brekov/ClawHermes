@@ -208,9 +208,9 @@ def _process_list(**kwargs) -> dict:
     import subprocess
     try:
         if platform.system() == "Windows":
-            result = subprocess.run(["tasklist"], capture_output=True, text=True, timeout=10)
+            result = subprocess.run(["tasklist"], capture_output=True, text=True, timeout=10)  # noqa: S607  受控系统命令
         else:
-            result = subprocess.run(["ps", "aux", "--no-headers"], capture_output=True, text=True, timeout=10)
+            result = subprocess.run(["ps", "aux", "--no-headers"], capture_output=True, text=True, timeout=10)  # noqa: S607  受控系统命令
         lines = result.stdout.strip().split("\n")[:50]
         return {"platform": platform.system(), "processes": lines, "count": len(lines)}
     except Exception as e:
@@ -849,7 +849,7 @@ def _exec_command(command: str, timeout: int = 30, **kwargs) -> dict:
     # 回退：非沙箱模式执行
     _logger.warning("非沙箱模式执行: %r", command)
     try:
-        sub_result = subprocess.run(
+        sub_result = subprocess.run(  # noqa: S602  Shell 工具：故意 shell=True 执行用户命令
             command, shell=True, capture_output=True,
             text=True, timeout=timeout,
         )
@@ -1221,8 +1221,8 @@ def _code_eval(code: str, timeout: int = 10, **kwargs) -> dict:
     # 回退：非沙箱模式执行
     _logger.warning("非沙箱模式执行 code_eval")
     try:
-        sub_result = subprocess.run(
-            ["python3", "-c", code],
+        sub_result = subprocess.run(  # noqa: S603  受控 python3 执行
+            ["python3", "-c", code],  # noqa: S607  受控系统命令
             capture_output=True, text=True, timeout=timeout,
         )
         return {
@@ -1298,8 +1298,8 @@ def _json_query(json_str: str, path: str = "", **kwargs) -> dict:
 def _git_status(path: str = ".", **kwargs) -> dict:
     try:
         p = Path(path).resolve()
-        result = subprocess.run(
-            ["git", "-C", str(p), "status", "--short"],
+        result = subprocess.run(  # noqa: S603  受控 git 命令
+            ["git", "-C", str(p), "status", "--short"],  # noqa: S607  受控系统命令
             capture_output=True, text=True, timeout=10,
         )
         lines = result.stdout.strip().split("\n") if result.stdout.strip() else []
@@ -1314,7 +1314,7 @@ def _git_diff(path: str = ".", staged: bool = False, **kwargs) -> dict:
         cmd = ["git", "-C", str(p), "diff"]
         if staged:
             cmd.append("--staged")
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=15)  # noqa: S603  受控 git 命令
         return {"path": str(p), "diff": result.stdout[:8000] or "（无差异）"}
     except Exception as e:
         return {"error": str(e)}
@@ -1323,8 +1323,8 @@ def _git_diff(path: str = ".", staged: bool = False, **kwargs) -> dict:
 def _git_log(path: str = ".", count: int = 10, **kwargs) -> dict:
     try:
         p = Path(path).resolve()
-        result = subprocess.run(
-            ["git", "-C", str(p), "log", f"-{count}", "--oneline", "--decorate"],
+        result = subprocess.run(  # noqa: S603  受控 git 命令
+            ["git", "-C", str(p), "log", f"-{count}", "--oneline", "--decorate"],  # noqa: S607  受控系统命令
             capture_output=True, text=True, timeout=10,
         )
         lines = result.stdout.strip().split("\n") if result.stdout.strip() else []

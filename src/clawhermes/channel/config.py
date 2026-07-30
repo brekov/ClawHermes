@@ -54,7 +54,7 @@ _CHANNEL_DEFAULTS: dict[str, dict[str, Any]] = {
         "group_policy": "open",
         "allow_bots": "none",
         "require_mention": True,
-        "webhook_host": "0.0.0.0",
+        "webhook_host": "0.0.0.0",  # noqa: S104  飞书 webhook 默认监听地址
         "webhook_port": 8080,
         "webhook_path": "/feishu/webhook",
         "ws_reconnect_nonce": 30,
@@ -105,7 +105,8 @@ def load_channel_config(channel_name: str) -> dict[str, Any]:
             logger.debug("Loaded channel config: %s", runtime_path)
 
     resolved = _resolve_env_ref(config)
-    assert isinstance(resolved, dict)
+    if not isinstance(resolved, dict):
+        raise TypeError("channel config 必须是 dict")
     return resolved
 
 

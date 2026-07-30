@@ -62,7 +62,7 @@ class HookManager:
                 logger.warning("Hook %s failed: %s", point, e)
         return results
 
-    async def trigger_async(self, point: str, timeout: float | None = None,
+    async def trigger_async(self, point: str, timeout: float | None = None,  # noqa: ASYNC109  内部用 asyncio.wait_for 实现
                             **kwargs) -> dict[str, Any]:
         results: dict[str, Any] = {}
         for handler in self._hooks.get(point, []):

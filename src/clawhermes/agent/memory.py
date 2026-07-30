@@ -166,7 +166,7 @@ class SQLiteMemoryProvider(MemoryProvider):
 
     def _evict_if_needed(self):
         """FIFO 淘汰：超过 max_items 时按 created_at 升序丢最旧。"""
-        assert self._conn is not None
+        assert self._conn is not None  # noqa: S101  mypy 类型收窄
         count = self._conn.execute("SELECT COUNT(*) FROM memories").fetchone()[0]
         if count > self._max_items:
             overflow = count - self._max_items
@@ -179,7 +179,7 @@ class SQLiteMemoryProvider(MemoryProvider):
 
     def save(self, item: MemoryItem):
         with self._lock:
-            assert self._conn is not None
+            assert self._conn is not None  # noqa: S101  mypy 类型收窄
             # scope 编码进 metadata，保持表结构与设计一致
             meta = {**item.metadata, "_scope": item.scope.value}
             self._conn.execute(
@@ -200,7 +200,7 @@ class SQLiteMemoryProvider(MemoryProvider):
     def search(self, query: str, limit: int = 5) -> list[MemoryItem]:
         """LIKE 子串匹配（大小写不敏感），按 importance 降序。"""
         with self._lock:
-            assert self._conn is not None
+            assert self._conn is not None  # noqa: S101  mypy 类型收窄
             pattern = f"%{query}%"
             rows = self._conn.execute(
                 "SELECT content, importance, metadata FROM memories "
@@ -212,7 +212,7 @@ class SQLiteMemoryProvider(MemoryProvider):
 
     def get_recent(self, limit: int = 10) -> list[MemoryItem]:
         with self._lock:
-            assert self._conn is not None
+            assert self._conn is not None  # noqa: S101  mypy 类型收窄
             rows = self._conn.execute(
                 "SELECT content, importance, metadata FROM memories "
                 "ORDER BY created_at DESC LIMIT ?",
@@ -223,7 +223,7 @@ class SQLiteMemoryProvider(MemoryProvider):
     def get_all(self) -> list[MemoryItem]:
         """返回全部记忆（按 created_at 升序）。"""
         with self._lock:
-            assert self._conn is not None
+            assert self._conn is not None  # noqa: S101  mypy 类型收窄
             rows = self._conn.execute(
                 "SELECT content, importance, metadata FROM memories "
                 "ORDER BY created_at ASC",
@@ -276,7 +276,7 @@ class MemoryManager:
         for p in self._providers:
             try:
                 all_results.extend(p.search(query, limit))
-            except Exception:
+            except Exception:  # noqa: S110  provider 失败时跳过，best-effort 聚合
                 pass
         all_results.sort(key=lambda x: x.importance, reverse=True)
         return all_results[:limit]
@@ -286,7 +286,7 @@ class MemoryManager:
         for p in self._providers:
             try:
                 all_items.extend(p.get_recent(limit))
-            except Exception:
+            except Exception:  # noqa: S110  provider 失败时跳过，best-effort 聚合
                 pass
         return all_items[:limit]
 

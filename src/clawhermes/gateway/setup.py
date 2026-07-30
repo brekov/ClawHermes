@@ -106,8 +106,8 @@ def install_systemd_service(
     unit_path.write_text(unit_content)
 
     try:
-        subprocess.run(["systemctl", "--user", "daemon-reload"], check=True, capture_output=True)
-        subprocess.run(["systemctl", "--user", "enable", "--now", "clawhermes-gateway"], check=True, capture_output=True)
+        subprocess.run(["systemctl", "--user", "daemon-reload"], check=True, capture_output=True)  # noqa: S607  受控系统命令
+        subprocess.run(["systemctl", "--user", "enable", "--now", "clawhermes-gateway"], check=True, capture_output=True)  # noqa: S607  受控系统命令
         print("  ✅ systemd 服务已安装并启动: clawhermes-gateway")
         print(f"    Token: {token}")
         return True
@@ -198,7 +198,7 @@ def install_launchd_service(
 
     try:
         subprocess.run(["launchctl", "unload", str(plist_path)], capture_output=True)  # noqa
-        subprocess.run(["launchctl", "load", str(plist_path)], check=True, capture_output=True)
+        subprocess.run(["launchctl", "load", str(plist_path)], check=True, capture_output=True)  # noqa: S603, S607  受控系统命令
         print("  ✅ launchd 服务已安装并启动: com.clawhermes.gateway")
         print(f"    Token: {token}")
         return True
@@ -236,12 +236,12 @@ def uninstall_gateway_service() -> bool:
     system = platform.system()
     if system == "Linux":
         try:
-            subprocess.run(["systemctl", "--user", "disable", "--now", "clawhermes-gateway"],
+            subprocess.run(["systemctl", "--user", "disable", "--now", "clawhermes-gateway"],  # noqa: S607  受控系统命令
                          check=True, capture_output=True)
             unit_path = Path.home() / ".config" / "systemd" / "user" / "clawhermes-gateway.service"
             if unit_path.exists():
                 unit_path.unlink()
-            subprocess.run(["systemctl", "--user", "daemon-reload"], check=True, capture_output=True)
+            subprocess.run(["systemctl", "--user", "daemon-reload"], check=True, capture_output=True)  # noqa: S607  受控系统命令
             print("  ✅ systemd 服务已卸载")
             return True
         except (subprocess.CalledProcessError, FileNotFoundError) as e:
@@ -251,7 +251,7 @@ def uninstall_gateway_service() -> bool:
         try:
             plist_path = Path.home() / "Library" / "LaunchAgents" / "com.clawhermes.gateway.plist"
             if plist_path.exists():
-                subprocess.run(["launchctl", "unload", str(plist_path)], capture_output=True)
+                subprocess.run(["launchctl", "unload", str(plist_path)], capture_output=True)  # noqa: S603, S607  受控系统命令
                 plist_path.unlink()
             print("  ✅ launchd 服务已卸载")
             return True
@@ -278,7 +278,7 @@ def check_gateway_service_status() -> dict:
     if system == "Linux":
         try:
             r = subprocess.run(
-                ["systemctl", "--user", "is-active", "clawhermes-gateway"],
+                ["systemctl", "--user", "is-active", "clawhermes-gateway"],  # noqa: S607  受控系统命令
                 capture_output=True, text=True,
             )
             result["running"] = r.stdout.strip() == "active"
@@ -292,7 +292,7 @@ def check_gateway_service_status() -> dict:
         if result["installed"]:
             try:
                 r = subprocess.run(
-                    ["launchctl", "list", "com.clawhermes.gateway"],
+                    ["launchctl", "list", "com.clawhermes.gateway"],  # noqa: S607  受控系统命令
                     capture_output=True, text=True,
                 )
                 result["running"] = r.returncode == 0 and "PID" in r.stdout

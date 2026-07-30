@@ -144,7 +144,8 @@ def get_agent_config(name: str) -> dict:
     if cfg_file.exists():
         try:
             cfg = json.loads(cfg_file.read_text())
-            assert isinstance(cfg, dict)
+            if not isinstance(cfg, dict):
+                raise TypeError("agent config 必须是 dict")
             return cfg
         except Exception:
             return {}

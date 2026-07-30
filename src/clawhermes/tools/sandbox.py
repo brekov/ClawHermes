@@ -50,7 +50,7 @@ def _docker_is_running() -> bool:
     """检查 Docker daemon 是否在运行"""
     try:
         result = subprocess.run(
-            ["docker", "info"], capture_output=True, timeout=5,
+            ["docker", "info"], capture_output=True, timeout=5,  # noqa: S607  受控系统命令
         )
         return result.returncode == 0
     except Exception:
@@ -100,14 +100,14 @@ class DockerSandbox:
             raise SandboxNotAvailableError("Docker 未安装")
 
         try:
-            result = subprocess.run(
-                ["docker", "image", "inspect", self._image],
+            result = subprocess.run(  # noqa: S603  受控系统命令
+                ["docker", "image", "inspect", self._image],  # noqa: S607  受控系统命令
                 capture_output=True, timeout=10,
             )
             if result.returncode != 0:
                 logger.info("Pulling Docker image: %s", self._image)
-                subprocess.run(
-                    ["docker", "pull", self._image],
+                subprocess.run(  # noqa: S603  受控系统命令
+                    ["docker", "pull", self._image],  # noqa: S607  受控系统命令
                     check=True, timeout=300,
                 )
             self._initialized = True
@@ -167,7 +167,7 @@ class DockerSandbox:
             # 安全加固：非 root 用户 + 只读文件系统 + 资源限制
             "--user", "65534:65534",
             "--read-only",
-            "--tmpfs", "/tmp:rw,size=64m",
+            "--tmpfs", "/tmp:rw,size=64m",  # noqa: S108  Docker 容器内 tmpfs 挂载，非宿主机临时目录
             "--cap-drop=ALL",
             "--security-opt=no-new-privileges",
             "--pids-limit=64",
@@ -187,7 +187,7 @@ class DockerSandbox:
         start = time.time()
 
         try:
-            result = subprocess.run(
+            result = subprocess.run(  # noqa: S603  受控 Docker 命令
                 cmd,
                 capture_output=True,
                 text=True,

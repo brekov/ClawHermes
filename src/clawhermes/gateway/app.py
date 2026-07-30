@@ -125,10 +125,48 @@ class GatewayState:
         # P2: 在 async 上下文中捕获主事件循环，供 worker 线程中的 _on_end 钩子投递后台任务
         self._main_loop = asyncio.get_running_loop()
         data_dir = get_data_dir()
-        provider = LLMProvider(model=model, api_key=api_key, base_url=base_url)
+
+        # 编排各子系统初始化（每个 _init_* 负责一个子系统，保持职责单一）
+        provider = self._init_llm_stack(api_key, model, base_url)
+        registry = self._init_tools(profile)
+        memory = self._init_memory(data_dir)
+        sm = self._init_skills(data_dir)
+        agent, delegate_mgr, session_mgr = self._init_agent(
+            provider, registry, memory, sm, data_dir, max_iterations
+        )
+        scheduler = await self._init_scheduler(data_dir, agent)
+        channel_router, pairing_manager = await self._init_channels(
+            data_dir, agent, session_mgr
+        )
+
+        # 全部子系统初始化成功后，统一更新公开状态（保持原语义：失败时 self.* 不变）
+        self.agent = agent
+        self.memory = memory
+        self.skill_manager = sm
+        self.delegate_manager = delegate_mgr
+        self.session_mgr = session_mgr
+        self.scheduler = scheduler
+        self.channel_router = channel_router
+        self.pairing_manager = pairing_manager
+
+        logger.info(
+            "Agent 初始化完成: %s (%d tools, profile=%s)", model, len(registry.list()), profile
+        )
+
+    def _init_llm_stack(
+        self, api_key: str, model: str, base_url: str | None
+    ) -> LLMProvider:
+        """初始化 LLM provider"""
+        return LLMProvider(model=model, api_key=api_key, base_url=base_url)
+
+    def _init_tools(self, profile: str) -> ToolRegistry:
+        """初始化工具注册表并注册内置工具"""
         registry = ToolRegistry()
         register_builtin_tools(registry, profile=profile)
+        return registry
 
+    def _init_memory(self, data_dir) -> MemoryManager:
+        """初始化记忆管理器：JSON + ChromaDB（可选）"""
         memory = MemoryManager()
         memory.add_provider(JSONMemoryProvider(Path(data_dir)))
         try:
@@ -136,10 +174,23 @@ class GatewayState:
             memory.add_provider(ChromaMemoryProvider(Path(data_dir)))
         except Exception:
             logger.info("ChromaDB 不可用，使用 JSON 记忆存储")
+        return memory
 
-        from clawhermes.skills.manager import BackgroundReview, Curator, SkillManager
-        sm = SkillManager(Path(data_dir) / "skills")
+    def _init_skills(self, data_dir):
+        """初始化 SkillManager"""
+        from clawhermes.skills.manager import SkillManager
+        return SkillManager(Path(data_dir) / "skills")
 
+    def _init_agent(
+        self,
+        provider: LLMProvider,
+        registry: ToolRegistry,
+        memory: MemoryManager,
+        sm,
+        data_dir,
+        max_iterations: int,
+    ) -> tuple[Agent, DelegateManager, SessionManager]:
+        """初始化 Agent：DelegateManager + SessionManager + Agent + hooks + Curator"""
         delegate_mgr = DelegateManager(
             llm_provider=provider,
             tool_registry=registry,
@@ -160,6 +211,7 @@ class GatewayState:
         )
 
         # BackgroundReview：fire-and-forget，用 asyncio.to_thread 避免阻塞事件循环
+        from clawhermes.skills.manager import BackgroundReview, Curator
         reviewer = BackgroundReview(provider, memory, sm)
         def _on_end(**kw):
             convo = agent.get_conversation()
@@ -197,18 +249,29 @@ class GatewayState:
         self._bg_tasks.add(curator_task)
         curator_task.add_done_callback(self._bg_tasks.discard)
 
-        # Scheduler：asyncio 原生
+        return agent, delegate_mgr, session_mgr
+
+    async def _init_scheduler(self, data_dir, agent: Agent) -> CronScheduler:
+        """初始化 CronScheduler（asyncio 原生）"""
         scheduler = CronScheduler(data_dir)
         scheduler.set_executor(lambda task, sid: agent.chat(task, session_id=sid))
         await scheduler.start()
+        return scheduler
 
+    async def _init_channels(
+        self,
+        data_dir,
+        agent: Agent,
+        session_mgr: SessionManager,
+    ) -> tuple[ChannelRouter, DMPairingManager]:
+        """初始化渠道：ChannelManager + 各渠道适配器 + ChannelRouter + DMPairingManager
+
+        YAML 配置为单一来源：.env → ${VAR} 插值 → channels/<name>.yaml → build_adapter_config
+        详见 docs/architecture.md "渠道配置格式"
+        """
         channel_manager = ChannelManager()
         rest_adapter = RESTAdapter()
         channel_manager.register("rest", rest_adapter)
-
-        # ── 渠道初始化（YAML 配置为单一来源）──
-        # .env → ${VAR} 插值 → channels/<name>.yaml → build_adapter_config
-        # 详见 docs/architecture.md "渠道配置格式"
 
         # WeChat/WeCom Adapter（需安装 clawhermes-weixin）
         if WeChatAdapter is not None:
@@ -243,7 +306,7 @@ class GatewayState:
                     "admins": fa_cfg.get("admins", []),
                     "allow_bots": fa_cfg.get("allow_bots", "none"),
                     "require_mention": _to_bool(fa_cfg.get("require_mention", True)),
-                    "webhook_host": fa_cfg.get("webhook_host", "0.0.0.0"),
+                    "webhook_host": fa_cfg.get("webhook_host", "0.0.0.0"),  # noqa: S104  飞书 webhook 默认监听地址
                     "webhook_port": int(fa_cfg.get("webhook_port", 8080)),
                     "webhook_path": fa_cfg.get("webhook_path", "/feishu/webhook"),
                     "ws_reconnect_nonce": int(fa_cfg.get("ws_reconnect_nonce", 30)),
@@ -272,6 +335,7 @@ class GatewayState:
                 })
                 channel_manager.register("qq", self.qq_adapter)
                 logger.info("QQ Adapter 已启用（clawhermes-qq）")
+
         session_router = SessionRouter()
         pairing_manager = DMPairingManager(db_path=Path(data_dir) / "pairing_state.json")
         channel_router = ChannelRouter(
@@ -290,16 +354,7 @@ class GatewayState:
         # 这会直接导致飞书消息收发完全无响应
         await channel_router.start()
 
-        self.agent = agent
-        self.memory = memory
-        self.skill_manager = sm
-        self.delegate_manager = delegate_mgr
-        self.session_mgr = session_mgr
-        self.scheduler = scheduler
-        self.channel_router = channel_router
-        self.pairing_manager = pairing_manager
-
-        logger.info("Agent 初始化完成: %s (%d tools, profile=%s)", model, len(registry.list()), profile)
+        return channel_router, pairing_manager
 
     async def shutdown(self):
         """优雅关闭所有后台任务"""
@@ -364,7 +419,7 @@ def _validate_gateway_security(host: str, secret: str) -> None:
 
     防止用户在公网暴露无鉴权的 Gateway。在 __main__ 启动 uvicorn 前调用。
     """
-    if not secret and host in ("0.0.0.0", "::"):
+    if not secret and host in ("0.0.0.0", "::"):  # noqa: S104  公网监听安全检查
         logger.error(
             "CH_GATEWAY_SECRET 未配置且监听地址为 %s，拒绝启动（公网暴露无鉴权）", host
         )

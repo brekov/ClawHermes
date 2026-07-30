@@ -65,9 +65,11 @@ class SkillManifest:
     @classmethod
     def from_dict(cls, d: dict[str, object]) -> SkillManifest:
         version_raw = d.get("version", 1)
-        assert isinstance(version_raw, int)
+        if not isinstance(version_raw, int):
+            raise TypeError("version 必须是 int")
         deps_raw = d.get("dependencies", [])
-        assert isinstance(deps_raw, list)
+        if not isinstance(deps_raw, list):
+            raise TypeError("dependencies 必须是 list")
         return cls(
             name=str(d.get("name", "")),
             version=version_raw,
@@ -206,8 +208,8 @@ class SkillHub:
 
             if self._is_git_url(url):
                 # D1: 禁用 hooks 与全局/系统 git 配置，防止克隆仓库触发 RCE
-                subprocess.run(
-                    ["git", "-c", "core.hooksPath=/dev/null", "clone", "--depth=1", url, str(tmp)],
+                subprocess.run(  # noqa: S603  受控 git 命令，已禁用 hooks 防 RCE
+                    ["git", "-c", "core.hooksPath=/dev/null", "clone", "--depth=1", url, str(tmp)],  # noqa: S607  受控系统命令
                     capture_output=True, timeout=60, check=True,
                     env={
                         **os.environ,
@@ -269,8 +271,8 @@ class SkillHub:
             tmp = Path(tmpdir)
             if SkillHub._is_git_url(url):
                 # D1: 禁用 hooks 与全局/系统 git 配置，防止克隆仓库触发 RCE
-                subprocess.run(
-                    ["git", "-c", "core.hooksPath=/dev/null", "clone", "--depth=1", url, str(tmp)],
+                subprocess.run(  # noqa: S603  受控 git 命令，已禁用 hooks 防 RCE
+                    ["git", "-c", "core.hooksPath=/dev/null", "clone", "--depth=1", url, str(tmp)],  # noqa: S607  受控系统命令
                     capture_output=True, timeout=30, check=True,
                     env={
                         **os.environ,
@@ -281,13 +283,15 @@ class SkillHub:
             index = tmp / "index.json"
             if index.exists():
                 data = json.loads(index.read_text(encoding="utf-8"))
-                assert isinstance(data, list)
+                if not isinstance(data, list):
+                    raise TypeError("index.json 必须是 list")
                 return [SkillManifest.from_dict(item) for item in data]
 
             manifests: list[SkillManifest] = []
             for f in sorted(tmp.glob("*.manifest.json")):
                 data = json.loads(f.read_text(encoding="utf-8"))
-                assert isinstance(data, dict)
+                if not isinstance(data, dict):
+                    raise TypeError("manifest 必须是 dict")
                 manifests.append(SkillManifest.from_dict(data))
             return manifests
 
@@ -324,17 +328,17 @@ class SkillHub:
         with tempfile.TemporaryDirectory() as tmpdir:
             tmp = Path(tmpdir)
             try:
-                subprocess.run(
-                    ["git", "clone", repo_url, str(tmp)],
+                subprocess.run(  # noqa: S603  受控 git 命令
+                    ["git", "clone", repo_url, str(tmp)],  # noqa: S607  受控系统命令
                     capture_output=True, timeout=60, check=True,
                 )
             except subprocess.CalledProcessError:
-                subprocess.run(
-                    ["git", "init", str(tmp)],
+                subprocess.run(  # noqa: S603  受控 git 命令
+                    ["git", "init", str(tmp)],  # noqa: S607  受控系统命令
                     capture_output=True, check=True,
                 )
-                subprocess.run(
-                    ["git", "-C", str(tmp), "remote", "add", "origin", repo_url],
+                subprocess.run(  # noqa: S603  受控 git 命令
+                    ["git", "-C", str(tmp), "remote", "add", "origin", repo_url],  # noqa: S607  受控系统命令
                     capture_output=True, check=True,
                 )
 
@@ -344,16 +348,16 @@ class SkillHub:
             )
             (tmp / f"{manifest.name}.md").write_text(content, encoding="utf-8")
 
-            subprocess.run(
-                ["git", "-C", str(tmp), "add", "."],
+            subprocess.run(  # noqa: S603  受控 git 命令
+                ["git", "-C", str(tmp), "add", "."],  # noqa: S607  受控系统命令
                 capture_output=True, check=True,
             )
-            subprocess.run(
-                ["git", "-C", str(tmp), "commit", "-m", f"Publish {manifest.name} v{manifest.version}"],
+            subprocess.run(  # noqa: S603  受控 git 命令
+                ["git", "-C", str(tmp), "commit", "-m", f"Publish {manifest.name} v{manifest.version}"],  # noqa: S607  受控系统命令
                 capture_output=True, check=True,
             )
-            subprocess.run(
-                ["git", "-C", str(tmp), "push", "origin", "main"],
+            subprocess.run(  # noqa: S603  受控 git 命令
+                ["git", "-C", str(tmp), "push", "origin", "main"],  # noqa: S607  受控系统命令
                 capture_output=True, timeout=60, check=True,
             )
             return True

@@ -166,7 +166,7 @@ class ClawHermesConfig(BaseSettings):
     @classmethod
     def check_gateway_secret(cls, v: str | None, info) -> str | None:
         """非回环绑定必须设置 secret"""
-        host = info.data.get("gateway_host", "0.0.0.0")
+        host = info.data.get("gateway_host", "0.0.0.0")  # noqa: S104  默认绑定地址，非实际监听
         if host not in ("127.0.0.1", "localhost") and not v:
             raise ValueError(f"Gateway 绑定 {host} 时必须设置 gateway_secret")
         return v
@@ -229,7 +229,7 @@ def _warn_config_parse_failure(config_path: Path, exc: Exception) -> None:
         import sys
         sys.stderr.write(f"⚠️  clawhermes config: {msg}\n")
         sys.stderr.flush()
-    except Exception:
+    except Exception:  # noqa: S110  stderr 写入失败时无法记录，静默忽略
         pass
 
 

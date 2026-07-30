@@ -375,7 +375,7 @@ def _ensure_lark_sdk() -> None:
 
     console.print("  📦 正在安装 clawhermes-lark ...")
     try:
-        subprocess.run(
+        subprocess.run(  # noqa: S603  受控 pip 安装，使用 sys.executable
             [sys.executable, "-m", "pip", "install", "-e", str(lark_dir)],
             capture_output=True, check=True,
         )
@@ -448,7 +448,7 @@ def _setup_gateway_section(existing_config: dict, existing_env: dict, quick: boo
     if bind_mode == "loopback":
         gw_host = "127.0.0.1"
     elif bind_mode == "lan":
-        gw_host = "0.0.0.0"
+        gw_host = "0.0.0.0"  # noqa: S104  LAN 模式有意绑定全部接口
     else:
         gw_host = questionary.text("监听地址:", default=default_host).ask()
         if not gw_host:
@@ -570,8 +570,8 @@ def _fetch_models_from_api(provider, default_model):
     try:
         if provider_name == "Ollama (本地)":
             base = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
-            req = urllib.request.Request(f"{base}/api/tags")
-            with urllib.request.urlopen(req, timeout=5) as resp:
+            req = urllib.request.Request(f"{base}/api/tags")  # noqa: S310  受控 HTTPS URL
+            with urllib.request.urlopen(req, timeout=5) as resp:  # noqa: S310  受控 HTTPS URL
                 data = json.loads(resp.read())
                 for m in data.get("models", []):
                     name = m.get("name", "")
@@ -580,7 +580,7 @@ def _fetch_models_from_api(provider, default_model):
         elif provider_name == "OpenAI" and api_key:
             req = urllib.request.Request("https://api.openai.com/v1/models")
             req.add_header("Authorization", f"Bearer {api_key}")
-            with urllib.request.urlopen(req, timeout=10) as resp:
+            with urllib.request.urlopen(req, timeout=10) as resp:  # noqa: S310  受控 HTTPS URL
                 data = json.loads(resp.read())
                 for m in data.get("data", []):
                     mid = m.get("id", "")
@@ -588,10 +588,10 @@ def _fetch_models_from_api(provider, default_model):
                         models.append((f"openai/{mid}", ""))
         elif provider_name in ("DeepSeek", "OpenRouter") and api_key:
             api_base = provider.get("api_base", "https://api.deepseek.com/v1" if provider_name == "DeepSeek" else "https://openrouter.ai/api/v1")
-            req = urllib.request.Request(f"{api_base}/models")
+            req = urllib.request.Request(f"{api_base}/models")  # noqa: S310  受控 HTTPS URL
             req.add_header("Authorization", f"Bearer {api_key}")
             prefix = "deepseek/" if provider_name == "DeepSeek" else "openrouter/"
-            with urllib.request.urlopen(req, timeout=10) as resp:
+            with urllib.request.urlopen(req, timeout=10) as resp:  # noqa: S310  受控 HTTPS URL
                 data = json.loads(resp.read())
                 for m in data.get("data", []):
                     mid = m.get("id", "")
@@ -864,8 +864,8 @@ def _resolve_bot_identity(domain: str, app_id: str, app_secret: str, env_vars: d
         # 获取 tenant_access_token
         token_url = f"{domain}/open-apis/auth/v3/tenant_access_token/internal"
         token_data = _json.dumps({"app_id": app_id, "app_secret": app_secret}).encode("utf-8")
-        token_req = urllib.request.Request(token_url, data=token_data, headers={"Content-Type": "application/json"})
-        with urllib.request.urlopen(token_req, timeout=10) as token_resp:
+        token_req = urllib.request.Request(token_url, data=token_data, headers={"Content-Type": "application/json"})  # noqa: S310  受控 HTTPS URL
+        with urllib.request.urlopen(token_req, timeout=10) as token_resp:  # noqa: S310  受控 HTTPS URL
             token_body = _json.loads(token_resp.read().decode("utf-8"))
         token = token_body.get("tenant_access_token", "")
         if not token:
@@ -874,8 +874,8 @@ def _resolve_bot_identity(domain: str, app_id: str, app_secret: str, env_vars: d
 
         # 获取 bot 身份
         bot_url = f"{domain}/open-apis/bot/v3/info"
-        bot_req = urllib.request.Request(bot_url, headers={"Authorization": f"Bearer {token}"})
-        with urllib.request.urlopen(bot_req, timeout=10) as bot_resp:
+        bot_req = urllib.request.Request(bot_url, headers={"Authorization": f"Bearer {token}"})  # noqa: S310  受控 HTTPS URL
+        with urllib.request.urlopen(bot_req, timeout=10) as bot_resp:  # noqa: S310  受控 HTTPS URL
             data = _json.loads(bot_resp.read().decode("utf-8"))
 
         if data.get("code") != 0:

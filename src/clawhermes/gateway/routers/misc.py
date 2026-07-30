@@ -35,7 +35,7 @@ async def initialize(req: InitRequest):
             max_iterations=req.max_iterations,
             profile=req.profile,
         )
-        assert _gw._state.agent is not None
+        assert _gw._state.agent is not None  # noqa: S101  mypy 类型收窄
         return {
             "status": "ok",
             "model": req.model,
