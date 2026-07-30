@@ -7,6 +7,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import os
 import subprocess
 import tempfile
 import urllib.parse
@@ -175,16 +176,22 @@ class SkillHub:
         return True
 
     def verify(self, content: str, manifest: SkillManifest) -> bool:
-        """验证技能完整性（checksum + 签名占位）"""
+        """验证技能完整性（checksum + 签名）
+
+        签名校验策略：当前未实现真正的 GPG/minisign 校验。
+        - 若 manifest.signature 非空：保守拒绝安装（避免假安全感），返回 False
+        - 若 manifest.signature 为空：仅 checksum 校验，记录 info 后返回 True
+        """
         actual = hashlib.sha256(content.encode()).hexdigest()
         if actual != manifest.checksum:
             return False
-        # H6: 签名校验占位 — 真正的 GPG/minisign 签名需 P2 阶段实现
         if manifest.signature:
+            # 当前无法验证签名，保守拒绝以避免假安全感
             logger.warning(
-                "签名校验未完全实现（skill=%s, signature=%s...）",
-                manifest.name, manifest.signature[:16],
+                "技能 %s 声明了签名但当前未实现签名校验，拒绝安装", manifest.name,
             )
+            return False
+        logger.info("技能 %s 无签名，仅 checksum 校验通过", manifest.name)
         return True
 
     def _install_from(
@@ -198,9 +205,15 @@ class SkillHub:
             tmp = Path(tmpdir)
 
             if self._is_git_url(url):
+                # D1: 禁用 hooks 与全局/系统 git 配置，防止克隆仓库触发 RCE
                 subprocess.run(
-                    ["git", "clone", "--depth=1", url, str(tmp)],
+                    ["git", "-c", "core.hooksPath=/dev/null", "clone", "--depth=1", url, str(tmp)],
                     capture_output=True, timeout=60, check=True,
+                    env={
+                        **os.environ,
+                        "GIT_CONFIG_GLOBAL": "/dev/null",
+                        "GIT_CONFIG_SYSTEM": "/dev/null",
+                    },
                 )
 
             manifest_path = tmp / f"{name}.manifest.json"
@@ -255,9 +268,15 @@ class SkillHub:
         with tempfile.TemporaryDirectory() as tmpdir:
             tmp = Path(tmpdir)
             if SkillHub._is_git_url(url):
+                # D1: 禁用 hooks 与全局/系统 git 配置，防止克隆仓库触发 RCE
                 subprocess.run(
-                    ["git", "clone", "--depth=1", url, str(tmp)],
+                    ["git", "-c", "core.hooksPath=/dev/null", "clone", "--depth=1", url, str(tmp)],
                     capture_output=True, timeout=30, check=True,
+                    env={
+                        **os.environ,
+                        "GIT_CONFIG_GLOBAL": "/dev/null",
+                        "GIT_CONFIG_SYSTEM": "/dev/null",
+                    },
                 )
             index = tmp / "index.json"
             if index.exists():

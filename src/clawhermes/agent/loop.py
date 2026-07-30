@@ -515,7 +515,16 @@ class Agent:
             return "（已中断）"
 
         if self.context_engine and iteration > 1:
-            prompt_tokens = sum(len(m.get("content", "")) for m in messages)
+            # 精确 token 计数：优先使用 litellm.token_counter，失败时折中估算
+            try:
+                import litellm
+                prompt_tokens = litellm.token_counter(
+                    model=getattr(self.llm, "model", "gpt-4"),
+                    messages=messages,
+                )
+            except Exception:
+                # 降级：折中估算（中文 ~1.5 字符/token，英文 ~4 字符/token，取 3 作折中）
+                prompt_tokens = sum(len(m.get("content", "")) // 3 for m in messages)
             if self.context_engine.should_compress(prompt_tokens):
                 messages[:] = self.context_engine.compress(messages, prompt_tokens)
 

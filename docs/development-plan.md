@@ -1,9 +1,9 @@
 # ClawHermes · 项目推进计划
 
-> 版本：v2.3
-> 日期：2026-07-16
-> 基线版本：v0.15.2（系统性安全修复 — 35 项评审问题 / 6 PR）
-> 状态：Phase 1 ✅ | Phase 2 ✅ | Phase 3 ✅ v0.15.2 | 下一目标 v0.16.0
+> 版本：v2.4
+> 日期：2026-07-30
+> 基线版本：v0.15.2（系统性安全修复 — 35 项评审问题 / 7 PR）→ v0.15.3 紧急修复（评审 v2 发现的 4 项 Critical）
+> 状态：Phase 1 ✅ | Phase 2 ✅ | Phase 3 ✅ v0.15.2 → 🔄 v0.15.3 | 下一目标 v0.16.0
 > 方法论：软件工程全流程 — 现状评估 → 竞品研究 → 差距分析 → SMART 目标 → 架构演进 → 分阶段路线图 → 质量保障 → 风险管理
 
 ---
@@ -86,7 +86,8 @@ v1.0.0 时 ClawHermes 应成为：
 | **v0.14.2** | **2026-06-23** | **文档审计 — 端点纠错 23→26、项目定位修正、Channel 架构重写、RELEASE.md 对齐 GitHub 格式** | **373** |
 | **v0.15.0** | **2026-06-24** | **Block Streaming SSE（M3.6c）+ DM 配对安全（M3.6d）+ QQ 适配器（M3.6g）** | **416** |
 | **v0.15.1** | **2026-07-14** | **AST 白名单求值器 + shell=True 消除 + Agent Loop 重构 + 并发锁加固 + 静默吞异常修复** | **659** |
-| **v0.15.2** | **2026-07-16** | **系统性安全修复（review.md 35 项 / 6 PR）：9C+10H+16M，ScopedPath/沙箱硬化/Ed25519 配对/Gateway fail-fast/原子文件写/test_security.py 14 负例** | **755** |
+| **v0.15.2** | **2026-07-16** | **系统性安全修复（review.md 35 项 / 7 PR）：9C+10H+16M，ScopedPath/沙箱硬化/Ed25519 配对/Gateway fail-fast/原子文件写/test_security.py 14 负例** | **755** |
+| **v0.15.3** | **2026-07-30** | **紧急修复（评审 v2 / 4 项 Critical + 3 项 High）：D1 git clone RCE/P1 Router 全局串行锁/P2 自进化静默失效/Q3 技能演进失效 + P3 token 计数/Q2 容错/D2 签名校验 + git tag 补打** | **770+** |
 
 ### 2.2 已交付功能清单（19 项）
 
@@ -308,14 +309,36 @@ CI/CD:      GitHub Actions（lint + typecheck + test + build）
 
 **质量指标**：pytest 639 → 659 passed（+20），ruff 0 / mypy 0，净减 52 行代码。
 
-### 5.2 v0.16.0（Phase 3 后期）
+### 5.1d v0.15.3 紧急修复（🔄 进行中 2026-07-30）
+
+基于评审 v2（代码质量 7.5 + 架构 6.5 + 性能 5.5）发现的 4 项 Critical + 3 项 High 紧急修复。
+
+| 修复项 | 内容 | 优先级 | 来源 |
+|:---|:---|:---:|:---|
+| D1 git clone RCE | `skills/hub.py` git clone 加 `GIT_CONFIG_GLOBAL=/dev/null` + `git -c core.hooksPath=/dev/null` | 🔴 P0 | 评审 v2 Critical |
+| P1 Router 全局串行锁 | `router.py` `_active_lock` 改 `dict[str, asyncio.Lock]` 按 session 分锁，多用户并发 | 🔴 P0 | 评审 v2 Critical |
+| P2 自进化静默失效 | `app.py` `_on_end` 钩子用 `run_coroutine_threadsafe` + 捕获主循环引用 | 🔴 P0 | 评审 v2 Critical |
+| Q3 技能演进失效 | `skills/manager.py:271` 技能更新应用 LLM 生成 content/description | 🔴 P0 | 评审 v2 Critical |
+| Q2 BackgroundReview 容错 | `skills/manager.py:apply` 加逐项 try/except | 🟠 P1 | 评审 v2 High |
+| P3 token 计数偏差 | `loop.py:518` 改 `litellm.token_counter` 或 `len//3` 折中估算 | 🟠 P1 | 评审 v2 High |
+| D2 签名校验占位 | `skills/hub.py:verify` 实现真正签名校验或明确文档"仅 checksum" | 🟠 P1 | 评审 v2 High |
+| git tag 补打 | v0.15.1 / v0.15.2 补打 git tag，修复 RELEASE.md 链接 | 🟡 P2 | 进度评审 |
+
+### 5.2 v0.16.0（Phase 3 后期 — 技术债清偿 + 渠道扩展）
 
 | 目标 | 衡量标准 | 时限 |
 |:---|:---|:---|
+| Task 5.7 loop.py 拆分 | 拆为 `agent.py`/`hook_manager.py`/`tool_registry.py`/`tool_dispatcher.py` | 3d |
+| Task 5.9 ruff 严格规则 | 开启 `S`/`B006`/`ASYNC` + 修复告警 | 2d |
+| A1 依赖倒置修复 | `exceptions.py` 迁至 `clawhermes/common/exceptions.py` | 1d |
+| A2 ToolRegistry 抽离 | `ToolDef`/`ToolRegistry` 抽至 `tools/registry.py` | 1d |
+| A3 MemoryProvider 迁移 | `MemoryProvider` 迁至 `storage/base.py` | 0.5d |
+| Q1 God Method 拆分 | `GatewayState.initialize` 拆为 5-6 个 `_init_xxx()` | 1d |
+| 覆盖率提升至 80% | 重点 gateway/tools 模块 | 3d |
+| Profile 隔离 | 独立 config/memory/sessions per profile | 5d |
 | Telegram 适配器 | 社区 python-telegram-bot → ChannelAdapter 封装 | 1 周 |
 | Discord 适配器 | 社区 discord.py → ChannelAdapter 封装 | 1 周 |
 | Slack 适配器 | 官方 slack-bolt → ChannelAdapter 封装 | 1 周 |
-| Profile 隔离 | 独立 config/memory/sessions per profile | 1 周 |
 
 ### 5.3 v0.17.0（Phase 3 收尾）
 
@@ -633,7 +656,7 @@ CI/CD:      GitHub Actions（lint + typecheck + test + build）
 
 > **本计划将随项目进展持续迭代。每个里程碑完成后回顾并修订下一阶段计划。**
 >
-> **当前焦点：Phase 3 v0.16.0 — Telegram / Discord / Slack 适配器 + Profile 隔离。**
+> **当前焦点：v0.15.3 紧急修复 — 4 项 Critical（git clone RCE / Router 串行锁 / 自进化失效 / 技能演进失效）+ 3 项 High。完成后推进 v0.16.0 技术债清偿 + 渠道扩展。**
 
 ---
 
