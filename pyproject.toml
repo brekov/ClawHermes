@@ -56,6 +56,10 @@ target-version = "py312"
 select = ["E", "F", "I", "N", "W", "S", "B006", "ASYNC"]
 ignore = ["E501"]
 
+[tool.ruff.lint.per-file-ignores]
+# 测试文件: assert 是 pytest 惯用写法; S104/S106/S108/S110 为测试边界场景
+"tests/**/*.py" = ["S101", "S104", "S106", "S108", "S110"]
+
 [tool.mypy]
 python_version = "3.12"
 ignore_missing_imports = true
