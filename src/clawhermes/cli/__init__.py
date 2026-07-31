@@ -110,18 +110,20 @@ def doctor():
 
 def _register_subcommands() -> None:
     """从子模块导入子命令组并注册到 main，同时 re-export 保持向后兼容。"""
-    from clawhermes.cli import agent_cmd, gateway_cmd
+    from clawhermes.cli import agent_cmd, gateway_cmd, profile_cmd
     from clawhermes.cli import setup as setup_mod
 
     main.add_command(gateway_cmd.gateway)
     main.add_command(agent_cmd.agent)
+    main.add_command(profile_cmd.profile)
     main.add_command(setup_mod.setup)
     main.add_command(setup_mod.config)
 
-    # re-export: 保持 `from clawhermes.cli import gateway/agent/setup/config` 兼容
+    # re-export: 保持 `from clawhermes.cli import gateway/agent/profile/setup/config` 兼容
     g = globals()
     g["gateway"] = gateway_cmd.gateway
     g["agent"] = agent_cmd.agent
+    g["profile"] = profile_cmd.profile
     g["setup"] = setup_mod.setup
     g["config"] = setup_mod.config
 
@@ -130,4 +132,4 @@ _register_subcommands()
 
 
 __all__ = ["main", "console", "_create_agent", "_load_dotenv",
-           "chat", "doctor", "gateway", "agent", "setup", "config"]
+           "chat", "doctor", "gateway", "agent", "profile", "setup", "config"]
