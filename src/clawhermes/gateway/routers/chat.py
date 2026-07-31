@@ -35,8 +35,19 @@ class ChatResponse(BaseModel):
 
 
 @router.post("/chat", response_model=ChatResponse)
-async def chat(req: ChatRequest):
-    agent = _gw._state.get_agent()
+async def chat(req: ChatRequest, profile_id: str | None = None):
+    # PR5b: profile_id 查询参数 — 指定时通过 profile_manager 解析对应 Agent
+    # 未指定（None）或 profile_manager 未初始化时保持原有行为（用 _state.agent）
+    pm = _gw._state.profile_manager
+    if profile_id and pm is not None:
+        try:
+            ctx = pm.resolve_profile(None, profile_id)
+        except KeyError as e:
+            raise HTTPException(404, str(e)) from e
+        agent = ctx.agent or _gw._state.get_agent()
+    else:
+        agent = _gw._state.get_agent()
+
     if _gw._state.session_mgr is None:
         raise HTTPException(500, "Session 管理器未初始化")
 
@@ -56,6 +67,7 @@ async def chat(req: ChatRequest):
                 channel_type=ChannelType.REST,
                 user_id="rest_user",
                 session_id=sid,
+                metadata={"profile_id": profile_id} if profile_id else None,
             )
         else:
             response = await asyncio.to_thread(agent.chat, req.message, session_id=sid)

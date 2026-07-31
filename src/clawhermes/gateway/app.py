@@ -46,6 +46,7 @@ from clawhermes.gateway.routers.mcp import MCPAddRequest
 from clawhermes.gateway.routers.mcp import router as mcp_router
 from clawhermes.gateway.routers.misc import InitRequest
 from clawhermes.gateway.routers.misc import router as misc_router
+from clawhermes.gateway.routers.profiles import router as profiles_router
 from clawhermes.gateway.routers.sessions import router as sessions_router
 from clawhermes.llm.provider import LLMProvider
 from clawhermes.profile.config import ProfileConfig
@@ -174,6 +175,11 @@ class GatewayState:
         except Exception as e:
             logger.warning("ProfileManager 初始化失败，回退到单 Profile 模式: %s", e)
             self.profile_manager = None
+
+        # PR5b: 将 profile_manager 注入 ChannelRouter，启用按 profile_id 分发消息
+        # profile_manager 为 None 时 ChannelRouter 内部回退到 _agent_handler，行为不变
+        if self.profile_manager is not None and self.channel_router is not None:
+            self.channel_router.set_profile_manager(self.profile_manager)
 
         logger.info(
             "Agent 初始化完成: %s (%d tools, profile=%s)", model, len(registry.list()), profile
@@ -588,6 +594,7 @@ app.include_router(cron_router)
 app.include_router(channels_router)
 app.include_router(mcp_router)
 app.include_router(dm_router)
+app.include_router(profiles_router)
 
 
 if __name__ == "__main__":

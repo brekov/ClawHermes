@@ -132,12 +132,41 @@ class ChannelRouter:
         self._collect_timer: float | None = None
         self._collect_flush_task: asyncio.Task[None] | None = None
         self._collect_idle_seconds: float = 2.0
+        # PR5b: 可选 ProfileManager — 启用后按 user_id/profile_id 解析对应 Agent
+        # 为 None 时所有消息仍走 _agent_handler，保持向后兼容
+        self._profile_manager: Any = None
 
     def set_agent_handler(self, handler: Callable[..., Any]) -> None:
         self._agent_handler = handler
 
     def set_session_creator(self, creator: Callable[..., str]) -> None:
         self._session_creator = creator
+
+    def set_profile_manager(self, profile_manager: Any) -> None:
+        """注入 ProfileManager — 启用按 profile_id / user_id 分发消息的能力
+
+        注入后 ``_process_queue`` / ``route_message`` 会优先使用
+        ``profile_manager.resolve_profile`` 获取的 Agent，
+        未注入（None）时仍走 ``_agent_handler``，行为不变。
+        """
+        self._profile_manager = profile_manager
+
+    def _resolve_agent(self, user_id: str, profile_id: str | None) -> Any:
+        """根据 user_id / profile_id 解析对应 Agent
+
+        - ``_profile_manager`` 未设置时返回 None（调用方应回退到 _agent_handler）
+        - ``profile_id`` 优先于 ``user_id`` 绑定
+        - 解析失败（KeyError）时返回 None，由调用方回退
+        """
+        pm = self._profile_manager
+        if pm is None:
+            return None
+        try:
+            ctx = pm.resolve_profile(user_id, profile_id)
+        except KeyError:
+            # explicit_id 指定但不存在 — 回退到默认 handler
+            return None
+        return getattr(ctx, "agent", None)
 
     def set_allowlist(self, allowlist: set[str] | None) -> None:
         self._allowlist = allowlist
@@ -332,7 +361,24 @@ class ChannelRouter:
         async with self._get_session_lock(session_id):
             self._active_sessions.add(session_id)
             try:
-                if self._agent_handler:
+                # PR5b: profile_manager 已注入时按 user_id/profile_id 解析对应 Agent
+                # 解析失败或未注入时回退到 _agent_handler（保持向后兼容）
+                profile_id = message.metadata.get("profile_id")
+                profile_agent = self._resolve_agent(message.user.user_id, profile_id)
+
+                if profile_agent is not None:
+                    # 直接调用解析出的 Agent（同步阻塞调用，通过 to_thread 包装）
+                    result = await asyncio.to_thread(
+                        profile_agent.chat, message.content, session_id=session_id
+                    )
+                    response = ChannelResponse(
+                        content=str(result) if result is not None else "",
+                        session_id=session_id,
+                    )
+                    adapter = self._channel_manager.get(message.channel_type.value)
+                    if adapter:
+                        await adapter.send_response(response, message)
+                elif self._agent_handler:
                     # 支持 sync 和 async 两种 handler（async 优先）
                     # async handler 不会阻塞事件循环（agent.chat 通过 to_thread 包装）
                     result = self._agent_handler(
@@ -380,6 +426,17 @@ class ChannelRouter:
             else:
                 resolved_session = self._session_router.create(channel_type, chat_id)
         self._session_router.touch(channel_type, chat_id)
+
+        # PR5b: profile_manager 已注入且 metadata 含 profile_id 时按 profile 分发
+        # 解析失败或未注入时回退到 _agent_handler（保持向后兼容）
+        profile_id = (metadata or {}).get("profile_id")
+        profile_agent = self._resolve_agent(user_id, profile_id)
+
+        if profile_agent is not None:
+            result = await asyncio.to_thread(
+                profile_agent.chat, content, session_id=resolved_session
+            )
+            return str(result) if result is not None else ""
 
         if self._agent_handler:
             result = self._agent_handler(content, session_id=resolved_session)
