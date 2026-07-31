@@ -48,6 +48,9 @@ from clawhermes.gateway.routers.misc import InitRequest
 from clawhermes.gateway.routers.misc import router as misc_router
 from clawhermes.gateway.routers.sessions import router as sessions_router
 from clawhermes.llm.provider import LLMProvider
+from clawhermes.profile.config import ProfileConfig
+from clawhermes.profile.context import ProfileContext
+from clawhermes.profile.manager import ProfileManager
 from clawhermes.tools.builtin import register_builtin_tools
 from clawhermes.tools.registry import ToolRegistry
 
@@ -96,6 +99,10 @@ class GatewayState:
         self._mcp_registry = None
         # M14: _auto_init 失败时记录错误，/health 返回 degraded
         self._init_error: str | None = None
+        # PR5a: 多 Profile 管理器 — 加载 profiles/ 下所有 profile
+        # default profile 复用上方 _init_* 链路构建的组件（通过 attach_components 包装），
+        # 其他 profile 由 ProfileManager 自行创建独立组件
+        self.profile_manager: ProfileManager | None = None
 
     def is_initialized(self) -> bool:
         return self.agent is not None
@@ -149,9 +156,71 @@ class GatewayState:
         self.channel_router = channel_router
         self.pairing_manager = pairing_manager
 
+        # PR5a: 初始化 ProfileManager — 将现有 default 组件包装为 default ProfileContext，
+        # 其他 profile 由 ProfileManager 从 profiles/ 目录加载。
+        # 失败不阻断主初始化流程（profile_manager 为 None 时回退到单 Profile 行为）。
+        try:
+            await self._init_profile_manager(
+                data_dir=data_dir,
+                agent=agent,
+                memory=memory,
+                skill_manager=sm,
+                session_mgr=session_mgr,
+                delegate_manager=delegate_mgr,
+                scheduler=scheduler,
+                model=model,
+                tools_profile=profile,
+            )
+        except Exception as e:
+            logger.warning("ProfileManager 初始化失败，回退到单 Profile 模式: %s", e)
+            self.profile_manager = None
+
         logger.info(
             "Agent 初始化完成: %s (%d tools, profile=%s)", model, len(registry.list()), profile
         )
+
+    async def _init_profile_manager(
+        self,
+        *,
+        data_dir,
+        agent: Agent,
+        memory: MemoryManager,
+        skill_manager,
+        session_mgr: SessionManager,
+        delegate_manager: DelegateManager,
+        scheduler: CronScheduler,
+        model: str,
+        tools_profile: str,
+    ) -> None:
+        """初始化 ProfileManager 并包装现有 default 组件为 default ProfileContext
+
+        最小化改造：default profile 复用 _init_* 链路构建的组件（避免重复创建），
+        通过 ``attach_components`` 注入到 ProfileContext 并注册到 ProfileManager。
+        其他 profile 由 ProfileManager.initialize() 从 profiles/ 目录加载。
+        """
+        default_cfg = ProfileConfig(
+            llm_model=model,
+            tools_profile=tools_profile,
+        )
+        default_dir = Path(data_dir) / "profiles" / "default"
+        default_ctx = ProfileContext(
+            profile_id="default",
+            data_dir=default_dir,
+            config=default_cfg,
+        )
+        default_ctx.attach_components(
+            agent=agent,
+            memory=memory,
+            skill_manager=skill_manager,
+            session_mgr=session_mgr,
+            delegate_manager=delegate_manager,
+            scheduler=scheduler,
+        )
+
+        pm = ProfileManager(Path(data_dir))
+        # default_context 注入路径：跳过 default 的自动创建/加载
+        await pm.initialize(default_context=default_ctx)
+        self.profile_manager = pm
 
     def _init_llm_stack(
         self, api_key: str, model: str, base_url: str | None
@@ -371,6 +440,13 @@ class GatewayState:
                 self.delegate_manager.shutdown(wait=True)
             except Exception as e:
                 logger.error("Delegate manager shutdown failed: %s", e)
+        # PR5a: 关闭 ProfileManager — default 组件已由上方关闭，
+        # shutdown_all 对 default 的二次关闭是幂等的（CronScheduler/DelegateManager/SessionManager 均支持）
+        if self.profile_manager:
+            try:
+                await self.profile_manager.shutdown_all()
+            except Exception as e:
+                logger.error("Profile manager shutdown failed: %s", e)
         for task in self._bg_tasks:
             if not task.done():
                 task.cancel()
